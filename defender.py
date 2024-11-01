@@ -12,12 +12,19 @@ from core import installation
 # LANCEMENT DE DEFENDER #
 #########################
 
+#   1. Chargement de la configuration
+#   2. Chargement de l'ensemble des classes
+#   3. 
+#
+
 try:
 
     installation.Install()
 
+    from core.loader import Loader
     from core.irc import Irc
-    ircInstance = Irc()
+    loader = Loader()
+    ircInstance = Irc(loader)
     ircInstance.init_irc(ircInstance)
 
 except AssertionError as ae:

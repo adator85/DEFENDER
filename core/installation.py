@@ -37,6 +37,7 @@ class Install:
         self.set_configuration()
 
         if self.skip_install:
+            self.install_dependencies()
             self.check_packages_version()
             return None
 
@@ -84,7 +85,7 @@ class Install:
             # If the Python version is not good then Exit
             exit("/!\\ Python version error /!\\")
 
-        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'core', 'configuration.json')):
+        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'config', 'configuration.json')):
             # If configuration file do not exist
             exit("/!\\ Configuration file (core/configuration.json) doesn't exist! please create it /!\\")
 

@@ -1,6 +1,9 @@
-from core.irc import Irc
+from typing import TYPE_CHECKING
 import re
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from core.irc import Irc
 
 # Activer le systeme sur un salon (activate #salon)
 #   Le service devra se connecter au salon
@@ -23,7 +26,7 @@ class Votekick():
 
     VOTE_CHANNEL_DB:list[VoteChannelModel] = []
 
-    def __init__(self, ircInstance:Irc) -> None:
+    def __init__(self, ircInstance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
@@ -195,7 +198,7 @@ class Votekick():
     def join_saved_channels(self) -> None:
 
         param = {'module_name': self.module_name}
-        result = self.Base.db_execute_query(f"SELECT id, channel_name FROM {self.Config.table_channel} WHERE module_name = :module_name", param)
+        result = self.Base.db_execute_query(f"SELECT id, channel_name FROM {self.Config.TABLE_CHANNEL} WHERE module_name = :module_name", param)
 
         channels = result.fetchall()
         unixtime = self.Base.get_unixtime()
@@ -285,7 +288,7 @@ class Votekick():
                                 self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Your are not allowed to execute this command')
                                 return None
 
-                            sentchannel = str(cmd[2]).lower() if self.Base.Is_Channel(str(cmd[2]).lower()) else None
+                            sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
                                 self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} :The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
@@ -299,7 +302,7 @@ class Votekick():
                                     )
                                 )
 
-                            self.Base.db_query_channel('add', self.module_name, sentchannel)
+                            self.Channel.db_query_channel('add', self.module_name, sentchannel)
 
                             self.Irc.send2socket(f":{dnickname} JOIN {sentchannel}")
                             self.Irc.send2socket(f":{dnickname} SAMODE {sentchannel} +o {dnickname}")
@@ -316,7 +319,7 @@ class Votekick():
                                 self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Your are not allowed to execute this command')
                                 return None
 
-                            sentchannel = str(cmd[2]).lower() if self.Base.Is_Channel(str(cmd[2]).lower()) else None
+                            sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
                                 self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} :The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
@@ -326,7 +329,7 @@ class Votekick():
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == sentchannel:
                                     self.VOTE_CHANNEL_DB.remove(chan)
-                                    self.Base.db_query_channel('del', self.module_name, chan.channel_name)
+                                    self.Channel.db_query_channel('del', self.module_name, chan.channel_name)
 
                             self.Logs.debug(f"The Channel {sentchannel} has been deactivated from the vote system")
                         except Exception as err:

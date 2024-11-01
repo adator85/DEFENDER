@@ -1,8 +1,11 @@
+import logging
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
-from core.irc import Irc
 from unrealircd_rpc_py.Live import Live
 from unrealircd_rpc_py.Loader import Loader
 
+if TYPE_CHECKING:
+    from core.irc import Irc
 
 class Jsonrpc():
 
@@ -12,13 +15,16 @@ class Jsonrpc():
         """
         jsonrpc: int = 0
 
-    def __init__(self, ircInstance:Irc) -> None:
+    def __init__(self, ircInstance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
         self.Irc = ircInstance
+
+        # Add Protocol to the module (Mandatory)
+        self.Protocol = ircInstance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
         self.Config = ircInstance.Config
@@ -50,6 +56,7 @@ class Jsonrpc():
 
         # Insert module commands into the core one (Mandatory)
         self.__set_commands(self.commands_level)
+        logging.getLogger('websockets').setLevel(logging.WARNING)
 
         # Create you own tables (Mandatory)
         # self.__create_tables()
@@ -71,8 +78,7 @@ class Jsonrpc():
                     username=self.Config.JSONRPC_USER,
                     password=self.Config.JSONRPC_PASSWORD,
                     callback_object_instance=self,
-                    callback_method_name='callback_sent_to_irc',
-                    debug_level=10
+                    callback_method_name='callback_sent_to_irc'
                     )
 
         self.Rpc: Loader = Loader(
@@ -85,10 +91,18 @@ class Jsonrpc():
         self.subscribed = False
 
         if self.Rpc.Error.code != 0:
-            self.Irc.sendPrivMsg(f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.Error.message}", self.Config.SERVICE_CHANLOG)
+            self.Protocol.sendPrivMsg(
+                nick_from=self.Config.SERVICE_NICKNAME,
+                msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.Error.message}", 
+                channel=self.Config.SERVICE_CHANLOG
+                )
 
         if self.UnrealIrcdRpcLive.Error.code != 0:
-            self.Irc.sendPrivMsg(f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", self.Config.SERVICE_CHANLOG)
+            self.Protocol.sendPrivMsg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
 
         if self.ModConfig.jsonrpc == 1:
             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
@@ -139,7 +153,10 @@ class Jsonrpc():
         red = self.Config.COLORS.red
 
         if json_response.result == True:
-            self.Irc.sendPrivMsg(msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", channel=dchanlog)
+            self.Protocol.sendPrivMsg(
+                nick_from=self.Config.SERVICE_NICKNAME,
+                msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
+                channel=dchanlog)
             return None
 
         level = json_response.result.level
@@ -150,7 +167,7 @@ class Jsonrpc():
 
         build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
 
-        self.Irc.sendPrivMsg(msg=build_msg, channel=dchanlog)
+        self.Protocol.sendPrivMsg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
 
     def thread_start_jsonrpc(self):
 
@@ -158,7 +175,11 @@ class Jsonrpc():
             self.UnrealIrcdRpcLive.subscribe(["all"])
             self.subscribed = True
         else:
-            self.Irc.sendPrivMsg(f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", self.Config.SERVICE_CHANLOG)
+            self.Protocol.sendPrivMsg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
 
     def __load_module_configuration(self) -> None:
         """### Load Module Configuration
@@ -208,8 +229,8 @@ class Jsonrpc():
                     option = str(cmd[1]).lower()
 
                     if len(command) == 1:
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :/msg {dnickname} jsonrpc on')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :/msg {dnickname} jsonrpc off')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
 
                     match option:
 
@@ -217,9 +238,17 @@ class Jsonrpc():
                             for thread in self.Base.running_threads:
                                 if thread.getName() == 'thread_start_jsonrpc':
                                     if thread.is_alive():
-                                        self.Irc.sendPrivMsg(f"Thread {thread.getName()} is running", dchannel)
+                                        self.Protocol.sendPrivMsg(
+                                            nick_from=self.Config.SERVICE_NICKNAME,
+                                            msg=f"Thread {thread.getName()} is running",
+                                            channel=dchannel
+                                            )
                                     else:
-                                        self.Irc.sendPrivMsg(f"Thread {thread.getName()} is not running, wait untill the process will be cleaned up", dchannel)
+                                        self.Protocol.sendPrivMsg(
+                                            nick_from=self.Config.SERVICE_NICKNAME,
+                                            msg=f"Thread {thread.getName()} is not running, wait untill the process will be cleaned up",
+                                            channel=dchannel
+                                            )
 
                             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
                             self.__update_configuration('jsonrpc', 1)
@@ -236,7 +265,7 @@ class Jsonrpc():
                     option = str(cmd[1]).lower()
 
                     if len(command) == 1:
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :/msg {dnickname} jruser get nickname')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
 
                     match option:
 
@@ -250,37 +279,37 @@ class Jsonrpc():
 
                             UserInfo = rpc.User.get(uid_to_get)
                             if rpc.Error.code != 0:
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :{rpc.Error.message}')
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.Error.message}')
                                 return None
 
                             chan_list = []
                             for chan in UserInfo.user.channels:
                                 chan_list.append(chan.name)
 
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :UID                  : {UserInfo.id}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :NICKNAME             : {UserInfo.name}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :USERNAME             : {UserInfo.user.username}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :REALNAME             : {UserInfo.user.realname}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :MODES                : {UserInfo.user.modes}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CHANNELS             : {chan_list}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :SECURITY GROUP       : {UserInfo.user.security_groups}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :REPUTATION           : {UserInfo.user.reputation}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {chan_list}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
 
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :IP                   : {UserInfo.ip}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :COUNTRY CODE         : {UserInfo.geoip.country_code}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :ASN                  : {UserInfo.geoip.asn}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :ASNAME               : {UserInfo.geoip.asname}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CLOAKED HOST         : {UserInfo.user.cloakedhost}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :HOSTNAME             : {UserInfo.hostname}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :VHOST                : {UserInfo.user.vhost}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CLIENT PORT          : {UserInfo.client_port}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :SERVER PORT          : {UserInfo.server_port}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
                             
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CERTFP               : {UserInfo.tls.certfp}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CIPHER               : {UserInfo.tls.cipher}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
 
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :IDLE SINCE           : {UserInfo.idle_since}')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :CONNECTED SINCE      : {UserInfo.connected_since}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
 
                 except IndexError as ie:
                     self.Logs.error(ie)
@@ -290,11 +319,11 @@ class Jsonrpc():
 
                     self.Base.create_thread(self.thread_ask_ia, ('',))
 
-                    self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : This is a notice to the sender ...")
-                    self.Irc.send2socket(f":{dnickname} PRIVMSG {fromuser} : This is private message to the sender ...")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" This is a notice to the sender ...")
+                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg="This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Irc.send2socket(f":{dnickname} PRIVMSG {fromchannel} : This is channel message to the sender ...")
+                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg="This is channel message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)

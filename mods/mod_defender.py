@@ -6,10 +6,9 @@ import psutil
 import requests
 from dataclasses import dataclass, fields, field
 from datetime import datetime
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from sys import exit
-from core.irc import Irc
-from core.Model import User
+import core.definition as df
 
 #   Le module crée devra réspecter quelques conditions
 #       1. Le nom de la classe devra toujours s'appeler comme le module. Exemple => nom de class Defender | nom du module mod_defender
@@ -22,6 +21,10 @@ from core.Model import User
 #           cmd(self, data:list)
 #           _hcmds(self, user:str, cmd: list)
 #           unload(self)
+
+if TYPE_CHECKING:
+    from core.irc import Irc
+
 
 class Defender():
 
@@ -42,33 +45,23 @@ class Defender():
         flood_message: int
         flood_time: int
         flood_timer: int
+        autolimit: int
+        autolimit_amount: int
+        autolimit_interval: int
 
-    @dataclass
-    class ReputationModel:
-        uid: str
-        nickname: str
-        username: str
-        hostname: str
-        realname: str
-        umodes: str
-        vhost: str
-        ip: str
-        score: int
-        isWebirc: bool
-        isWebsocket: bool
-        secret_code: str
-        connected_datetime: str
-        updated_datetime: str
-
-    UID_REPUTATION_DB: list[ReputationModel] = []
-
-    def __init__(self, ircInstance:Irc) -> None:
+    def __init__(self, ircInstance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
         self.Irc = ircInstance
+
+        # Add Loader Object to the module (Mandatory)
+        self.Loader = ircInstance.Loader
+
+        # Add server protocol Object to the module (Mandatory)
+        self.Protocol = ircInstance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
         self.Config = ircInstance.Config
@@ -85,11 +78,13 @@ class Defender():
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
 
+        # Add Reputation object to the module (Optional)
+        self.Reputation = ircInstance.Reputation
+
         # Create module commands (Mandatory)
         self.commands_level = {
             0: ['code'],
-            1: ['info'],
-            2: ['owner', 'deowner', 'op', 'deop', 'halfop', 'dehalfop', 'voice', 'devoice', 'ban', 'unban','kick', 'kickban'],
+            1: ['info', 'autolimit'],
             3: ['reputation','proxy_scan', 'flood', 'status', 'timer','show_reputation', 'sentinel']
         }
 
@@ -114,11 +109,11 @@ class Defender():
         self.timeout = self.Config.API_TIMEOUT
 
         # Listes qui vont contenir les ip a scanner avec les différentes API
-        self.abuseipdb_UserModel: list[User.UserModel] = []
-        self.freeipapi_UserModel: list[User.UserModel] = []
-        self.cloudfilt_UserModel: list[User.UserModel] = []
-        self.psutil_UserModel: list[User.UserModel]    = []
-        self.localscan_UserModel: list[User.UserModel] = []
+        self.abuseipdb_UserModel: list[df.MUser] = []
+        self.freeipapi_UserModel: list[df.MUser] = []
+        self.cloudfilt_UserModel: list[df.MUser] = []
+        self.psutil_UserModel: list[df.MUser]    = []
+        self.localscan_UserModel: list[df.MUser] = []
 
         # Variables qui indique que les threads sont en cours d'éxecutions
         self.abuseipdb_isRunning:bool       = True
@@ -127,6 +122,7 @@ class Defender():
         self.psutil_isRunning:bool          = True
         self.localscan_isRunning:bool       = True
         self.reputationTimer_isRunning:bool = True
+        self.autolimit_isRunning: bool      = True
 
         # Variable qui va contenir les users
         self.flood_system = {}
@@ -145,10 +141,11 @@ class Defender():
         self.Base.create_thread(func=self.thread_local_scan)
         self.Base.create_thread(func=self.thread_psutil_scan)
         self.Base.create_thread(func=self.thread_reputation_timer)
+        self.Base.create_thread(func=self.thread_autolimit)
 
         if self.ModConfig.reputation == 1:
-            self.Irc.send2socket(f":{self.Config.SERVEUR_ID} SJOIN {self.Base.get_unixtime()} {self.Config.SALON_JAIL} + :{self.Config.SERVICE_NICKNAME}")
-            self.Irc.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.SALON_JAIL} +o {self.Config.SERVICE_NICKNAME}")
+            self.Protocol.sjoin(self.Config.SALON_JAIL)
+            self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.SALON_JAIL} +o {self.Config.SERVICE_NICKNAME}")
 
         return None
 
@@ -214,7 +211,8 @@ class Defender():
                 reputation=0, reputation_timer=1, reputation_seuil=26, reputation_score_after_release=27, 
                 reputation_ban_all_chan=0,reputation_sg=1,
                 local_scan=0, psutil_scan=0, abuseipdb_scan=0, freeipapi_scan=0, cloudfilt_scan=0,
-                flood=0, flood_message=5, flood_time=1, flood_timer=20
+                flood=0, flood_message=5, flood_time=1, flood_timer=20,
+                autolimit=1, autolimit_amount=3, autolimit_interval=3
                 )
 
             # Sync the configuration with core configuration (Mandatory)
@@ -233,11 +231,11 @@ class Defender():
         """Cette methode sera executée a chaque désactivation ou 
         rechargement de module
         """
-        self.abuseipdb_UserModel: list[User.UserModel] = []
-        self.freeipapi_UserModel: list[User.UserModel] = []
-        self.cloudfilt_UserModel: list[User.UserModel] = []
-        self.psutil_UserModel: list[User.UserModel]    = []
-        self.localscan_UserModel: list[User.UserModel] = []
+        self.abuseipdb_UserModel: list[df.MUser] = []
+        self.freeipapi_UserModel: list[df.MUser] = []
+        self.cloudfilt_UserModel: list[df.MUser] = []
+        self.psutil_UserModel: list[df.MUser]    = []
+        self.localscan_UserModel: list[df.MUser] = []
 
         self.abuseipdb_isRunning:bool = False
         self.freeipapi_isRunning:bool = False
@@ -245,79 +243,8 @@ class Defender():
         self.psutil_isRunning:bool    = False
         self.localscan_isRunning:bool = False
         self.reputationTimer_isRunning:bool = False
+        self.autolimit_isRunning: bool = False
         return None
-
-    def reputation_insert(self, reputationModel: ReputationModel) -> bool:
-
-        response = False
-
-        # Check if the user already exist
-        for reputation in self.UID_REPUTATION_DB:
-            if reputation.uid == reputationModel.uid:
-                return response
-
-        self.UID_REPUTATION_DB.append(reputationModel)
-        self.Logs.debug(f'Reputation inserted: {reputationModel}')
-        response = True
-
-        return response
-
-    def reputation_delete(self, uidornickname:str) -> bool:
-
-        response = False
-
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == uidornickname:
-                self.UID_REPUTATION_DB.remove(record)
-                response = True
-                self.Logs.debug(f'UID ({record.uid}) has been deleted')
-            elif record.nickname == uidornickname:
-                self.UID_REPUTATION_DB.remove(record)
-                response = True
-                self.Logs.debug(f'Nickname ({record.nickname}) has been deleted')
-
-        if not response:
-            self.Logs.critical(f'The UID {uidornickname} was not deleted')
-
-        return response
-
-    def reputation_check(self, uidornickname: str) -> bool:
-        """Check if the uid exist in the dataclass
-
-        Args:
-            uidornickname (str): UID or nickname of the user
-
-        Returns:
-            bool: True if the user exist in the reputation dataclass
-        """
-        response = False
-
-        for reputation in self.UID_REPUTATION_DB:
-            if reputation.uid == uidornickname:
-                response = True
-            elif reputation.nickname == uidornickname:
-                response = True
-
-        return response
-
-    def reputation_get_Reputation(self, uidornickname: str) -> Union[ReputationModel, None]:
-        """Get a user reputation object with all information
-
-        Args:
-            uidornickname (str): The UID or Nickname of the suspected user
-
-        Returns:
-            ReputationModel or None: Return the Reputation Model or None if the user doesn't exist
-        """
-
-        Reputation_user = None
-        for reputation in self.UID_REPUTATION_DB:
-            if reputation.uid == uidornickname:
-                Reputation_user = reputation
-            elif reputation.nickname == uidornickname:
-                Reputation_user = reputation
-        
-        return Reputation_user
 
     def insert_db_trusted(self, uid: str, nickname:str) -> None:
 
@@ -336,7 +263,7 @@ class Defender():
 
     def join_saved_channels(self) -> None:
 
-        result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.table_channel}")
+        result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}")
         channels = result.fetchall()
         jail_chan = self.Config.SALON_JAIL
         jail_chan_mode = self.Config.SALON_JAIL_MODES
@@ -348,10 +275,11 @@ class Defender():
 
         for channel in channels:
             chan = channel[0]
-            self.Irc.send2socket(f":{self.Config.SERVEUR_ID} SJOIN {unixtime} {chan} + :{self.Config.SERVICE_ID}")
+            # self.Irc.send2socket(f":{self.Config.SERVEUR_ID} SJOIN {unixtime} {chan} + :{self.Config.SERVICE_ID}")
+            self.Protocol.sjoin(chan)
             if chan == jail_chan:
-                self.Irc.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
-                self.Irc.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
+                self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
+                self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
 
         return None
 
@@ -397,7 +325,7 @@ class Defender():
         # - Defender devra intégrer une liste d'IDs (pseudo/host) exemptés de 'Reputation security' malgré un score de rép. faible et un pseudo non enregistré.
         try:
 
-            get_reputation = self.reputation_get_Reputation(uid)
+            get_reputation = self.Reputation.get_Reputation(uid)
 
             if get_reputation is None:
                 self.Logs.error(f'UID {uid} has not been found')
@@ -413,6 +341,7 @@ class Defender():
             color_red = self.Config.COLORS.red
             color_black = self.Config.COLORS.black
             color_bold = self.Config.COLORS.bold
+            nogc = self.Config.COLORS.nogc
             service_id = self.Config.SERVICE_ID
             service_prefix = self.Config.SERVICE_PREFIX
             reputation_ban_all_chan = self.ModConfig.reputation_ban_all_chan
@@ -420,21 +349,28 @@ class Defender():
             if not get_reputation.isWebirc:
                 # Si le user ne vient pas de webIrc
 
-                self.Irc.send2socket(f":{service_id} SAJOIN {jailed_nickname} {salon_jail}")
-                self.Irc.send2socket(f":{service_id} PRIVMSG {salon_logs} :[{color_red} REPUTATION {color_black}] : Connexion de {jailed_nickname} ({jailed_score}) ==> {salon_jail}")
-                self.Irc.send2socket(f":{service_id} NOTICE {jailed_nickname} :[{color_red} {jailed_nickname} {color_black}] : Merci de tapez la commande suivante {color_bold}{service_prefix}code {code}{color_bold}")
+                self.Protocol.send2socket(f":{service_id} SAJOIN {jailed_nickname} {salon_jail}")
+                self.Protocol.sendPrivMsg(nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f" [{color_red} REPUTATION {nogc}] : Connexion de {jailed_nickname} ({jailed_score}) ==> {salon_jail}",
+                    channel=salon_logs
+                    )
+                self.Protocol.sendNotice(
+                        nick_from=self.Config.SERVICE_NICKNAME, 
+                        nick_to=jailed_nickname,
+                        msg=f"[{color_red} {jailed_nickname} {color_black}] : Merci de tapez la commande suivante {color_bold}{service_prefix}code {code}{color_bold}"
+                    )
                 if reputation_ban_all_chan == 1:
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if chan.name != salon_jail:
-                            self.Irc.send2socket(f":{service_id} MODE {chan.name} +b {jailed_nickname}!*@*")
-                            self.Irc.send2socket(f":{service_id} KICK {chan.name} {jailed_nickname}")
+                            self.Protocol.send2socket(f":{service_id} MODE {chan.name} +b {jailed_nickname}!*@*")
+                            self.Protocol.send2socket(f":{service_id} KICK {chan.name} {jailed_nickname}")
 
                 self.Logs.info(f"system_reputation : {jailed_nickname} à été capturé par le système de réputation")
                 # self.Irc.create_ping_timer(int(self.ModConfig.reputation_timer) * 60, 'Defender', 'system_reputation_timer')
                 # self.Base.create_timer(int(self.ModConfig.reputation_timer) * 60, self.system_reputation_timer)
             else:
                 self.Logs.info(f"system_reputation : {jailed_nickname} à été supprimé du système de réputation car connecté via WebIrc ou il est dans la 'Trusted list'")
-                self.reputation_delete(uid)
+                self.Repurtation.delete(uid)
 
         except IndexError as e:
             self.Logs.error(f"system_reputation : {str(e)}")
@@ -449,6 +385,7 @@ class Defender():
             dchanlog = self.Config.SERVICE_CHANLOG
             color_red = self.Config.COLORS.red
             color_black = self.Config.COLORS.black
+            nogc = self.Config.COLORS.nogc
             salon_jail = self.Config.SALON_JAIL
 
             if reputation_flag == 0:
@@ -458,12 +395,16 @@ class Defender():
 
             uid_to_clean = []
 
-            for user in self.UID_REPUTATION_DB:
+            for user in self.Reputation.UID_REPUTATION_DB:
                 if not user.isWebirc: # Si il ne vient pas de WebIRC
                     if self.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score) <= int(reputation_seuil):
-                        self.Irc.send2socket(f":{service_id} PRIVMSG {dchanlog} :[{color_red} REPUTATION {color_black}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité")
-                        self.Irc.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code ")
-                        self.Irc.send2socket(f":{self.Config.SERVEUR_LINK} REPUTATION {user.ip} 0")
+                        self.Protocol.sendPrivMsg(
+                            nick_from=service_id,
+                            msg=f":{service_id} PRIVMSG {dchanlog} :[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
+                            channel=dchanlog
+                            )
+                        self.Protocol.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code ")
+                        self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} REPUTATION {user.ip} 0")
 
                         self.Logs.info(f"Nickname: {user.nickname} KILLED after {str(reputation_timer)} minutes of inactivity")
                         uid_to_clean.append(user.uid)
@@ -472,12 +413,12 @@ class Defender():
                 # Suppression des éléments dans {UID_DB} et {REPUTATION_DB}
                 for chan in self.Channel.UID_CHANNEL_DB:
                     if chan.name != salon_jail and ban_all_chan == 1:
-                        get_user_reputation = self.reputation_get_Reputation(uid)
-                        self.Irc.send2socket(f":{service_id} MODE {chan.name} -b {get_user_reputation.nickname}!*@*")
+                        get_user_reputation = self.Reputation.get_Reputation(uid)
+                        self.Protocol.send2socket(f":{service_id} MODE {chan.name} -b {get_user_reputation.nickname}!*@*")
 
                 # Lorsqu'un utilisateur quitte, il doit être supprimé de {UID_DB}.
                 self.Channel.delete_user_from_all_channel(uid)
-                self.reputation_delete(uid)
+                self.Reputation.delete(uid)
                 self.User.delete(uid)
 
         except AssertionError as ae:
@@ -509,7 +450,7 @@ class Defender():
         match action:
             case 'mode-m':
                 # Action -m sur le salon
-                self.Irc.send2socket(f":{service_id} MODE {channel} -m")
+                self.Protocol.send2socket(f":{service_id} MODE {channel} -m")
             case _:
                 pass
         
@@ -552,8 +493,12 @@ class Defender():
         
         elif self.flood_system[get_detected_uid]['nbr_msg'] > flood_message:
             self.Irc.Base.logs.info('system de flood detecté')
-            self.Irc.send2socket(f':{dnickname} PRIVMSG {channel} : {color_red} {color_bold} Flood detected. Apply the +m mode (Ô_o)')
-            self.Irc.send2socket(f":{service_id} MODE {channel} +m")
+            self.Protocol.sendPrivMsg(
+                nick_from=dnickname,
+                msg=f"{color_red} {color_bold} Flood detected. Apply the +m mode (Ô_o)",
+                channel=channel
+            )
+            self.Protocol.send2socket(f":{service_id} MODE {channel} +m")
             self.Irc.Base.logs.info(f'FLOOD Détecté sur {get_detected_nickname} mode +m appliqué sur le salon {channel}')
             self.flood_system[get_detected_uid]['nbr_msg'] = 0
             self.flood_system[get_detected_uid]['first_msg_time'] = unixtime
@@ -562,23 +507,28 @@ class Defender():
 
     def run_db_action_timer(self, wait_for: float = 0) -> None:
 
-        query = "SELECT parameter FROM def_config"
+        query = f"SELECT param_key FROM {self.Config.TABLE_CONFIG}"
         res = self.Base.db_execute_query(query)
         service_id = self.Config.SERVICE_ID
         dchanlog = self.Config.SERVICE_CHANLOG
 
         for param in res.fetchall():
             if param[0] == 'reputation':
-                self.Irc.send2socket(f":{service_id} PRIVMSG {dchanlog} : ===> {param[0]}")
+                self.Protocol.sendPrivMsg(
+                    nick_from=service_id,
+                    msg=f" ===> {param[0]}",
+                    channel=dchanlog
+                )
             else:
-                self.Irc.send2socket(f":{service_id} PRIVMSG {dchanlog} : {param[0]}")
-                # print(f":{service_id} PRIVMSG {dchanlog} : {param[0]}")
-
-        # self.Base.garbage_collector_timer()
+                self.Protocol.sendPrivMsg(
+                    nick_from=service_id,
+                    msg=f"{param[0]}",
+                    channel=dchanlog
+                )
 
         return None
 
-    def scan_ports(self, userModel: User.UserModel) -> None:
+    def scan_ports(self, userModel: df.MUser) -> None:
         """local_scan
 
         Args:
@@ -603,7 +553,11 @@ class Defender():
                 connection = (remote_ip, self.Base.int_if_possible(port))
                 newSocket.connect(connection)
 
-                self.Irc.send2socket(f":{self.Config.SERVICE_NICKNAME} PRIVMSG {self.Config.SERVICE_CHANLOG} :[ {self.Config.COLORS.red}PROXY_SCAN{self.Config.COLORS.black} ] {fullname} ({remote_ip}) :     Port [{str(port)}] ouvert sur l'adresse ip [{remote_ip}]")
+                self.Protocol.sendPrivMsg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[ {self.Config.COLORS.red}PROXY_SCAN{self.Config.COLORS.nogc} ] {fullname} ({remote_ip}) :     Port [{str(port)}] ouvert sur l'adresse ip [{remote_ip}]",
+                    channel=self.Config.SERVICE_CHANLOG
+                    )
                 # print(f"=======> Le port {str(port)} est ouvert !!")
                 self.Base.running_sockets.append(newSocket)
                 # print(newSocket)
@@ -640,7 +594,7 @@ class Defender():
         except ValueError as ve:
             self.Logs.warning(f"thread_local_scan Error : {ve}")
 
-    def get_ports_connexion(self, userModel: User.UserModel) -> list[int]:
+    def get_ports_connexion(self, userModel: df.MUser) -> list[int]:
         """psutil_scan for Linux (should be run on the same location as the unrealircd server)
 
         Args:
@@ -666,7 +620,11 @@ class Defender():
             self.Logs.info(f"Connexion of {fullname} ({remote_ip}) using ports : {str(matching_ports)}")
 
             if matching_ports:
-                self.Irc.send2socket(f":{self.Config.SERVICE_NICKNAME} PRIVMSG {self.Config.SERVICE_CHANLOG} :[ {self.Config.COLORS.red}PSUTIL_SCAN{self.Config.COLORS.black} ] {fullname} ({remote_ip}) : is using ports {matching_ports}")
+                self.Protocol.sendPrivMsg(
+                        nick_from=self.Config.SERVICE_NICKNAME,
+                        msg=f"[ {self.Config.COLORS.red}PSUTIL_SCAN{self.Config.COLORS.black} ] {fullname} ({remote_ip}) : is using ports {matching_ports}",
+                        channel=self.Config.SERVICE_CHANLOG
+                    )
 
             return matching_ports
 
@@ -693,7 +651,7 @@ class Defender():
         except ValueError as ve:
             self.Logs.warning(f"thread_psutil_scan Error : {ve}")
 
-    def abuseipdb_scan(self, userModel: User.UserModel) -> Union[dict[str, any], None]:
+    def abuseipdb_scan(self, userModel: df.MUser) -> Union[dict[str, any], None]:
         """Analyse l'ip avec AbuseIpDB
            Cette methode devra etre lancer toujours via un thread ou un timer.
         Args:
@@ -748,16 +706,21 @@ class Defender():
             service_chanlog = self.Config.SERVICE_CHANLOG
             color_red = self.Config.COLORS.red
             color_black = self.Config.COLORS.black
+            nogc = self.Config.COLORS.nogc
 
             # pseudo!ident@host
             fullname = f'{nickname}!{username}@{hostname}'
 
-            self.Irc.send2socket(f":{service_id} PRIVMSG {service_chanlog} :[ {color_red}ABUSEIPDB_SCAN{color_black} ] : Connexion de {fullname} ({remote_ip}) ==> Score: {str(result['score'])} | Country : {result['country']} | Tor : {str(result['isTor'])} | Total Reports : {str(result['totalReports'])}")
+            self.Protocol.sendPrivMsg(
+                nick_from=service_id,
+                msg=f"[ {color_red}ABUSEIPDB_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Score: {str(result['score'])} | Country : {result['country']} | Tor : {str(result['isTor'])} | Total Reports : {str(result['totalReports'])}",
+                channel=service_chanlog
+                )
 
             if result['isTor']:
-                self.Irc.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} This server do not allow Tor connexions {str(result['isTor'])} - Detected by Abuseipdb")
+                self.Protocol.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} This server do not allow Tor connexions {str(result['isTor'])} - Detected by Abuseipdb")
             elif result['score'] >= 95:
-                self.Irc.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} You were banned from this server because your abuse score is = {str(result['score'])} - Detected by Abuseipdb")
+                self.Protocol.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} You were banned from this server because your abuse score is = {str(result['score'])} - Detected by Abuseipdb")
 
             response.close()
 
@@ -791,7 +754,7 @@ class Defender():
         except ValueError as ve:
                 self.Logs.error(f"thread_abuseipdb_scan Error : {ve}")
 
-    def freeipapi_scan(self, userModel: User.UserModel) -> Union[dict[str, any], None]:
+    def freeipapi_scan(self, userModel: df.MUser) -> Union[dict[str, any], None]:
         """Analyse l'ip avec Freeipapi
            Cette methode devra etre lancer toujours via un thread ou un timer.
         Args:
@@ -816,6 +779,7 @@ class Defender():
         service_chanlog = self.Config.SERVICE_CHANLOG
         color_red = self.Config.COLORS.red
         color_black = self.Config.COLORS.black
+        nogc = self.Config.COLORS.nogc
 
         url = f'https://freeipapi.com/api/json/{remote_ip}'
 
@@ -845,10 +809,14 @@ class Defender():
             # pseudo!ident@host
             fullname = f'{nickname}!{username}@{hostname}'
 
-            self.Irc.send2socket(f":{service_id} PRIVMSG {service_chanlog} :[ {color_red}FREEIPAPI_SCAN{color_black} ] : Connexion de {fullname} ({remote_ip}) ==> Proxy: {str(result['isProxy'])} | Country : {str(result['countryCode'])}")
+            self.Protocol.sendPrivMsg(
+                nick_from=service_id,
+                msg=f"[ {color_red}FREEIPAPI_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Proxy: {str(result['isProxy'])} | Country : {str(result['countryCode'])}",
+                channel=service_chanlog
+                )
 
             if result['isProxy']:
-                self.Irc.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} This server do not allow proxy connexions {str(result['isProxy'])} - detected by freeipapi")
+                self.Protocol.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} This server do not allow proxy connexions {str(result['isProxy'])} - detected by freeipapi")
             response.close()
 
             return result
@@ -862,7 +830,7 @@ class Defender():
 
             while self.freeipapi_isRunning:
 
-                list_to_remove: list[User.UserModel] = []
+                list_to_remove: list[df.MUser] = []
                 for user in self.freeipapi_UserModel:
                     self.freeipapi_scan(user)
                     list_to_remove.append(user)
@@ -877,7 +845,7 @@ class Defender():
         except ValueError as ve:
             self.Logs.error(f"thread_freeipapi_scan Error : {ve}")
 
-    def cloudfilt_scan(self, userModel: User.UserModel) -> Union[dict[str, any], None]:
+    def cloudfilt_scan(self, userModel: df.MUser) -> Union[dict[str, any], None]:
         """Analyse l'ip avec cloudfilt
            Cette methode devra etre lancer toujours via un thread ou un timer.
         Args:
@@ -904,6 +872,7 @@ class Defender():
         service_chanlog = self.Config.SERVICE_CHANLOG
         color_red = self.Config.COLORS.red
         color_black = self.Config.COLORS.black
+        nogc = self.Config.COLORS.nogc
 
         url = f"https://developers18334.cloudfilt.com/"
 
@@ -931,10 +900,14 @@ class Defender():
             # pseudo!ident@host
             fullname = f'{nickname}!{username}@{hostname}'
 
-            self.Irc.send2socket(f":{service_id} PRIVMSG {service_chanlog} :[ {color_red}CLOUDFILT_SCAN{color_black} ] : Connexion de {fullname} ({remote_ip}) ==> Host: {str(result['host'])} | country: {str(result['countryiso'])} | listed: {str(result['listed'])} | listed by : {str(result['listed_by'])}")
+            self.Protocol.sendPrivMsg(
+                nick_from=service_id,
+                msg=f"[ {color_red}CLOUDFILT_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Host: {str(result['host'])} | country: {str(result['countryiso'])} | listed: {str(result['listed'])} | listed by : {str(result['listed_by'])}",
+                channel=service_chanlog
+                )
 
             if result['listed']:
-                self.Irc.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} You connexion is listed as dangerous {str(result['listed'])} {str(result['listed_by'])} - detected by cloudfilt")
+                self.Protocol.send2socket(f":{service_id} GLINE +*@{remote_ip} {self.Config.GLINE_DURATION} You connexion is listed as dangerous {str(result['listed'])} {str(result['listed_by'])} - detected by cloudfilt")
 
             response.close()
 
@@ -962,6 +935,68 @@ class Defender():
             return None
         except ValueError as ve:
             self.Logs.error(f"Thread_cloudfilt_scan Error : {ve}")
+
+    def thread_autolimit(self) -> None:
+
+        if self.ModConfig.autolimit == 0:
+            self.Logs.debug(f"autolimit deactivated ... canceling the thread")
+            return None
+
+        while self.Irc.autolimit_started:
+            time.sleep(0.2)
+
+        self.Irc.autolimit_started = True
+        init_amount = self.ModConfig.autolimit_amount
+        INIT = 1
+
+        # Copy Channels to a list of dict
+        chanObj_copy: list[dict[str, int]] = [{"name": c.name, "uids_count": len(c.uids)} for c in self.Channel.UID_CHANNEL_DB]
+        chan_list: list[str] = [c.name for c in self.Channel.UID_CHANNEL_DB]
+
+        while self.autolimit_isRunning:
+
+            if self.ModConfig.autolimit == 0:
+                self.Logs.debug(f"autolimit deactivated ... stopping the current thread")
+                break
+
+            for chan in self.Channel.UID_CHANNEL_DB:
+                for chan_copy in chanObj_copy:
+                    if chan_copy["name"] == chan.name and len(chan.uids) != chan_copy["uids_count"]:
+                        self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + self.ModConfig.autolimit_amount}")
+                        chan_copy["uids_count"] = len(chan.uids)
+
+                if not chan.name in chan_list:
+                    chan_list.append(chan.name)
+                    chanObj_copy.append({"name": chan.name, "uids_count": 0})
+
+            # Verifier si un salon a été vidé
+            current_chan_in_list = [d.name for d in self.Channel.UID_CHANNEL_DB]
+            for c in chan_list:
+                if not c in current_chan_in_list:
+                    chan_list.remove(c)
+
+            # Si c'est la premiere execution
+            if INIT == 1:
+                for chan in self.Channel.UID_CHANNEL_DB:
+                    self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + self.ModConfig.autolimit_amount}")
+
+            # Si le nouveau amount est différent de l'initial
+            if init_amount != self.ModConfig.autolimit_amount:
+                init_amount = self.ModConfig.autolimit_amount
+                for chan in self.Channel.UID_CHANNEL_DB:
+                    self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + self.ModConfig.autolimit_amount}")
+
+            INIT = 0
+
+            if self.autolimit_isRunning:
+                time.sleep(self.ModConfig.autolimit_interval)
+
+        for chan in self.Channel.UID_CHANNEL_DB:
+            self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} -l")
+
+        self.Irc.autolimit_started = False
+
+        return None
 
     def cmd(self, data: list) -> None:
         try:
@@ -1000,8 +1035,8 @@ class Defender():
 
                     if self.Config.SALON_JAIL == channel:
                         if mode == '+b' and group_to_unban in group_to_check:
-                            self.Irc.send2socket(f":{service_id} MODE {self.Config.SALON_JAIL} -b ~security-group:unknown-users")
-                            self.Irc.send2socket(f":{service_id} MODE {self.Config.SALON_JAIL} -eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+                            self.Protocol.send2socket(f":{service_id} MODE {self.Config.SALON_JAIL} -b ~security-group:unknown-users")
+                            self.Protocol.send2socket(f":{service_id} MODE {self.Config.SALON_JAIL} -eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
 
                 case 'PRIVMSG':
                     cmd.pop(0)
@@ -1012,7 +1047,7 @@ class Defender():
 
                 case 'UID':
                     # If Init then do nothing
-                    if self.Irc.INIT == 1:
+                    if self.Config.DEFENDER_INIT == 1:
                         return None
 
                     # Supprimer la premiere valeur et finir le code normalement
@@ -1036,21 +1071,23 @@ class Defender():
                     reputation_flag = self.ModConfig.reputation
                     reputation_seuil = self.ModConfig.reputation_seuil
 
-                    if self.Irc.INIT == 0:
+                    if self.Config.DEFENDER_INIT == 0:
                         # Si le user n'es pas un service ni un IrcOP
                         if not re.match(fr'^.*[S|o?].*$', _User.umodes):
                             if reputation_flag == 1 and _User.score_connexion <= reputation_seuil:
                                 currentDateTime = self.Base.get_datetime()
-                                self.reputation_insert(
-                                    self.ReputationModel(
-                                        uid=_User.uid, nickname=_User.nickname, username=_User.username, realname=_User.realname, 
-                                        hostname=_User.hostname, umodes=_User.umodes, vhost=_User.vhost, ip=_User.remote_ip, score=_User.score_connexion,
-                                        secret_code=self.Base.get_random(8), isWebirc=_User.isWebirc, isWebsocket=_User.isWebsocket, connected_datetime=currentDateTime,
-                                        updated_datetime=currentDateTime
+                                self.Reputation.insert(
+                                    self.Loader.Definition.MReputation(
+                                        **_User,
+                                        secret_code=self.Base.get_random(8)
+                                        # uid=_User.uid, nickname=_User.nickname, username=_User.username, realname=_User.realname, 
+                                        # hostname=_User.hostname, umodes=_User.umodes, vhost=_User.vhost, ip=_User.remote_ip, score=_User.score_connexion,
+                                        # secret_code=self.Base.get_random(8), isWebirc=_User.isWebirc, isWebsocket=_User.isWebsocket, connected_datetime=currentDateTime,
+                                        # updated_datetime=currentDateTime
                                     )
                                 )
                                 # self.Irc.send2socket(f":{service_id} WHOIS {nickname}")
-                                if self.reputation_check(_User.uid):
+                                if self.Reputation.is_exist(_User.uid):
                                     if reputation_flag == 1 and _User.score_connexion <= reputation_seuil:
                                         self.system_reputation(_User.uid)
                                         self.Logs.info('Démarrer le systeme de reputation')
@@ -1066,23 +1103,23 @@ class Defender():
                             pattern = fr'^:[@|%|\+|~|\*]*'
                             parsed_UID = re.sub(pattern, '', parsed_UID)
 
-                            get_reputation = self.reputation_get_Reputation(parsed_UID)
+                            get_reputation = self.Reputation.get_Reputation(parsed_UID)
 
                             if parsed_chan != self.Config.SALON_JAIL:
-                                self.Irc.send2socket(f":{service_id} MODE {parsed_chan} +b ~security-group:unknown-users")
-                                self.Irc.send2socket(f":{service_id} MODE {parsed_chan} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+                                self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +b ~security-group:unknown-users")
+                                self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
 
                             if not get_reputation is None:
                                 isWebirc = get_reputation.isWebirc
 
                                 if not isWebirc:
                                     if parsed_chan != self.Config.SALON_JAIL:
-                                        self.Irc.send2socket(f":{service_id} SAPART {get_reputation.nickname} {parsed_chan}")
+                                        self.Protocol.send2socket(f":{service_id} SAPART {get_reputation.nickname} {parsed_chan}")
 
                                 if self.ModConfig.reputation_ban_all_chan == 1 and not isWebirc:
                                     if parsed_chan != self.Config.SALON_JAIL:
-                                        self.Irc.send2socket(f":{service_id} MODE {parsed_chan} +b {get_reputation.nickname}!*@*")
-                                        self.Irc.send2socket(f":{service_id} KICK {parsed_chan} {get_reputation.nickname}")
+                                        self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +b {get_reputation.nickname}!*@*")
+                                        self.Protocol.send2socket(f":{service_id} KICK {parsed_chan} {get_reputation.nickname}")
 
                             self.Logs.debug(f'SJOIN parsed_uid : {parsed_UID}')
                     except KeyError as ke:
@@ -1116,7 +1153,7 @@ class Defender():
                     try:
                         cmd.pop(0)
                         uid = str(cmd[0]).replace(':','')
-                        get_Reputation = self.reputation_get_Reputation(uid)
+                        get_Reputation = self.Reputation.get_Reputation(uid)
                         jail_salon = self.Config.SALON_JAIL
                         service_id = self.Config.SERVICE_ID
 
@@ -1133,8 +1170,8 @@ class Defender():
                         if self.ModConfig.reputation_ban_all_chan == 1:
                             for chan in self.Channel.UID_CHANNEL_DB:
                                 if chan.name != jail_salon:
-                                    self.Irc.send2socket(f":{service_id} MODE {chan.name} -b {oldnick}!*@*")
-                                    self.Irc.send2socket(f":{service_id} MODE {chan.name} +b {newnickname}!*@*")
+                                    self.Protocol.send2socket(f":{service_id} MODE {chan.name} -b {oldnick}!*@*")
+                                    self.Protocol.send2socket(f":{service_id} MODE {chan.name} +b {newnickname}!*@*")
 
                     except KeyError as ke:
                         self.Logs.error(f'cmd - NICK - KeyError: {ke}')
@@ -1149,14 +1186,14 @@ class Defender():
                     jail_salon = self.Config.SALON_JAIL
                     service_id = self.Config.SERVICE_ID
 
-                    get_user_reputation = self.reputation_get_Reputation(final_UID)
+                    get_user_reputation = self.Reputation.get_Reputation(final_UID)
 
                     if not get_user_reputation is None:
                         final_nickname = get_user_reputation.nickname
                         for chan in self.Channel.UID_CHANNEL_DB:
                             if chan.name != jail_salon and ban_all_chan == 1:
-                                self.Irc.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
-                        self.reputation_delete(final_UID)
+                                self.Protocol.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
+                        self.Reputation.delete(final_UID)
 
         except KeyError as ke:
             self.Logs.error(f"{ke} / {cmd} / length {str(len(cmd))}")
@@ -1169,7 +1206,7 @@ class Defender():
 
         command = str(cmd[0]).lower()
         fromuser = user
-        fromchannel = channel if self.Base.Is_Channel(channel) else None
+        fromchannel = channel if self.Channel.Is_Channel(channel) else None
         channel = fromchannel
 
         dnickname = self.Config.SERVICE_NICKNAME            # Defender nickname
@@ -1194,21 +1231,23 @@ class Defender():
 
             case 'show_reputation':
 
-                if not self.UID_REPUTATION_DB:
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : No one is suspected')
+                if not self.Reputation.UID_REPUTATION_DB:
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=" No one is suspected")
 
-                for suspect in self.UID_REPUTATION_DB:
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score} | Secret code: {suspect.secret_code} | Connected on: {suspect.connected_datetime}')
+                for suspect in self.Reputation.UID_REPUTATION_DB:
+                    self.Protocol.sendNotice(nick_from=dnickname, 
+                                             nick_to=fromuser, 
+                                             msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score} | Secret code: {suspect.secret_code} | Connected on: {suspect.connected_datetime}")
 
             case 'code':
                 try:
                     release_code = cmd[1]
                     jailed_nickname = self.User.get_nickname(fromuser)
                     jailed_UID = self.User.get_uid(fromuser)
-                    get_reputation = self.reputation_get_Reputation(jailed_UID)
+                    get_reputation = self.Reputation.get_Reputation(jailed_UID)
 
                     if get_reputation is None:
-                        self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : No code is requested ...")
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=" No code is requested ...")
                         return False
 
                     jailed_IP = get_reputation.ip
@@ -1222,31 +1261,85 @@ class Defender():
                     color_black = self.Config.COLORS.black
 
                     if release_code == get_reputation.secret_code:
-                        self.Irc.send2socket(f':{dnickname} PRIVMSG {jailed_salon} : Bon mot de passe. Allez du vent !')
+                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg="Bon mot de passe. Allez du vent !", channel=jailed_salon)
 
                         if self.ModConfig.reputation_ban_all_chan == 1:
                             for chan in self.Channel.UID_CHANNEL_DB:
                                 if chan.name != jailed_salon:
-                                    self.Irc.send2socket(f":{service_id} MODE {chan.name} -b {jailed_nickname}!*@*")
+                                    self.Protocol.send2socket(f":{service_id} MODE {chan.name} -b {jailed_nickname}!*@*")
 
-                        self.reputation_delete(jailed_UID)
+                        self.Reputation.delete(jailed_UID)
                         self.Logs.debug(f'{jailed_UID} - {jailed_nickname} removed from REPUTATION_DB')
-                        self.Irc.send2socket(f":{service_id} SAPART {jailed_nickname} {jailed_salon}")
-                        self.Irc.send2socket(f":{service_id} SAJOIN {jailed_nickname} {welcome_salon}")
-                        self.Irc.send2socket(f":{link} REPUTATION {jailed_IP} {self.ModConfig.reputation_score_after_release}")
+                        self.Protocol.send2socket(f":{service_id} SAPART {jailed_nickname} {jailed_salon}")
+                        self.Protocol.send2socket(f":{service_id} SAJOIN {jailed_nickname} {welcome_salon}")
+                        self.Protocol.send2socket(f":{link} REPUTATION {jailed_IP} {self.ModConfig.reputation_score_after_release}")
                         self.User.get_User(jailed_UID).score_connexion = reputation_seuil + 1
-                        self.Irc.send2socket(f":{service_id} PRIVMSG {jailed_nickname} :[{color_green} MOT DE PASS CORRECT {color_black}] : You have now the right to enjoy the network !")
+                        self.Protocol.sendPrivMsg(nick_from=dnickname,
+                                                  msg=f"[{color_green} MOT DE PASS CORRECT {color_black}] : You have now the right to enjoy the network !", 
+                                                  nick_to=jailed_nickname)
 
                     else:
-                        self.Irc.send2socket(f':{dnickname} PRIVMSG {jailed_salon} : Mauvais password')
-                        self.Irc.send2socket(f":{service_id} PRIVMSG {jailed_nickname} :[{color_green} MAUVAIS PASSWORD {color_black}]")
+                        self.Protocol.sendPrivMsg(
+                                nick_from=dnickname,
+                                msg="Mauvais password", 
+                                channel=jailed_salon
+                            )
+                        self.Protocol.sendPrivMsg(
+                                nick_from=dnickname,
+                                msg=f"[{color_green} MAUVAIS PASSWORD {color_black}]", 
+                                nick_to=jailed_nickname
+                            )
 
-                except IndexError:
-                    self.Logs.error('_hcmd code: out of index')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} code [code]')
+                except IndexError as ie:
+                    self.Logs.error(f'Index Error: {ie}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} code [code]")
                 except KeyError as ke:
                     self.Logs.error(f'_hcmd code: KeyError {ke}')
-                    # self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} code [code]')
+
+            case 'autolimit':
+                try:
+                    # autolimit on
+                    # autolimit set [amount] [interval]
+
+                    arg = str(cmd[1]).lower()
+
+                    match arg:
+                        case 'on':
+                            if self.ModConfig.autolimit == 0:
+                                self.__update_configuration('autolimit', 1)
+                                self.autolimit_isRunning = True
+                                self.Base.create_thread(self.thread_autolimit)
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Activated", channel=self.Config.SERVICE_CHANLOG)
+                            else:
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[{self.Config.COLORS.red}AUTOLIMIT{self.Config.COLORS.nogc}] Already activated", channel=self.Config.SERVICE_CHANLOG)
+
+                        case 'off':
+                            if self.ModConfig.autolimit == 1:
+                                self.__update_configuration('autolimit', 0)
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Deactivated", channel=self.Config.SERVICE_CHANLOG)
+                            else:
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[{self.Config.COLORS.red}AUTOLIMIT{self.Config.COLORS.nogc}] Already Deactivated", channel=self.Config.SERVICE_CHANLOG)
+
+                        case 'set':
+                            amount = int(cmd[2])
+                            interval = int(cmd[3])
+
+                            self.__update_configuration('autolimit_amount', amount)
+                            self.__update_configuration('autolimit_interval', interval)
+                            self.Protocol.sendPrivMsg(
+                                nick_from=dnickname,
+                                msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Amount set to ({amount}) | Interval set to ({interval})", 
+                                channel=self.Config.SERVICE_CHANLOG
+                                )
+
+                        case _:
+                            self.Protocol.sendNotice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON", nickname=fromuser)
+                            self.Protocol.sendNotice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]", nickname=fromuser)
+
+                except Exception as err:
+                    self.Protocol.sendNotice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON", nickname=fromuser)
+                    self.Protocol.sendNotice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]", nickname=fromuser)
+                    self.Logs.error(f"Value Error -> {err}")
 
             case 'reputation':
                 # .reputation [on/off] --> activate or deactivate reputation system
@@ -1263,44 +1356,53 @@ class Defender():
                         if activation == 'on':
 
                             if self.ModConfig.reputation == 1:
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Already activated")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Already activated", channel=dchanlog)
                                 return False
 
                             # self.update_db_configuration('reputation', 1)
                             self.__update_configuration(key, 1)
 
-                            self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Activated by {fromuser}")
-                            self.Irc.send2socket(f":{service_id} JOIN {jail_chan}")
-                            self.Irc.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
-                            self.Irc.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
+                            self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
+
+                            self.Protocol.join(uidornickname=dnickname, channel=jail_chan)
+                            self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
+                            self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
 
                             if self.ModConfig.reputation_sg == 1:
                                 for chan in self.Channel.UID_CHANNEL_DB:
                                     if chan.name != jail_chan:
-                                        self.Irc.send2socket(f":{service_id} MODE {chan.name} +b ~security-group:unknown-users")
-                                        self.Irc.send2socket(f":{service_id} MODE {chan.name} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+                                        self.Protocol.send2socket(f":{service_id} MODE {chan.name} +b ~security-group:unknown-users")
+                                        self.Protocol.send2socket(f":{service_id} MODE {chan.name} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
 
-                            self.Base.db_query_channel('add', self.module_name, jail_chan)
+                            self.Channel.db_query_channel('add', self.module_name, jail_chan)
 
                         if activation == 'off':
 
                             if self.ModConfig.reputation == 0:
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Already deactivated")
+                                self.Protocol.sendPrivMsg(
+                                    nick_from=dnickname,
+                                    msg=f"[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Already deactivated",
+                                    channel=dchanlog
+                                    )
                                 return False
 
                             self.__update_configuration(key, 0)
 
-                            self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.red}REPUTATION{self.Config.COLORS.black} ] : Deactivated by {fromuser}")
-                            self.Irc.send2socket(f":{service_id} SAMODE {jail_chan} -{dumodes} {dnickname}")
-                            self.Irc.send2socket(f":{service_id} MODE {jail_chan} -sS")
-                            self.Irc.send2socket(f":{service_id} PART {jail_chan}")
+                            self.Protocol.sendPrivMsg(
+                                    nick_from=dnickname,
+                                    msg=f"[ {self.Config.COLORS.red}REPUTATION{self.Config.COLORS.black} ] : Deactivated by {fromuser}",
+                                    channel=dchanlog
+                                    )
+                            self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} -{dumodes} {dnickname}")
+                            self.Protocol.send2socket(f":{service_id} MODE {jail_chan} -sS")
+                            self.Protocol.send2socket(f":{service_id} PART {jail_chan}")
 
                             for chan in self.Channel.UID_CHANNEL_DB:
                                 if chan.name != jail_chan:
-                                    self.Irc.send2socket(f":{service_id} MODE {chan.name} -b ~security-group:unknown-users")
-                                    self.Irc.send2socket(f":{service_id} MODE {chan.name} -eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+                                    self.Protocol.send2socket(f":{service_id} MODE {chan.name} -b ~security-group:unknown-users")
+                                    self.Protocol.send2socket(f":{service_id} MODE {chan.name} -eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
 
-                            self.Base.db_query_channel('del', self.module_name, jail_chan)
+                            self.Channel.db_query_channel('del', self.module_name, jail_chan)
 
                     if len_cmd == 4:
                         get_set = str(cmd[1]).lower()
@@ -1318,23 +1420,39 @@ class Defender():
                                 if get_value == 'on':
 
                                     if self.ModConfig.reputation_ban_all_chan == 1:
-                                        self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.red}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Already activated")
+                                        self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.red}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Already activated",
+                                                channel=dchanlog
+                                            )
                                         return False
 
                                     # self.update_db_configuration(key, 1)
                                     self.__update_configuration(key, 1)
 
-                                    self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Activated by {fromuser}')
+                                    self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Activated by {fromuser}",
+                                                channel=dchanlog
+                                            )
 
                                 elif get_value == 'off':
                                     if self.ModConfig.reputation_ban_all_chan == 0:
-                                        self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.red}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Already deactivated")
+                                        self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.red}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Already deactivated",
+                                                channel=dchanlog
+                                            )
                                         return False
 
                                     # self.update_db_configuration(key, 0)
                                     self.__update_configuration(key, 0)
 
-                                    self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Deactivated by {fromuser}')
+                                    self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}BAN ON ALL CHANS{self.Config.COLORS.black} ] : Deactivated by {fromuser}",
+                                                channel=dchanlog
+                                            )
 
                             case 'limit':
                                 reputation_seuil = int(cmd[3])
@@ -1343,53 +1461,69 @@ class Defender():
                                 # self.update_db_configuration(key, reputation_seuil)
                                 self.__update_configuration(key, reputation_seuil)
 
-                                self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION SEUIL{self.Config.COLORS.black} ] : Limit set to {str(reputation_seuil)} by {fromuser}')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Reputation set to {reputation_seuil}')
+                                self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}REPUTATION SEUIL{self.Config.COLORS.black} ] : Limit set to {str(reputation_seuil)} by {fromuser}",
+                                                channel=dchanlog
+                                            )
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_seuil}")
 
                             case 'timer':
                                 reputation_timer = int(cmd[3])
                                 key = 'reputation_timer'
                                 self.__update_configuration(key, reputation_timer)
 
-                                self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION TIMER{self.Config.COLORS.black} ] : Timer set to {str(reputation_timer)} minute(s) by {fromuser}')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Reputation set to {reputation_timer}')
+                                self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}REPUTATION TIMER{self.Config.COLORS.black} ] : Timer set to {str(reputation_timer)} minute(s) by {fromuser}",
+                                                channel=dchanlog
+                                            )
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_timer}")
 
                             case 'score_after_release':
                                 reputation_score_after_release = int(cmd[3])
                                 key = 'reputation_score_after_release'
                                 self.__update_configuration(key, reputation_score_after_release)
 
-                                self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION SCORE AFTER RELEASE{self.Config.COLORS.black} ] : Reputation score after release set to {str(reputation_score_after_release)} by {fromuser}')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Reputation score after release set to {reputation_score_after_release}')
+                                self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}REPUTATION SCORE AFTER RELEASE{self.Config.COLORS.black} ] : Reputation score after release set to {str(reputation_score_after_release)} by {fromuser}",
+                                                channel=dchanlog
+                                            )
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_score_after_release}")
 
                             case 'security_group':
                                 reputation_sg = int(cmd[3])
                                 key = 'reputation_sg'
                                 self.__update_configuration(key, reputation_sg)
 
-                                self.Irc.send2socket(f':{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}REPUTATION SECURITY-GROUP{self.Config.COLORS.black} ] : Reputation Security-group set to {str(reputation_sg)} by {fromuser}')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Reputation score after release set to {reputation_sg}')
+                                self.Protocol.sendPrivMsg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}REPUTATION SECURITY-GROUP{self.Config.COLORS.black} ] : Reputation Security-group set to {str(reputation_sg)} by {fromuser}",
+                                                channel=dchanlog
+                                            )
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_sg}")
 
                             case _:
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation [ON/OFF]')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation set banallchan [ON/OFF]')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation set limit [1234]')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation set score_after_release [1234]')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation set timer [1234]')
-                                self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :Right command : /msg {dnickname} reputation set action [kill|None]')
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
+                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
 
                 except IndexError as ie:
                     self.Logs.warning(f'{ie}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation set banallchan [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation set limit [1234]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation set score_after_release [1234]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation set timer [1234]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} reputation set action [kill|None]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
 
                 except ValueError as ve:
                     self.Logs.warning(f'{ve}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : La valeur devrait etre un entier >= 0')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" La valeur devrait etre un entier >= 0")
 
             case 'proxy_scan':
 
@@ -1405,11 +1539,11 @@ class Defender():
                     set_key = str(cmd[1]).lower()
 
                     if set_key != 'set':
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
 
                     option = str(cmd[2]).lower() # => local_scan, psutil_scan, abuseipdb_scan
                     action = str(cmd[3]).lower() # => on / off
@@ -1418,105 +1552,105 @@ class Defender():
                         case 'local_scan':
                             if action == 'on':
                                 if self.ModConfig.local_scan == 1:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 1)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
                                 if self.ModConfig.local_scan == 0:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 0)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'psutil_scan':
                             if action == 'on':
                                 if self.ModConfig.psutil_scan == 1:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 1)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
                                 if self.ModConfig.psutil_scan == 0:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 0)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'abuseipdb_scan':
                             if action == 'on':
                                 if self.ModConfig.abuseipdb_scan == 1:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 1)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
                                 if self.ModConfig.abuseipdb_scan == 0:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 0)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'freeipapi_scan':
                             if action == 'on':
                                 if self.ModConfig.freeipapi_scan == 1:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 1)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
                                 if self.ModConfig.freeipapi_scan == 0:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 0)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'cloudfilt_scan':
                             if action == 'on':
                                 if self.ModConfig.cloudfilt_scan == 1:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 1)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
                                 if self.ModConfig.cloudfilt_scan == 0:
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 self.__update_configuration(option, 0)
 
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case _:
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                            self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
                 else:
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
 
             case 'flood':
                 # .flood on/off
@@ -1531,21 +1665,21 @@ class Defender():
                         key = 'flood'
                         if activation == 'on':
                             if self.ModConfig.flood == 1:
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Already activated")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Already activated", channel=dchanlog)
                                 return False
 
                             self.__update_configuration(key, 1)
 
-                            self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Activated by {fromuser}")
+                            self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
 
                         if activation == 'off':
                             if self.ModConfig.flood == 0:
-                                self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.red}FLOOD{self.Config.COLORS.black} ] : Already Deactivated")
+                                self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.red}FLOOD{self.Config.COLORS.black} ] : Already Deactivated", channel=dchanlog)
                                 return False
 
                             self.__update_configuration(key, 0)
 
-                            self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Deactivated by {fromuser}")
+                            self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                     if len_cmd == 4:
                         set_key = str(cmd[2]).lower()
@@ -1557,21 +1691,27 @@ class Defender():
                                     set_value = int(cmd[3])
                                     self.__update_configuration(key, set_value)
 
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood message set to {set_value} by {fromuser}")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                                              msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood message set to {set_value} by {fromuser}", 
+                                                              channel=dchanlog)
 
                                 case 'flood_time':
                                     key = 'flood_time'
                                     set_value = int(cmd[3])
                                     self.__update_configuration(key, set_value)
 
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood time set to {set_value} by {fromuser}")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                                              msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood time set to {set_value} by {fromuser}", 
+                                                              channel=dchanlog)
 
                                 case 'flood_timer':
                                     key = 'flood_timer'
                                     set_value = int(cmd[3])
                                     self.__update_configuration(key, set_value)
 
-                                    self.Irc.send2socket(f":{dnickname} PRIVMSG {dchanlog} :[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood timer set to {set_value} by {fromuser}")
+                                    self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                                              msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood timer set to {set_value} by {fromuser}", 
+                                                              channel=dchanlog)
 
                                 case _:
                                     pass
@@ -1583,23 +1723,24 @@ class Defender():
                 color_green = self.Config.COLORS.green
                 color_red = self.Config.COLORS.red
                 color_black = self.Config.COLORS.black
+                nogc = self.Config.COLORS.nogc
                 try:
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : [{color_green if self.ModConfig.reputation == 1 else color_red}Reputation{color_black}]                           ==> {self.ModConfig.reputation}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :           reputation_seuil             ==> {self.ModConfig.reputation_seuil}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :           reputation_after_release     ==> {self.ModConfig.reputation_score_after_release}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :           reputation_ban_all_chan      ==> {self.ModConfig.reputation_ban_all_chan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :           reputation_timer             ==> {self.ModConfig.reputation_timer}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : [Proxy_scan]')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :             {color_green if self.ModConfig.local_scan == 1 else color_red}local_scan{color_black}                 ==> {self.ModConfig.local_scan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :             {color_green if self.ModConfig.psutil_scan == 1 else color_red}psutil_scan{color_black}                ==> {self.ModConfig.psutil_scan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :             {color_green if self.ModConfig.abuseipdb_scan == 1 else color_red}abuseipdb_scan{color_black}             ==> {self.ModConfig.abuseipdb_scan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :             {color_green if self.ModConfig.freeipapi_scan == 1 else color_red}freeipapi_scan{color_black}             ==> {self.ModConfig.freeipapi_scan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :             {color_green if self.ModConfig.cloudfilt_scan == 1 else color_red}cloudfilt_scan{color_black}             ==> {self.ModConfig.cloudfilt_scan}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : [{color_green if self.ModConfig.flood == 1 else color_red}Flood{color_black}]                                ==> {self.ModConfig.flood}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :      flood_action                      ==> Coming soon')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :      flood_message                     ==> {self.ModConfig.flood_message}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :      flood_time                        ==> {self.ModConfig.flood_time}')
-                    self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} :      flood_timer                       ==> {self.ModConfig.flood_timer}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.reputation == 1 else color_red}Reputation{nogc}]                           ==> {self.ModConfig.reputation}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_seuil             ==> {self.ModConfig.reputation_seuil}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_after_release     ==> {self.ModConfig.reputation_score_after_release}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_ban_all_chan      ==> {self.ModConfig.reputation_ban_all_chan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_timer             ==> {self.ModConfig.reputation_timer}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' [Proxy_scan]')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.local_scan == 1 else color_red}local_scan{nogc}                 ==> {self.ModConfig.local_scan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.psutil_scan == 1 else color_red}psutil_scan{nogc}                ==> {self.ModConfig.psutil_scan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.abuseipdb_scan == 1 else color_red}abuseipdb_scan{nogc}             ==> {self.ModConfig.abuseipdb_scan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.freeipapi_scan == 1 else color_red}freeipapi_scan{nogc}             ==> {self.ModConfig.freeipapi_scan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.cloudfilt_scan == 1 else color_red}cloudfilt_scan{nogc}             ==> {self.ModConfig.cloudfilt_scan}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.flood == 1 else color_red}Flood{nogc}]                                ==> {self.ModConfig.flood}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_action                      ==> Coming soon')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {self.ModConfig.flood_message}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_time                        ==> {self.ModConfig.flood_time}')
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_timer                       ==> {self.ModConfig.flood_timer}')
                 except KeyError as ke:
                     self.Logs.error(f"Key Error : {ke}")
 
@@ -1615,22 +1756,22 @@ class Defender():
                                 if self.Base.clean_uid(uid_in_chan) == UserObject.uid:
                                     channels.append(chan.name)
 
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : UID              : {UserObject.uid}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : NICKNAME         : {UserObject.nickname}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : USERNAME         : {UserObject.username}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : REALNAME         : {UserObject.realname}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : HOSTNAME         : {UserObject.hostname}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : VHOST            : {UserObject.vhost}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : IP               : {UserObject.remote_ip}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : Country          : {UserObject.geoip}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : WebIrc           : {UserObject.isWebirc}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : WebWebsocket     : {UserObject.isWebsocket}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : REPUTATION       : {UserObject.score_connexion}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : MODES            : {UserObject.umodes}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : CHANNELS         : {channels}')
-                        self.Irc.send2socket(f':{dnickname} NOTICE {fromuser} : CONNECTION TIME  : {UserObject.connexion_datetime}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {UserObject.uid}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {UserObject.nickname}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' USERNAME         : {UserObject.username}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' REALNAME         : {UserObject.realname}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' HOSTNAME         : {UserObject.hostname}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' VHOST            : {UserObject.vhost}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' IP               : {UserObject.remote_ip}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' Country          : {UserObject.geoip}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' WebIrc           : {UserObject.isWebirc}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' WebWebsocket     : {UserObject.isWebsocket}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' REPUTATION       : {UserObject.score_connexion}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' MODES            : {UserObject.umodes}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' CHANNELS         : {channels}')
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f' CONNECTION TIME  : {UserObject.connexion_datetime}')
                     else:
-                        self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : This user {nickoruid} doesn't exist")
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f":{dnickname} NOTICE {fromuser} : This user {nickoruid} doesn't exist")
 
                 except KeyError as ke:
                     self.Logs.warning(f"Key error info user : {ke}")
@@ -1645,9 +1786,9 @@ class Defender():
                 if activation == 'on':
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if not chan.name in channel_to_dont_quit:
-                            self.Irc.send2socket(f":{service_id} JOIN {chan.name}")
+                            self.Protocol.join(uidornickname=dnickname, channel=chan.name)
                 if activation == 'off':
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if not chan.name in channel_to_dont_quit:
-                            self.Irc.send2socket(f":{service_id} PART {chan.name}")
+                            self.Protocol.part(uidornickname=dnickname, channel=chan.name)
                     self.join_saved_channels()
