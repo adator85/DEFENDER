@@ -213,6 +213,7 @@ class Command():
         dnickname = self.Config.SERVICE_NICKNAME
         service_id = self.Config.SERVICE_ID
         dchanlog = self.Config.SERVICE_CHANLOG
+        self.user_to_notice = user
         fromuser = user
         fromchannel = channel
 

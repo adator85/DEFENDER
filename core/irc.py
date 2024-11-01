@@ -490,7 +490,8 @@ class Irc:
                 self.Base.db_record_module(fromuser, module_name)
             self.send2socket(f":{self.Config.SERVICE_NICKNAME} PRIVMSG {self.Config.SERVICE_CHANLOG} :Module {module_name} chargé")
 
-            self.Base.logs.info(self.loaded_classes)
+            # self.Base.logs.info(self.loaded_classes)
+            self.Base.logs.info(f"Module {class_name} has been loaded")
             return True
 
         except ModuleNotFoundError as moduleNotFound:

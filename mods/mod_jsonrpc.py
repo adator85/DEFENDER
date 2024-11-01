@@ -10,8 +10,7 @@ class Jsonrpc():
     class ModConfModel:
         """The Model containing the module parameters
         """
-        param_exemple1: str
-        param_exemple2: int
+        jsonrpc: int = 0
 
     def __init__(self, ircInstance:Irc) -> None:
 
@@ -72,7 +71,8 @@ class Jsonrpc():
                     username=self.Config.JSONRPC_USER,
                     password=self.Config.JSONRPC_PASSWORD,
                     callback_object_instance=self,
-                    callback_method_name='callback_sent_to_irc'
+                    callback_method_name='callback_sent_to_irc',
+                    debug_level=10
                     )
 
         self.Rpc: Loader = Loader(
@@ -89,6 +89,9 @@ class Jsonrpc():
 
         if self.UnrealIrcdRpcLive.Error.code != 0:
             self.Irc.sendPrivMsg(f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", self.Config.SERVICE_CHANLOG)
+
+        if self.ModConfig.jsonrpc == 1:
+            self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
 
         return None
 
@@ -162,10 +165,10 @@ class Jsonrpc():
         """
         try:
             # Build the default configuration model (Mandatory)
-            self.ModConfig = self.ModConfModel(param_exemple1='param value 1', param_exemple2=1)
+            self.ModConfig = self.ModConfModel(jsonrpc=0)
 
             # Sync the configuration with core configuration (Mandatory)
-            #self.Base.db_sync_core_config(self.module_name, self.ModConfig)
+            self.Base.db_sync_core_config(self.module_name, self.ModConfig)
 
             return None
 
@@ -194,6 +197,7 @@ class Jsonrpc():
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
+        dchannel = self.Config.SERVICE_CHANLOG
         fromuser = user
         fromchannel = str(channel) if not channel is None else None
 
@@ -210,10 +214,19 @@ class Jsonrpc():
                     match option:
 
                         case 'on':
+                            for thread in self.Base.running_threads:
+                                if thread.getName() == 'thread_start_jsonrpc':
+                                    if thread.is_alive():
+                                        self.Irc.sendPrivMsg(f"Thread {thread.getName()} is running", dchannel)
+                                    else:
+                                        self.Irc.sendPrivMsg(f"Thread {thread.getName()} is not running, wait untill the process will be cleaned up", dchannel)
+
                             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
+                            self.__update_configuration('jsonrpc', 1)
 
                         case 'off':
                             self.UnrealIrcdRpcLive.unsubscribe()
+                            self.__update_configuration('jsonrpc', 0)
 
                 except IndexError as ie:
                     self.Logs.error(ie)
