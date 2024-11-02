@@ -81,6 +81,7 @@ class Channel:
     def delete_user_from_channel(self, chan_name: str, uid:str) -> bool:
         try:
             result = False
+            chan_name = chan_name.lower()
 
             for record in self.UID_CHANNEL_DB:
                 if record.name == chan_name:

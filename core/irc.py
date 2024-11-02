@@ -194,7 +194,7 @@ class Irc:
                         # Reload configuration
                         self.Base.logs.debug('Reloading configuration')
                         self.Config = self.Loader.ConfModule.Configuration().ConfigObject
-                        self.Base = self.Loader.BaseModule.Base(self.Config)
+                        self.Base = self.Loader.BaseModule.Base(self.Config, self.Settings)
                         self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, ircInstance).Protocol
 
                         self.init_service_user()
@@ -835,6 +835,10 @@ class Irc:
                     #     self.Base.create_thread(self.abuseipdb_scan, (cmd[7], ))
                     pass
 
+                case 'UMODE2':
+                    # [':adator_', 'UMODE2', '-i']
+                    self.Protocol.on_umode2(serverMsg=original_response)
+
                 case 'SQUIT':
                     # ['@msgid=QOEolbRxdhpVW5c8qLkbAU;time=2024-09-21T17:33:16.547Z', 'SQUIT', 'defender.deb.biz.st', ':Connection', 'closed']
                     server_hostname = interm_response[1]
@@ -845,19 +849,6 @@ class Irc:
 
                     self.User.delete(uid_to_delete)
                     self.Channel.delete_user_from_all_channel(uid_to_delete)
-
-                case 'SJOIN':
-                    # If Server Join channels
-                    # [':11Z', 'SJOIN', '1726940687', '#welcome', '+', ':11ZAAAAAB']
-                    channel_joined = original_response[3]
-                    server_uid = self.Base.clean_uid(original_response[5])
-
-                    self.Channel.insert(
-                        self.Loader.Definition.MChannel(
-                            name=channel_joined,
-                            uids=[server_uid]
-                        )
-                    )
 
                 case 'REPUTATION':
                     # :001 REPUTATION 127.0.0.1 118
@@ -963,135 +954,34 @@ class Irc:
                     self.Protocol.on_version_msg(original_response)
 
                 case 'QUIT':
-                    # :001N1WD7L QUIT :Quit: free_znc_1
 
-                    uid_who_quit = str(interm_response[0]).replace(':', '')
-                    self.User.delete(uid_who_quit)
-                    self.Channel.delete_user_from_all_channel(uid_who_quit)
+                    self.Protocol.on_quit(serverMsg=original_response)
 
                 case 'PONG':
                     # ['@msgid=aTNJhp17kcPboF5diQqkUL;time=2023-12-28T20:35:58.411Z', ':irc.deb.biz.st', 'PONG', 'irc.deb.biz.st', ':Dev-PyDefender']
                     self.Base.execute_periodic_action()
 
                 case 'NICK':
-                    # ['@unrealircd.org/geoip=FR;unrealircd.org/', ':001OOU2H3', 'NICK', 'WebIrc', '1703795844']
-                    # Changement de nickname
 
-                    uid = str(interm_response[0]).replace(':','')
-                    newnickname = interm_response[2]
-                    self.User.update(uid, newnickname)
+                    self.Protocol.on_nick(original_response)
 
                 case 'MODE':
                     #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6+Z4494xWUg;time=2024-08-09T12:45:36.651Z', 
                     # ':001', 'MODE', '#a', '+nt', '1723207536']
+                    # [':adator_', 'UMODE2', '-i']
                     pass
 
                 case 'SJOIN':
-                    # ['@msgid=5sTwGdj349D82L96p749SY;time=2024-08-15T09:50:23.528Z', ':001', 'SJOIN', '1721564574', '#welcome', ':001JD94QH']
-                    # ['@msgid=bvceb6HthbLJapgGLXn1b0;time=2024-08-15T09:50:11.464Z', ':001', 'SJOIN', '1721564574', '#welcome', '+lnrt', '13', ':001CIVLQF', '+11ZAAAAAB', '001QGR10C', '*@0014UE10B', '001NL1O07', '001SWZR05', '001HB8G04', '@00BAAAAAJ', '0019M7101']
-                    # ['@msgid=SKUeuVzOrTShRDduq8VerX;time=2024-08-23T19:37:04.266Z', ':001', 'SJOIN', '1723993047', '#welcome', '+lnrt', '13', 
-                    # ':001T6VU3F', '001JGWB2K', '@11ZAAAAAB', 
-                    # '001F16WGR', '001X9YMGQ', '*+001DYPFGP', '@00BAAAAAJ', '001AAGOG9', '001FMFVG8', '001DAEEG7', 
-                    # '&~G:unknown-users', '"~G:websocket-users', '"~G:known-users', '"~G:webirc-users']
 
-                    channel = str(interm_response[3]).lower()
-                    len_cmd = len(interm_response)
-                    list_users:list = []
-                    occurence = 0
-                    start_boucle = 0
-
-                    # Trouver le premier user
-                    for i in range(len_cmd):
-                        s: list = re.findall(fr':', interm_response[i])
-                        if s:
-                            occurence += 1
-                            if occurence == 2:
-                                start_boucle = i
-
-                    # Boucle qui va ajouter l'ensemble des users (UID)
-                    for i in range(start_boucle, len(interm_response)):
-                        parsed_UID = str(interm_response[i])
-                        # pattern = fr'[:|@|%|\+|~|\*]*'
-                        # pattern = fr':'
-                        # parsed_UID = re.sub(pattern, '', parsed_UID)
-                        clean_uid = self.Base.clean_uid(parsed_UID)
-                        if len(clean_uid) == 9:
-                            list_users.append(parsed_UID)
-
-                    self.Channel.insert(
-                        self.Loader.Definition.MChannel(
-                            name=channel,
-                            uids=list_users
-                        )
-                    )
+                    self.Protocol.on_sjoin(serverMsg=original_response)
 
                 case 'PART':
-                    # ['@unrealircd.org/geoip=FR;unrealircd.org/userhost=50d6492c@80.214.73.44;unrealircd.org/userip=50d6492c@80.214.73.44;msgid=YSIPB9q4PcRu0EVfC9ci7y-/mZT0+Gj5FLiDSZshH5NCw;time=2024-08-15T15:35:53.772Z', 
-                    # ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
-                    try:
-                        uid = str(interm_response[0]).replace(':','')
-                        channel = str(interm_response[2]).lower()
-                        self.Channel.delete_user_from_channel(channel, uid)
 
-                    except IndexError as ie:
-                        self.Base.logs.error(f'Index Error: {ie}')
-
+                    self.Protocol.on_part(serverMsg=original_response)
+ 
                 case 'UID':
                     try:
-                        # ['@s2s-md/geoip=cc=GB|cd=United\\sKingdom|asn=16276|asname=OVH\\sSAS;s2s-md/tls_cipher=TLSv1.3-TLS_CHACHA20_POLY1305_SHA256;s2s-md/creationtime=1721564601', 
-                        # ':001', 'UID', 'albatros', '0', '1721564597', 'albatros', 'vps-91b2f28b.vps.ovh.net', 
-                        # '001HB8G04', '0', '+iwxz', 'Clk-A62F1D18.vps.ovh.net', 'Clk-A62F1D18.vps.ovh.net', 'MyZBwg==', ':...']
-
-                        isWebirc = True if 'webirc' in original_response[0] else False
-                        isWebsocket = True if 'websocket' in original_response[0] else False
-
-                        uid = str(original_response[8])
-                        nickname = str(original_response[3])
-                        username = str(original_response[6])
-                        hostname = str(original_response[7])
-                        umodes = str(original_response[10])
-                        vhost = str(original_response[11])
-
-                        if not 'S' in umodes:
-                            remote_ip = self.Base.decode_ip(str(original_response[13]))
-                        else:
-                            remote_ip = '127.0.0.1'
-
-                        # extract realname
-                        realname_list = []
-                        for i in range(14, len(original_response)):
-                            realname_list.append(original_response[i])
-
-                        realname = ' '.join(realname_list)[1:]
-
-                        # Extract Geoip information
-                        pattern = r'^.*geoip=cc=(\S{2}).*$'
-                        geoip_match = re.match(pattern, original_response[0])
-
-                        if geoip_match:
-                            geoip = geoip_match.group(1)
-                        else:
-                            geoip = None
-
-                        score_connexion = self.first_score
-
-                        self.User.insert(
-                            self.Loader.Definition.MUser(
-                                uid=uid,
-                                nickname=nickname,
-                                username=username,
-                                realname=realname,
-                                hostname=hostname,
-                                umodes=umodes,
-                                vhost=vhost,
-                                isWebirc=isWebirc,
-                                isWebsocket=isWebsocket,
-                                remote_ip=remote_ip,
-                                geoip=geoip,
-                                score_connexion=score_connexion,
-                                connexion_datetime=datetime.now()
-                            )
-                        )
+                        self.Protocol.on_uid(serverMsg=original_response)
 
                         for classe_name, classe_object in self.loaded_classes.items():
                             classe_object.cmd(original_response)
@@ -1596,17 +1486,17 @@ class Irc:
                     reason.append(cmd[i])
                 final_reason = ' '.join(reason)
 
-                self.User.UID_DB.clear()                # Clear User Object
-                self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-
-                for class_name in self.loaded_classes:
-                    self.loaded_classes[class_name].unload()
-
                 self.Protocol.sendNotice(
                     nick_from=dnickname,
                     nick_to=fromuser,
                     msg=f"Redémarrage du service {dnickname}"
                 )
+
+                for class_name in self.loaded_classes:
+                    self.loaded_classes[class_name].unload()
+
+                self.User.UID_DB.clear()                # Clear User Object
+                self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
 
                 self.Protocol.squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
                 self.Base.logs.info(f'Redémarrage du server {dnickname}')

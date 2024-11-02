@@ -1364,7 +1364,7 @@ class Defender():
 
                             self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
 
-                            self.Protocol.join(uidornickname=dnickname, channel=jail_chan)
+                            self.Protocol.sendChanJoin(uidornickname=dnickname, channel=jail_chan)
                             self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
                             self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
 
@@ -1786,7 +1786,7 @@ class Defender():
                 if activation == 'on':
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if not chan.name in channel_to_dont_quit:
-                            self.Protocol.join(uidornickname=dnickname, channel=chan.name)
+                            self.Protocol.sendChanJoin(uidornickname=dnickname, channel=chan.name)
                 if activation == 'off':
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if not chan.name in channel_to_dont_quit:

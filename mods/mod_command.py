@@ -226,7 +226,7 @@ class Command():
 
         return None
 
-    def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def _hcmds(self, user: str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
@@ -656,7 +656,7 @@ class Command():
                         return False
 
                     # self.Protocol.send2socket(f':{service_id} JOIN {sent_channel}')
-                    self.Protocol.join(uidornickname=dnickname,channel=sent_channel)
+                    self.Protocol.sendChanJoin(uidornickname=dnickname,channel=sent_channel)
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} JOINED {sent_channel}")
                     self.Channel.db_query_channel('add', self.module_name, sent_channel)
 
@@ -677,7 +677,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} CAN'T LEFT {sent_channel} AS IT IS LOG CHANNEL")
                         return False
 
-                    self.Protocol.part(uidornickname=dnickname, channel=sent_channel)
+                    self.Protocol.sendChanPart(uidornickname=dnickname, channel=sent_channel)
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} LEFT {sent_channel}")
                     
                     self.Channel.db_query_channel('del', self.module_name, sent_channel)
@@ -859,6 +859,10 @@ class Command():
             case 'umode':
                 try:
                     # .umode nickname +mode
+                    if len(cmd) < 2:
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [NICKNAME] [+/-]mode")
+                        return None
+
                     nickname = str(cmd[1])
                     umode = str(cmd[2])
 

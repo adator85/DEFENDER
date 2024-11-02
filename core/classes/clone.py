@@ -55,20 +55,15 @@ class Clone:
         Returns:
             bool: True if deleted
         """
-        result = False
 
-        for record in self.UID_CLONE_DB:
-            if record.nickname == uidornickname or record.uid == uidornickname:
-                # If the user exist then remove and return True and do not go further
-                self.UID_CLONE_DB.remove(record)
-                result = True
-                # self.Logs.debug(f'The clone ({record.nickname}) has been deleted')
-                return result
+        cloneObj = self.get_Clone(uidornickname=uidornickname)
 
-        if not result:
-            self.Logs.critical(f'The UID or Nickname {uidornickname} was not deleted')
+        if cloneObj is None:
+            return False
 
-        return result
+        self.UID_CLONE_DB.remove(cloneObj)
+
+        return True
 
     def exists(self, nickname: str) -> bool:
         """Check if the nickname exist
@@ -113,11 +108,15 @@ class Clone:
         Returns:
             Union[MClone, None]: Return MClone object or None
         """
+        cloneObj = None
+
         for clone in self.UID_CLONE_DB:
             if clone.uid == uidornickname:
-                return clone
+                cloneObj = clone
             if clone.nickname == uidornickname:
-                return clone
+                cloneObj = clone
+
+        return cloneObj
 
     def get_uid(self, uidornickname: str) -> Union[str, None]:
         """Get the UID of the clone starting from the UID or the Nickname

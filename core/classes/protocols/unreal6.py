@@ -1,3 +1,5 @@
+from re import match, findall
+from datetime import datetime
 from typing import TYPE_CHECKING
 from ssl import SSLEOFError, SSLError
 
@@ -23,12 +25,12 @@ class Unrealircd6:
                 if print_log:
                     self.__Base.logs.debug(f'<< {message}')
 
-        except UnicodeDecodeError:
-            self.__Base.logs.error(f'Decode Error try iso-8859-1 - message: {message}')
-            self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[0],'replace'))
-        except UnicodeEncodeError:
-            self.__Base.logs.error(f'Encode Error try iso-8859-1 - message: {message}')
-            self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[0],'replace'))
+        except UnicodeDecodeError as ude:
+            self.__Base.logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
+            self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
+        except UnicodeEncodeError as uee:
+            self.__Base.logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
+            self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
         except AssertionError as ae:
             self.__Base.logs.warning(f'Assertion Error {ae} - message: {message}')
         except SSLEOFError as soe:
@@ -150,6 +152,9 @@ class Unrealircd6:
 
     def squit(self, server_id: str, server_link: str, reason: str) -> None:
 
+        if not reason:
+            reason = 'Service Shutdown'
+
         self.send2socket(f":{server_id} SQUIT {server_link} :{reason}")
         return None
 
@@ -168,13 +173,81 @@ class Unrealircd6:
 
     def sjoin(self, channel: str) -> None:
 
+        if not self.__Irc.Channel.Is_Channel(channel):
+            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+            return None
+
         self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
         return None
 
-    def join(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    def sendQuit(self, uid: str, reason: str, print_log: True) -> None:
+        """Send quit message
+
+        Args:
+            uidornickname (str): The UID or the Nickname
+            reason (str): The reason for the quit
+        """
+        userObj = self.__Irc.User.get_User(uidornickname=uid)
+        cloneObj = self.__Irc.Clone.get_Clone(uidornickname=uid)
+        reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
+
+        if not userObj is None:
+            self.send2socket(f":{userObj.uid} QUIT :{reason}", print_log=print_log)
+            self.__Irc.User.delete(userObj.uid)
+
+        if not cloneObj is None:
+            self.__Irc.Clone.delete(cloneObj.uid)
+
+        if not reputationObj is None:
+            self.__Irc.Reputation.delete(reputationObj.uid)
+
+        if not self.__Irc.Channel.delete_user_from_all_channel(uid):
+            self.__Base.logs.error(f"The UID [{uid}] has not been deleted from all channels")
+
+        return None
+
+    def sendUID(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+        """Send UID to the server
+
+        Args:
+            nickname (str): Nickname of the client
+            username (str): Username of the client
+            hostname (str): Hostname of the client you want to create
+            uid (str): UID of the client you want to create
+            umodes (str): umodes of the client you want to create
+            vhost (str): vhost of the client you want to create
+            remote_ip (str): remote_ip of the client you want to create
+            realname (str): realname of the client you want to create
+            print_log (bool, optional): print logs if true. Defaults to True.
+        """
+        # {self.Config.SERVEUR_ID} UID 
+        # {clone.nickname} 1 {self.Base.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
+        try:
+            unixtime = self.__Base.get_unixtime()
+            encoded_ip = self.__Base.encode_ip(remote_ip)
+
+            # Create the user
+            self.__Irc.User.insert(
+                self.__Irc.Loader.Definition.MUser(
+                            uid=uid, nickname=nickname, username=username, 
+                            realname=realname,hostname=hostname, umodes=umodes,
+                            vhost=vhost, remote_ip=remote_ip
+                        )
+                    )
+
+            uid_msg = f":{self.__Config.SERVEUR_ID} UID {nickname} 1 {unixtime} {username} {hostname} {uid} * {umodes} {vhost} * {encoded_ip} :{realname}"
+
+            self.send2socket(uid_msg, print_log=print_log)
+
+            return None
+
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def sendChanJoin(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -191,6 +264,7 @@ class Unrealircd6:
             return None
 
         if not self.__Irc.Channel.Is_Channel(channel):
+            self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} JOIN {channel} {passwordChannel}", print_log=print_log)
@@ -199,7 +273,7 @@ class Unrealircd6:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
         return None
 
-    def part(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
+    def sendChanPart(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
         """Part from a channel
 
         Args:
@@ -211,9 +285,11 @@ class Unrealircd6:
         userObj = self.__Irc.User.get_User(uidornickname)
 
         if userObj is None:
+            self.__Base.logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
         if not self.__Irc.Channel.Is_Channel(channel):
+            self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} PART {channel}", print_log=print_log)
@@ -227,6 +303,214 @@ class Unrealircd6:
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
 
         return None
+
+    def on_umode2(self, serverMsg: list[str]) -> None:
+        """Handle umode2 coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # [':adator_', 'UMODE2', '-iwx']
+
+            userObj  = self.__Irc.User.get_User(str(serverMsg[0]).lstrip(':'))
+            userMode = serverMsg[2]
+
+            if userObj is None: # If user is not created
+                return None
+
+            # save previous user modes
+            old_umodes = userObj.umodes
+
+            # TODO : User object should be able to update user modes
+            if self.__Irc.User.update_mode(userObj.uid, userMode):
+                return None
+                # self.__Base.logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
+
+            return None
+
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def on_quit(self, serverMsg: list[str]) -> None:
+        """Handle quit coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # ['@unrealircd.org/userhost=...@192.168.1.10;unrealircd.org/userip=...@192.168.1.10;msgid=CssUrV08BzekYuq7BfvPHn;time=2024-11-02T15:03:33.182Z', ':001JKNY0N', 'QUIT', ':Quit:', '....']
+
+            uid_who_quit = str(serverMsg[1]).lstrip(':')
+
+            self.__Irc.Channel.delete_user_from_all_channel(uid_who_quit)
+            self.__Irc.User.delete(uid_who_quit)
+            self.__Irc.Reputation.delete(uid_who_quit)
+            self.__Irc.Clone.delete(uid_who_quit)
+
+            return None
+
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def on_nick(self, serverMsg: list[str]) -> None:
+        """Handle nick coming from a server
+        new nickname
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # ['@unrealircd.org/geoip=FR;unrealircd.org/', ':001OOU2H3', 'NICK', 'WebIrc', '1703795844']
+                    # Changement de nickname
+
+            uid = str(serverMsg[1]).lstrip(':')
+            newnickname = serverMsg[3]
+            self.__Irc.User.update(uid, newnickname)
+
+            return None
+
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def on_sjoin(self, serverMsg: list[str]) -> None:
+        """Handle sjoin coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # ['@msgid=5sTwGdj349D82L96p749SY;time=2024-08-15T09:50:23.528Z', ':001', 'SJOIN', '1721564574', '#welcome', ':001JD94QH']
+            # ['@msgid=bvceb6HthbLJapgGLXn1b0;time=2024-08-15T09:50:11.464Z', ':001', 'SJOIN', '1721564574', '#welcome', '+lnrt', '13', ':001CIVLQF', '+11ZAAAAAB', '001QGR10C', '*@0014UE10B', '001NL1O07', '001SWZR05', '001HB8G04', '@00BAAAAAJ', '0019M7101']
+            # ['@msgid=SKUeuVzOrTShRDduq8VerX;time=2024-08-23T19:37:04.266Z', ':001', 'SJOIN', '1723993047', '#welcome', '+lnrt', '13', 
+            # ':001T6VU3F', '001JGWB2K', '@11ZAAAAAB', 
+            # '001F16WGR', '001X9YMGQ', '*+001DYPFGP', '@00BAAAAAJ', '001AAGOG9', '001FMFVG8', '001DAEEG7', 
+            # '&~G:unknown-users', '"~G:websocket-users', '"~G:known-users', '"~G:webirc-users']
+            serverMsg.pop(0)
+            channel = str(serverMsg[3]).lower()
+            len_cmd = len(serverMsg)
+            list_users:list = []
+            occurence = 0
+            start_boucle = 0
+
+            # Trouver le premier user
+            for i in range(len_cmd):
+                s: list = findall(fr':', serverMsg[i])
+                if s:
+                    occurence += 1
+                    if occurence == 2:
+                        start_boucle = i
+
+            # Boucle qui va ajouter l'ensemble des users (UID)
+            for i in range(start_boucle, len(serverMsg)):
+                parsed_UID = str(serverMsg[i])
+                clean_uid = self.__Irc.User.clean_uid(parsed_UID)
+                if not clean_uid is None and len(clean_uid) == 9:
+                    list_users.append(parsed_UID)
+
+            if list_users:
+                self.__Irc.Channel.insert(
+                    self.__Irc.Loader.Definition.MChannel(
+                        name=channel,
+                        uids=list_users
+                    )
+                )
+            return None
+
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def on_part(self, serverMsg: list[str]) -> None:
+        """Handle part coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # ['@unrealircd.org/geoip=FR;unrealircd.org/userhost=50d6492c@80.214.73.44;unrealircd.org/userip=50d6492c@80.214.73.44;msgid=YSIPB9q4PcRu0EVfC9ci7y-/mZT0+Gj5FLiDSZshH5NCw;time=2024-08-15T15:35:53.772Z', 
+            # ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
+
+            uid = str(serverMsg[1]).lstrip(':')
+            channel = str(serverMsg[3]).lower()
+            self.__Irc.Channel.delete_user_from_channel(channel, uid)
+
+            return None
+
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def on_uid(self, serverMsg: list[str]) -> None:
+        """Handle uid message coming from the server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        # ['@s2s-md/geoip=cc=GB|cd=United\\sKingdom|asn=16276|asname=OVH\\sSAS;s2s-md/tls_cipher=TLSv1.3-TLS_CHACHA20_POLY1305_SHA256;s2s-md/creationtime=1721564601', 
+        # ':001', 'UID', 'albatros', '0', '1721564597', 'albatros', 'vps-91b2f28b.vps.ovh.net', 
+        # '001HB8G04', '0', '+iwxz', 'Clk-A62F1D18.vps.ovh.net', 'Clk-A62F1D18.vps.ovh.net', 'MyZBwg==', ':...']
+        try:
+
+            isWebirc = True if 'webirc' in serverMsg[0] else False
+            isWebsocket = True if 'websocket' in serverMsg[0] else False
+
+            uid = str(serverMsg[8])
+            nickname = str(serverMsg[3])
+            username = str(serverMsg[6])
+            hostname = str(serverMsg[7])
+            umodes = str(serverMsg[10])
+            vhost = str(serverMsg[11])
+
+            if not 'S' in umodes:
+                remote_ip = self.__Base.decode_ip(str(serverMsg[13]))
+            else:
+                remote_ip = '127.0.0.1'
+
+            # extract realname
+            realname = ' '.join(serverMsg[14:]).lstrip(':')
+
+            # Extract Geoip information
+            pattern = r'^.*geoip=cc=(\S{2}).*$'
+            geoip_match = match(pattern, serverMsg[0])
+
+            if geoip_match:
+                geoip = geoip_match.group(1)
+            else:
+                geoip = None
+
+            score_connexion = 0
+
+            self.__Irc.User.insert(
+                self.__Irc.Loader.Definition.MUser(
+                    uid=uid,
+                    nickname=nickname,
+                    username=username,
+                    realname=realname,
+                    hostname=hostname,
+                    umodes=umodes,
+                    vhost=vhost,
+                    isWebirc=isWebirc,
+                    isWebsocket=isWebsocket,
+                    remote_ip=remote_ip,
+                    geoip=geoip,
+                    score_connexion=score_connexion,
+                    connexion_datetime=datetime.now()
+                )
+            )
+            return None
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server

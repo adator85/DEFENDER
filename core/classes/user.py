@@ -1,4 +1,4 @@
-import re
+from re import sub
 from typing import Union, TYPE_CHECKING
 from dataclasses import asdict
 
@@ -26,25 +26,16 @@ class User:
         Returns:
             bool: True if inserted
         """
-        result = False
-        exist = False
 
-        for record in self.UID_DB:
-            if record.uid == newUser.uid:
-                # If the user exist then return False and do not go further
-                exist = True
-                self.Logs.debug(f'{record.uid} already exist')
-                return result
+        userObj = self.get_User(newUser.uid)
 
-        if not exist:
-            self.UID_DB.append(newUser)
-            result = True
-            # self.Logs.debug(f'New User Created: ({newUser})')
+        if not userObj is None:
+            # User already created return False
+            return False
 
-        if not result:
-            self.Logs.critical(f'The User Object was not inserted {newUser}')
+        self.UID_DB.append(newUser)
 
-        return result
+        return True
 
     def update(self, uid: str, newNickname: str) -> bool:
         """Update the nickname starting from the UID
@@ -56,20 +47,53 @@ class User:
         Returns:
             bool: True if updated
         """
-        result = False
+        userObj = self.get_User(uidornickname=uid)
 
-        for record in self.UID_DB:
-            if record.uid == uid:
-                # If the user exist then update and return True and do not go further
-                record.nickname = newNickname
-                result = True
-                # self.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {newNickname}')
-                return result
+        if userObj is None:
+            return False
 
-        if not result:
-            self.Logs.critical(f'The new nickname {newNickname} was not updated, uid = {uid}')
+        userObj.nickname = newNickname
 
-        return result
+        return True
+
+    def update_mode(self, uidornickname: str, modes: str) -> bool:
+        """Updating user mode
+
+        Args:
+            uidornickname (str): The UID or Nickname of the user
+            modes (str): new modes to update
+
+        Returns:
+            bool: True if user mode has been updaed
+        """
+        response = True
+        userObj = self.get_User(uidornickname=uidornickname)
+
+        if userObj is None:
+            return False
+
+        action = modes[0]
+        new_modes = modes[1:]
+
+        existing_umodes = userObj.umodes
+        final_umodes = userObj.umodes
+
+        if action == '+':
+
+            for nm in new_modes:
+                if nm not in existing_umodes:
+                    final_umodes += nm
+
+        elif action == '-':
+            for nm in new_modes:
+                if nm in existing_umodes:
+                    final_umodes = final_umodes.replace(nm, '')
+        else:
+            return False
+
+        userObj.umodes = final_umodes
+
+        return response
 
     def delete(self, uid: str) -> bool:
         """Delete the User starting from the UID
@@ -80,20 +104,15 @@ class User:
         Returns:
             bool: True if deleted
         """
-        result = False
 
-        for record in self.UID_DB:
-            if record.uid == uid:
-                # If the user exist then remove and return True and do not go further
-                self.UID_DB.remove(record)
-                result = True
-                # self.Logs.debug(f'UID ({record.uid}) has been deleted')
-                return result
+        userObj = self.get_User(uidornickname=uid)
 
-        if not result:
-            self.Logs.critical(f'The UID {uid} was not deleted')
+        if userObj is None:
+            return False
 
-        return result
+        self.UID_DB.remove(userObj)
+
+        return True
 
     def get_User(self, uidornickname: str) -> Union['MUser', None]:
         """Get The User Object model
@@ -111,8 +130,6 @@ class User:
             elif record.nickname == uidornickname:
                 User = record
 
-        # self.Logs.debug(f'Search {uidornickname} -- result = {User}')
-
         return User
 
     def get_uid(self, uidornickname:str) -> Union[str, None]:
@@ -124,17 +141,13 @@ class User:
         Returns:
             str|None: Return the UID
         """
-        uid = None
-        for record in self.UID_DB:
-            if record.uid == uidornickname:
-                uid = record.uid
-            if record.nickname == uidornickname:
-                uid = record.uid
 
-        # if not uid is None:
-        #     self.Logs.debug(f'The UID that you are looking for {uidornickname} has been found {uid}')
+        userObj = self.get_User(uidornickname=uidornickname)
 
-        return uid
+        if userObj is None:
+            return None
+
+        return userObj.uid
 
     def get_nickname(self, uidornickname:str) -> Union[str, None]:
         """Get the Nickname starting from UID or the nickname
@@ -145,26 +158,46 @@ class User:
         Returns:
             str|None: the nickname
         """
-        nickname = None
-        for record in self.UID_DB:
-            if record.nickname == uidornickname:
-                nickname = record.nickname
-            if record.uid == uidornickname:
-                nickname = record.nickname
-        # self.Logs.debug(f'The value to check {uidornickname} -> {nickname}')
-        return nickname
-
-    def get_User_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
-
         userObj = self.get_User(uidornickname=uidornickname)
 
-        if not userObj is None:
-            user_as_dict = asdict(userObj)
-            return user_as_dict
-        else:
+        if userObj is None:
             return None
 
-    def clean_uid(self, uid: str) -> str:
+        return userObj.nickname
+
+    def get_User_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
+        """Transform User Object to a dictionary
+
+        Args:
+            uidornickname (str): The UID or The nickname
+
+        Returns:
+            Union[dict[str, any], None]: User Object as a dictionary or None
+        """
+        userObj = self.get_User(uidornickname=uidornickname)
+
+        if userObj is None:
+            return None
+
+        return asdict(userObj)
+
+    def is_exist(self, uidornikname: str) -> bool:
+        """Check if the UID or the nickname exist in the USER DB
+
+        Args:
+            uidornickname (str): The UID or the NICKNAME
+
+        Returns:
+            bool: True if exist
+        """
+        userObj = self.get_User(uidornickname=uidornikname)
+
+        if userObj is None:
+            return False
+
+        return True
+
+    def clean_uid(self, uid: str) -> Union[str, None]:
         """Clean UID by removing @ / % / + / ~ / * / :
 
         Args:
@@ -175,6 +208,9 @@ class User:
         """
 
         pattern = fr'[:|@|%|\+|~|\*]*'
-        parsed_UID = re.sub(pattern, '', uid)
+        parsed_UID = sub(pattern, '', uid)
+
+        if not parsed_UID:
+            return None
 
         return parsed_UID

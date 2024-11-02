@@ -8,3 +8,5 @@ class Settings:
     RUNNING_SOCKETS: list[socket]   = []
     PERIODIC_FUNC: dict[object]     = {}
     LOCK: RLock = RLock()
+
+    CONSOLE: bool                   = True

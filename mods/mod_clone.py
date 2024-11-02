@@ -63,7 +63,6 @@ class Clone():
         # Créer les tables necessaire a votre module (ce n'es pas obligatoire)
         self.__create_tables()
 
-        self.CloneCopy = [self.Definition.MClone()]
         self.stop = False
         logging.getLogger('faker').setLevel(logging.CRITICAL)
 
@@ -74,7 +73,7 @@ class Clone():
         self.__load_module_configuration()
 
         self.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.join(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
+        self.Protocol.sendChanJoin(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.CLONE_CHANNEL} +o {self.Config.SERVICE_NICKNAME}")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +nts")
@@ -141,7 +140,7 @@ class Clone():
         self.Channel.db_query_channel(action='del', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -nts")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -k {self.Config.CLONE_CHANNEL_PASSWORD}")
-        self.Protocol.part(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
+        self.Protocol.sendChanPart(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
         return None
 
@@ -168,6 +167,8 @@ class Clone():
             generate_uid = fakeEN.random_sample(chaine, 6)
             uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
 
+            umodes = '+iwxz'
+
             # Generate Username
             chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
             new_username = fakeEN.random_sample(chaine, 9)
@@ -188,7 +189,8 @@ class Clone():
             department = fakeFR.department_name()
             realname = f'{age} {gender} {department}'
 
-            ip = self.Base.encode_ip(fakeEN.ipv4_private())
+            decoded_ip = fakeEN.ipv4_private()
+            hostname = fakeEN.hostname()
 
             vhost = self.generate_vhost()
 
@@ -211,16 +213,17 @@ class Clone():
                         connected=False, 
                         nickname=nickname, 
                         username=username, 
-                        realname=realname, 
+                        realname=realname,
+                        hostname=hostname,
+                        umodes=umodes,
                         uid=uid, 
-                        remote_ip=ip, 
+                        remote_ip=decoded_ip, 
                         vhost=vhost, 
                         group=group, 
                         channels=[]
                         )
 
             self.Clone.insert(clone)
-            self.CloneCopy.append(clone)
 
             return None
 
@@ -242,18 +245,8 @@ class Clone():
                 break
 
             if not clone.connected:
-                cloneObj_asdict = self.Clone.get_Clone_AsDict(clone.uid)
-
-                for key in ['connected','group','channels']:
-                    cloneObj_asdict.pop(key, None)
-
-                self.User.insert(
-                    self.Definition.MUser(**cloneObj_asdict)
-                )
-
-                self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} UID {clone.nickname} 1 {self.Base.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * +ixwz  {clone.vhost} * {clone.remote_ip} :{clone.realname}", False)
-                self.Protocol.join(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
-                self.Irc.Channel.insert(self.Irc.Loader.Definition.MChannel(name=self.Config.CLONE_CHANNEL, uids=[clone.uid]))
+                self.Protocol.sendUID(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, print_log=False)
+                self.Protocol.sendChanJoin(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
 
             time.sleep(interval)
             clone.connected = True
@@ -262,47 +255,13 @@ class Clone():
 
         clone_to_kill: list[str] = []
         for clone in self.Clone.UID_CLONE_DB:
-            self.Protocol.send2socket(f':{clone.uid} QUIT :Goood bye', False)
             clone_to_kill.append(clone.uid)
 
         for clone_uid in clone_to_kill:
-            self.Irc.Channel.delete_user_from_all_channel(clone_uid)
-            self.Clone.delete(clone_uid)
-            self.User.delete(clone_uid)
+            self.Protocol.sendQuit(clone_uid, 'Gooood bye', print_log=False)
 
         del clone_to_kill
 
-        self.clean_clones(fromuser)
-
-        return None
-
-    def clean_clones(self, fromuser: str) -> None:
-
-        connected = 0
-        for c in self.CloneCopy:
-            if c.connected:
-                connected += 1
-
-        self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=fromuser, msg=f"Clean in progress | Total Clones in memory {len(self.CloneCopy) - 1} - {connected} / {len(self.CloneCopy) - 1} Connected ...")
-        clone_to_kill: list[str] = []
-
-        # clean from Channels
-        for clone in self.CloneCopy:
-            self.Irc.Channel.delete_user_from_all_channel(clone.uid)
-
-        # clean from users
-        for clone in self.CloneCopy:
-            self.Protocol.send2socket(f':{clone.uid} QUIT :Goood bye', False)
-            clone_to_kill.append(clone.uid)
-
-        # clean original clone object
-        for clone_uid in clone_to_kill:
-            self.User.delete(clone_uid)
-            self.Clone.delete(clone_uid)
-
-        self.CloneCopy = [self.Definition.MClone()]
-        self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=fromuser, 
-                                 msg="Clone cleaning done!")
         return None
 
     def cmd(self, data:list) -> None:
@@ -353,6 +312,7 @@ class Clone():
         try:
             command = str(cmd[0]).lower()
             fromuser = user
+            print(command)
 
             dnickname = self.Config.SERVICE_NICKNAME            # Defender nickname
 
@@ -400,15 +360,9 @@ class Clone():
                                     self.Base.create_thread(func=self.thread_kill_clones, func_args=(fromuser, ))
 
                                 else:
-                                    if self.Clone.exists(clone_name):
-
-                                        self.Protocol.send2socket(f':{clone_name} QUIT :Goood bye')
-
-                                        clone_uid = self.Clone.get_uid(clone_name)
-                                        if not clone_uid is None:
-                                            self.Irc.Channel.delete_user_from_all_channel(clone_uid)
-                                            self.Clone.delete(clone_name)
-                                            self.User.delete(clone_uid)
+                                    cloneObj = self.Clone.get_Clone(clone_name)
+                                    if not cloneObj is None:
+                                        self.Protocol.sendQuit(cloneObj.uid, 'Goood bye', print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
@@ -424,14 +378,12 @@ class Clone():
                                 if clone_name.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
-                                        self.Protocol.join(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
-                                        self.Irc.Channel.insert(self.Irc.Loader.Definition.MChannel(name=clone_channel_to_join, uids=[clone.uid]))
+                                        self.Protocol.sendChanJoin(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
                                         if not self.Clone.get_uid(clone_name) is None:
-                                            self.Protocol.join(uidornickname=clone_name, channel=clone_channel_to_join, print_log=False)
-                                            self.Irc.Channel.insert(self.Irc.Loader.Definition.MChannel(name=clone_channel_to_join, uids=[self.Clone.get_uid(clone_name)]))
+                                            self.Protocol.sendChanJoin(uidornickname=clone_name, channel=clone_channel_to_join, print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
@@ -447,15 +399,13 @@ class Clone():
                                 if clone_name.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
-                                        self.Protocol.part(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
-                                        self.Irc.Channel.delete_user_from_channel(clone_channel_to_part, clone.uid)
+                                        self.Protocol.sendChanPart(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
                                         clone_uid = self.Clone.get_uid(clone_name)
                                         if not clone_uid is None:
-                                            self.Protocol.part(uidornickname=clone_uid, channel=clone_channel_to_part, print_log=False)
-                                            self.Irc.Channel.delete_user_from_channel(clone_channel_to_part, clone_uid)
+                                            self.Protocol.sendChanPart(uidornickname=clone_uid, channel=clone_channel_to_part, print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')

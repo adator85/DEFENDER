@@ -52,20 +52,15 @@ class Reputation:
         Returns:
             bool: True if updated
         """
-        result = False
 
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == uid:
-                # If the user exist then update and return True and do not go further
-                record.nickname = newNickname
-                result = True
-                self.Logs.debug(f'Reputation UID ({record.uid}) has been updated with new nickname {newNickname}')
-                return result
+        reputationObj = self.get_Reputation(uid)
 
-        if not result:
-            self.Logs.critical(f'Reputation new nickname {newNickname} was not updated, uid = {uid}')
+        if reputationObj is None:
+            return False
 
-        return result
+        reputationObj.nickname = newNickname
+
+        return True
 
     def delete(self, uid: str) -> bool:
         """Delete the User starting from the UID
@@ -77,6 +72,9 @@ class Reputation:
             bool: True if deleted
         """
         result = False
+
+        if not self.is_exist(uid):
+            return result
 
         for record in self.UID_REPUTATION_DB:
             if record.uid == uid:
@@ -107,9 +105,6 @@ class Reputation:
             elif record.nickname == uidornickname:
                 User = record
 
-        if not User is None:
-            self.Logs.debug(f'Reputation found for {uidornickname} -> {User}')
-
         return User
 
     def get_uid(self, uidornickname:str) -> Union[str, None]:
@@ -121,17 +116,13 @@ class Reputation:
         Returns:
             str|None: Return the UID
         """
-        uid = None
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == uidornickname:
-                uid = record.uid
-            if record.nickname == uidornickname:
-                uid = record.uid
 
-        if not uid is None:
-            self.Logs.debug(f'Reputation UID found for {uidornickname} -> {uid}')
+        reputationObj = self.get_Reputation(uidornickname)
 
-        return uid
+        if reputationObj is None:
+            return None
+
+        return reputationObj.uid
 
     def get_nickname(self, uidornickname:str) -> Union[str, None]:
         """Get the Nickname starting from UID or the nickname
@@ -142,17 +133,12 @@ class Reputation:
         Returns:
             str|None: the nickname
         """
-        nickname = None
-        for record in self.UID_REPUTATION_DB:
-            if record.nickname == uidornickname:
-                nickname = record.nickname
-            if record.uid == uidornickname:
-                nickname = record.nickname
-        
-        if not nickname is None:
-            self.Logs.debug(f'Reputation nickname found for {uidornickname} -> {nickname}')
+        reputationObj = self.get_Reputation(uidornickname)
 
-        return nickname
+        if reputationObj is None:
+            return None
+
+        return reputationObj.nickname
 
     def is_exist(self, uidornickname: str) -> bool:
         """Check if the UID or the nickname exist in the reputation DB
@@ -164,12 +150,9 @@ class Reputation:
             bool: True if exist
         """
 
-        found = False
+        reputationObj = self.get_Reputation(uidornickname)
 
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == uidornickname:
-                found = True
-            if record.nickname == uidornickname:
-                found = True
-
-        return found
+        if reputationObj is None:
+            return False
+        else:
+            return True

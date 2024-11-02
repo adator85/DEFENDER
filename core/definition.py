@@ -287,5 +287,6 @@ class MClone:
     channels: list = field(default_factory=list)
     vhost: str = None
     hostname: str = 'localhost'
+    umodes: str = None
     remote_ip: str = '127.0.0.1'
     group: str = 'Default'

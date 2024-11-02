@@ -202,11 +202,15 @@ class Base:
     def replace_filter(self, record: logging.LogRecord) -> bool:
 
         response = True
+        filter: list[str] = ['PING', f":{self.Config.SERVICE_PREFIX}auth"]
 
         # record.msg = record.getMessage().replace("PING", "[REDACTED]")
+        if self.Settings.CONSOLE:
+            print(record.getMessage())
 
-        response = False if "PING" in record.getMessage() else True
-        response = False if f":{self.Config.SERVICE_PREFIX}auth" in record.getMessage() else True
+        for f in filter:
+            if f in record.getMessage():
+                response = False
 
         return response  # Retourne True pour permettre l'affichage du message
 
@@ -401,59 +405,6 @@ class Base:
         self.logs.debug(dataclassObj)
 
         return True
-
-    # def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:
-    #     """You can add a channel or delete a channel.
-
-    #     Args:
-    #         action (Literal[&#39;add&#39;,&#39;del&#39;]): Action on the database
-    #         module_name (str): The module name (mod_test)
-    #         channel_name (str): The channel name (With #)
-
-    #     Returns:
-    #         bool: True if action done
-    #     """
-    #     try:
-    #         channel_name = channel_name.lower() if self.Is_Channel(channel_name) else None
-    #         core_table = self.Config.TABLE_CHANNEL
-
-    #         if not channel_name:
-    #             self.logs.warning(f'The channel [{channel_name}] is not correct')
-    #             return False
-
-    #         match action:
-
-    #             case 'add':
-    #                 mes_donnees = {'module_name': module_name, 'channel_name': channel_name}
-    #                 response = self.db_execute_query(f"SELECT id FROM {core_table} WHERE module_name = :module_name AND channel_name = :channel_name", mes_donnees)
-    #                 isChannelExist = response.fetchone()
-
-    #                 if isChannelExist is None:
-    #                     mes_donnees = {'datetime': self.get_datetime(), 'channel_name': channel_name, 'module_name': module_name}
-    #                     insert = self.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
-    #                     if insert.rowcount:
-    #                         self.logs.debug(f'New channel added: channel={channel_name} / module_name={module_name}')
-    #                         return True
-    #                 else:
-    #                     return False
-    #                 pass
-
-    #             case 'del':
-    #                 mes_donnes = {'channel_name': channel_name, 'module_name': module_name}
-    #                 response = self.db_execute_query(f"DELETE FROM {core_table} WHERE channel_name = :channel_name AND module_name = :module_name", mes_donnes)
-
-    #                 if response.rowcount > 0:
-    #                     self.logs.debug(f'Channel deleted: channel={channel_name} / module: {module_name}')
-    #                     return True
-    #                 else:
-                        
-    #                     return False
-
-    #             case _:
-    #                 return False
-
-    #     except Exception as err:
-    #         self.logs.error(err)
 
     def db_create_first_admin(self) -> None:
 
