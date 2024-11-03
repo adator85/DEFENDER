@@ -6,10 +6,10 @@ from ssl import SSLEOFError, SSLError
 if TYPE_CHECKING:
     from core.irc import Irc
 
-class Unrealircd6:
+class Inspircd:
 
     def  __init__(self, ircInstance: 'Irc'):
-        self.name = 'UnrealIRCD-6'
+        self.name = 'InspIRCd-4'
 
         self.__Irc = ircInstance
         self.__Config = ircInstance.Config
@@ -173,12 +173,6 @@ class Unrealircd6:
 
         return None
 
-    def unkline(self, nickname:str, hostname: str) -> None:
-
-        self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
-
-        return None
-
     def sjoin(self, channel: str) -> None:
 
         if not self.__Irc.Channel.Is_Channel(channel):
@@ -191,36 +185,8 @@ class Unrealircd6:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
         return None
 
-    def sendSapart(self, nick_to_sapart: str, channel_name: str) -> None:
-        """_summary_
-
-        Args:
-            from_nick (str): _description_
-            nick_to (str): _description_
-            channel_name (str): _description_
-        """
-        try:
-
-            userObj = self.__Irc.User.get_User(uidornickname=nick_to_sapart)
-            chanObj = self.__Irc.Channel.get_Channel(channel_name)
-            service_uid = self.__Config.SERVICE_ID
-
-            if userObj is None or chanObj is None:
-                return None
-
-            self.send2socket(f":{service_uid} SAPART {userObj.nickname} {chanObj.name}")
-            self.__Irc.Channel.delete_user_from_channel(chanObj.name, userObj.uid)
-
-            return None
-
-        except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
-
     def sendQuit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
-        - Delete uid from User object
-        - Delete uid from Clone object
-        - Delete uid from Reputation object
 
         Args:
             uidornickname (str): The UID or the Nickname
@@ -247,7 +213,7 @@ class Unrealircd6:
 
     def sendUID(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
         """Send UID to the server
-        - Insert User to User Object
+
         Args:
             nickname (str): Nickname of the client
             username (str): Username of the client
@@ -332,6 +298,12 @@ class Unrealircd6:
 
         # Add defender to the channel uids list
         self.__Irc.Channel.delete_user_from_channel(channel, userObj.uid)
+        return None
+
+    def unkline(self, nickname:str, hostname: str) -> None:
+
+        self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
+
         return None
 
     def on_umode2(self, serverMsg: list[str]) -> None:

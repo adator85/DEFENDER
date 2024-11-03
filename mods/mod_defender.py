@@ -262,26 +262,28 @@ class Defender():
             pass
 
     def join_saved_channels(self) -> None:
+        """_summary_
+        """
+        try:
+            result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}")
+            channels = result.fetchall()
+            jail_chan = self.Config.SALON_JAIL
+            jail_chan_mode = self.Config.SALON_JAIL_MODES
+            service_id = self.Config.SERVICE_ID
+            dumodes = self.Config.SERVICE_UMODES
+            dnickname = self.Config.SERVICE_NICKNAME
 
-        result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}")
-        channels = result.fetchall()
-        jail_chan = self.Config.SALON_JAIL
-        jail_chan_mode = self.Config.SALON_JAIL_MODES
-        service_id = self.Config.SERVICE_ID
-        dumodes = self.Config.SERVICE_UMODES
-        dnickname = self.Config.SERVICE_NICKNAME
+            for channel in channels:
+                chan = channel[0]
+                self.Protocol.sjoin(chan)
+                if chan == jail_chan:
+                    self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
+                    self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
 
-        unixtime = self.Base.get_unixtime()
+            return None
 
-        for channel in channels:
-            chan = channel[0]
-            # self.Irc.send2socket(f":{self.Config.SERVEUR_ID} SJOIN {unixtime} {chan} + :{self.Config.SERVICE_ID}")
-            self.Protocol.sjoin(chan)
-            if chan == jail_chan:
-                self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
-                self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
-
-        return None
+        except Exception as err:
+            self.Logs.error(f"General Error: {err}")
 
     def get_user_uptime_in_minutes(self, uidornickname:str) -> float:
         """Retourne depuis quand l'utilisateur est connecté (en secondes ).
@@ -313,7 +315,7 @@ class Defender():
 
         return uptime_minutes
 
-    def system_reputation(self, uid:str)-> None:
+    def system_reputation(self, uid: str)-> None:
         # Reputation security
         # - Activation ou désactivation du système --> OK
         # - Le user sera en mesure de changer la limite de la réputation --> OK
@@ -336,7 +338,7 @@ class Defender():
 
             code = get_reputation.secret_code
             jailed_nickname = get_reputation.nickname
-            jailed_score = get_reputation.score
+            jailed_score = get_reputation.score_connexion
 
             color_red = self.Config.COLORS.red
             color_black = self.Config.COLORS.black
@@ -370,7 +372,7 @@ class Defender():
                 # self.Base.create_timer(int(self.ModConfig.reputation_timer) * 60, self.system_reputation_timer)
             else:
                 self.Logs.info(f"system_reputation : {jailed_nickname} à été supprimé du système de réputation car connecté via WebIrc ou il est dans la 'Trusted list'")
-                self.Repurtation.delete(uid)
+                self.Reputation.delete(uid)
 
         except IndexError as e:
             self.Logs.error(f"system_reputation : {str(e)}")
@@ -397,14 +399,14 @@ class Defender():
 
             for user in self.Reputation.UID_REPUTATION_DB:
                 if not user.isWebirc: # Si il ne vient pas de WebIRC
-                    if self.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score) <= int(reputation_seuil):
+                    if self.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score_connexion) <= int(reputation_seuil):
                         self.Protocol.sendPrivMsg(
                             nick_from=service_id,
                             msg=f":{service_id} PRIVMSG {dchanlog} :[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
                             channel=dchanlog
                             )
                         self.Protocol.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code ")
-                        self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} REPUTATION {user.ip} 0")
+                        self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} REPUTATION {user.remote_ip} 0")
 
                         self.Logs.info(f"Nickname: {user.nickname} KILLED after {str(reputation_timer)} minutes of inactivity")
                         uid_to_clean.append(user.uid)
@@ -432,7 +434,7 @@ class Defender():
 
             return None
         except ValueError as ve:
-            self.Irc.Base.logs.error(f"thread_reputation_timer Error : {ve}")
+            self.Logs.error(f"thread_reputation_timer Error : {ve}")
 
     def _execute_flood_action(self, action:str, channel:str) -> None:
         """DO NOT EXECUTE THIS FUNCTION WITHOUT THREADING
@@ -461,7 +463,7 @@ class Defender():
         if self.ModConfig.flood == 0:
             return None
 
-        if not '#' in channel:
+        if not self.Channel.Is_Channel(channelToCheck=channel):
             return None
 
         flood_time = self.ModConfig.flood_time
@@ -471,10 +473,10 @@ class Defender():
         dnickname = self.Config.SERVICE_NICKNAME
         color_red = self.Config.COLORS.red
         color_bold = self.Config.COLORS.bold
-        
+
         get_detected_uid = self.User.get_uid(detected_user)
         get_detected_nickname = self.User.get_nickname(detected_user)
-        
+
         unixtime = self.Base.get_unixtime()
         get_diff_secondes = 0
 
@@ -490,7 +492,7 @@ class Defender():
             self.flood_system[get_detected_uid]['first_msg_time'] = unixtime
             self.flood_system[get_detected_uid]['nbr_msg'] = 0
             get_diff_secondes = unixtime - self.flood_system[get_detected_uid]['first_msg_time']
-        
+
         elif self.flood_system[get_detected_uid]['nbr_msg'] > flood_message:
             self.Irc.Base.logs.info('system de flood detecté')
             self.Protocol.sendPrivMsg(
@@ -1086,7 +1088,6 @@ class Defender():
                                         # updated_datetime=currentDateTime
                                     )
                                 )
-                                # self.Irc.send2socket(f":{service_id} WHOIS {nickname}")
                                 if self.Reputation.is_exist(_User.uid):
                                     if reputation_flag == 1 and _User.score_connexion <= reputation_seuil:
                                         self.system_reputation(_User.uid)
@@ -1096,13 +1097,10 @@ class Defender():
                     # ['@msgid=F9B7JeHL5pj9nN57cJ5pEr;time=2023-12-28T20:47:24.305Z', ':001', 'SJOIN', '1702138958', '#welcome', ':0015L1AHL']
                     try:
                         cmd.pop(0)
-                        parsed_chan = cmd[3]
+                        parsed_chan = cmd[3] if self.Channel.Is_Channel(cmd[3]) else None
 
                         if self.ModConfig.reputation == 1:
-                            parsed_UID = cmd[4]
-                            pattern = fr'^:[@|%|\+|~|\*]*'
-                            parsed_UID = re.sub(pattern, '', parsed_UID)
-
+                            parsed_UID = self.User.clean_uid(cmd[4])
                             get_reputation = self.Reputation.get_Reputation(parsed_UID)
 
                             if parsed_chan != self.Config.SALON_JAIL:
@@ -1122,6 +1120,7 @@ class Defender():
                                         self.Protocol.send2socket(f":{service_id} KICK {parsed_chan} {get_reputation.nickname}")
 
                             self.Logs.debug(f'SJOIN parsed_uid : {parsed_UID}')
+
                     except KeyError as ke:
                         self.Logs.error(f"key error SJOIN : {ke}")
 

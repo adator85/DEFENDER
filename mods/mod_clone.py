@@ -305,14 +305,13 @@ class Clone():
                             )
 
         except Exception as err:
-            self.Base.logs.error(f'General Error: {err}')
+            self.Logs.error(f'General Error: {err}')
 
     def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         try:
             command = str(cmd[0]).lower()
             fromuser = user
-            print(command)
 
             dnickname = self.Config.SERVICE_NICKNAME            # Defender nickname
 

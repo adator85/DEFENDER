@@ -141,11 +141,11 @@ class Test():
 
             return None
         except KeyError as ke:
-            self.Base.logs.error(f"Key Error: {ke}")
+            self.Logs.error(f"Key Error: {ke}")
         except IndexError as ie:
-            self.Base.logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
+            self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
         except Exception as err:
-            self.Base.logs.error(f"General Error: {err}")
+            self.Logs.error(f"General Error: {err}")
 
     def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
@@ -159,11 +159,11 @@ class Test():
             case 'test-command':
                 try:
 
-                    self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : This is a notice to the sender ...")
-                    self.Irc.send2socket(f":{dnickname} PRIVMSG {fromuser} : This is private message to the sender ...")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
+                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Irc.send2socket(f":{dnickname} PRIVMSG {fromchannel} : This is channel message to the sender ...")
+                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)

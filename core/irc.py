@@ -49,6 +49,9 @@ class Irc:
         # Use Base Instance
         self.Base = self.Loader.Base
 
+        # Logger
+        self.Logs = self.Loader.Base.logs
+
         # Get Settings.
         self.Settings = self.Base.Settings
 
@@ -66,7 +69,7 @@ class Irc:
 
         # Use Reputation Instance
         self.Reputation = self.Loader.Reputation
-        
+
         self.autolimit_started: bool = False
         """This variable is to make sure the thread is not running"""
 
@@ -107,7 +110,7 @@ class Irc:
             self.__create_socket()
             self.__connect_to_irc(ircInstance)
         except AssertionError as ae:
-            self.Base.logs.critical(f'Assertion error: {ae}')
+            self.Logs.critical(f'Assertion error: {ae}')
 
     def init_service_user(self) -> None:
 
@@ -135,34 +138,34 @@ class Irc:
                 ssl_connexion.connect(connexion_information)
                 self.IrcSocket:SSLSocket = ssl_connexion
                 self.Config.SSL_VERSION = self.IrcSocket.version()
-                self.Base.logs.info(f"Connexion en mode SSL : Version = {self.Config.SSL_VERSION}")
+                self.Logs.info(f"Connexion en mode SSL : Version = {self.Config.SSL_VERSION}")
             else:
                 soc.connect(connexion_information)
                 self.IrcSocket:socket.socket = soc
-                self.Base.logs.info("Connexion en mode normal")
+                self.Logs.info("Connexion en mode normal")
 
             return None
 
         except ssl.SSLEOFError as soe:
-            self.Base.logs.critical(f"SSLEOFError: {soe} - {soc.fileno()}")
+            self.Logs.critical(f"SSLEOFError: {soe} - {soc.fileno()}")
         except ssl.SSLError as se:
-            self.Base.logs.critical(f"SSLError: {se} - {soc.fileno()}")
+            self.Logs.critical(f"SSLError: {se} - {soc.fileno()}")
         except OSError as oe:
-            self.Base.logs.critical(f"OSError: {oe} - {soc.fileno()}")
+            self.Logs.critical(f"OSError: {oe} - {soc.fileno()}")
             if 'connection refused' in str(oe).lower():
                 sys.exit(oe)
             if soc.fileno() == -1:
                 sys.exit(soc.fileno())
 
         except AttributeError as ae:
-            self.Base.logs.critical(f"AttributeError: {ae} - {soc.fileno()}")
+            self.Logs.critical(f"AttributeError: {ae} - {soc.fileno()}")
 
     def __ssl_context(self) -> ssl.SSLContext:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
-        self.Base.logs.debug(f'SSLContext initiated with verified mode {ctx.verify_mode}')
+        self.Logs.debug(f'SSLContext initiated with verified mode {ctx.verify_mode}')
 
         return ctx
 
@@ -172,7 +175,7 @@ class Irc:
             self.init_service_user()
             self.ircObject = ircInstance                        # créer une copie de l'instance Irc
             self.Protocol = Protocol(
-                protocol=self.Config.SERVEUR_PROTOCOL, 
+                protocol=self.Config.SERVEUR_PROTOCOL,
                 ircInstance=self.ircObject
                 ).Protocol
             self.Protocol.link()                                # Etablir le link en fonction du protocol choisi
@@ -183,16 +186,16 @@ class Irc:
             while self.signal:
                 try:
                     if self.Config.DEFENDER_RESTART == 1:
-                        self.Base.logs.debug('Restarting Defender ...')
+                        self.Logs.debug('Restarting Defender ...')
                         self.IrcSocket.shutdown(socket.SHUT_RDWR)
                         self.IrcSocket.close()
 
                         while self.IrcSocket.fileno() != -1:
                             time.sleep(0.5)
-                            self.Base.logs.warning('--> Waiting for socket to close ...')
+                            self.Logs.warning('--> Waiting for socket to close ...')
 
                         # Reload configuration
-                        self.Base.logs.debug('Reloading configuration')
+                        self.Logs.debug('Reloading configuration')
                         self.Config = self.Loader.ConfModule.Configuration().ConfigObject
                         self.Base = self.Loader.BaseModule.Base(self.Config, self.Settings)
                         self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, ircInstance).Protocol
@@ -224,30 +227,30 @@ class Irc:
                     self.send_response(data)
 
                 except ssl.SSLEOFError as soe:
-                    self.Base.logs.error(f"SSLEOFError __connect_to_irc: {soe} - {data}")
+                    self.Logs.error(f"SSLEOFError __connect_to_irc: {soe} - {data}")
                 except ssl.SSLError as se:
-                    self.Base.logs.error(f"SSLError __connect_to_irc: {se} - {data}")
+                    self.Logs.error(f"SSLError __connect_to_irc: {se} - {data}")
                 except OSError as oe:
-                    self.Base.logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
+                    self.Logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
                 except (socket.error, ConnectionResetError):
                     print("Connexion reset")
 
             self.IrcSocket.shutdown(socket.SHUT_RDWR)
             self.IrcSocket.close()
-            self.Base.logs.info("--> Fermeture de Defender ...")
+            self.Logs.info("--> Fermeture de Defender ...")
             sys.exit(0)
 
         except AssertionError as ae:
-            self.Base.logs.error(f'AssertionError: {ae}')
+            self.Logs.error(f'AssertionError: {ae}')
         except ValueError as ve:
-            self.Base.logs.error(f'ValueError: {ve}')
+            self.Logs.error(f'ValueError: {ve}')
         except ssl.SSLEOFError as soe:
-            self.Base.logs.error(f"SSLEOFError: {soe}")
+            self.Logs.error(f"SSLEOFError: {soe}")
         except AttributeError as atte:
-            self.Base.logs.critical(f"AttributeError: {atte}")
+            self.Logs.critical(f"AttributeError: {atte}")
         except Exception as e:
-            self.Base.logs.critical(f"General Error: {e}")
-            self.Base.logs.critical(traceback.format_exc())
+            self.Logs.critical(f"General Error: {e}")
+            self.Logs.critical(traceback.format_exc())
 
     def __join_saved_channels(self) -> None:
         """## Joining saved channels"""
@@ -262,67 +265,32 @@ class Irc:
                 chan = chan_name[0]
                 self.Protocol.sjoin(channel=chan)
 
-    def send2socket(self, send_message:str, print_log: bool = True) -> None:
-        """Envoit les commandes à envoyer au serveur.
-
-        Args:
-            string (Str): contient la commande à envoyer au serveur.
-        """
-        try:
-            with self.Base.lock:
-                self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0]))
-                if print_log:
-                    self.Base.logs.debug(f'< {send_message}')
-
-        except UnicodeDecodeError:
-            self.Base.logs.error(f'Decode Error try iso-8859-1 - message: {send_message}')
-            self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
-        except UnicodeEncodeError:
-            self.Base.logs.error(f'Encode Error try iso-8859-1 - message: {send_message}')
-            self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
-        except AssertionError as ae:
-            self.Base.logs.warning(f'Assertion Error {ae} - message: {send_message}')
-        except ssl.SSLEOFError as soe:
-            self.Base.logs.error(f"SSLEOFError: {soe} - {send_message}")
-        except ssl.SSLError as se:
-            self.Base.logs.error(f"SSLError: {se} - {send_message}")
-        except OSError as oe:
-            self.Base.logs.error(f"OSError: {oe} - {send_message}")
-
-    # def sendNotice(self, msg:str, nickname: str) -> None:
-    #     """Sending NOTICE by batches
+    # def send2socket(self, send_message:str, print_log: bool = True) -> None:
+    #     """Envoit les commandes à envoyer au serveur.
 
     #     Args:
-    #         msg (str): The message to send to the server
-    #         nickname (str): The reciever Nickname
+    #         string (Str): contient la commande à envoyer au serveur.
     #     """
-    #     batch_size = self.Config.BATCH_SIZE
-    #     service_nickname = self.Config.SERVICE_NICKNAME
+    #     try:
+    #         with self.Base.lock:
+    #             self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0]))
+    #             if print_log:
+    #                 self.Logs.debug(f'< {send_message}')
 
-    #     for i in range(0, len(str(msg)), batch_size):
-    #         batch = str(msg)[i:i+batch_size]
-    #         # self.send2socket(f":{service_nickname} NOTICE {nickname} :{batch}")
-
-    # def sendPrivMsg(self, msg: str, channel: str = None, nickname: str = None):
-    #     """Sending PRIVMSG to a channel or to a nickname by batches
-    #     could be either channel or nickname not both together
-    #     Args:
-    #         msg (str): The message to send
-    #         channel (str, optional): The receiver channel. Defaults to None.
-    #         nickname (str, optional): The reciever nickname. Defaults to None.
-    #     """
-    #     batch_size = self.Config.BATCH_SIZE
-    #     service_nickname = self.Config.SERVICE_NICKNAME
-
-    #     if not channel is None:
-    #         for i in range(0, len(str(msg)), batch_size):
-    #             batch = str(msg)[i:i+batch_size]
-    #             # self.send2socket(f":{service_nickname} PRIVMSG {channel} :{batch}")
-
-    #     if not nickname is None:
-    #         for i in range(0, len(str(msg)), batch_size):
-    #             batch = str(msg)[i:i+batch_size]
-    #             # self.send2socket(f":{service_nickname} PRIVMSG {nickname} :{batch}")
+    #     except UnicodeDecodeError:
+    #         self.Logs.error(f'Decode Error try iso-8859-1 - message: {send_message}')
+    #         self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
+    #     except UnicodeEncodeError:
+    #         self.Logs.error(f'Encode Error try iso-8859-1 - message: {send_message}')
+    #         self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
+    #     except AssertionError as ae:
+    #         self.Logs.warning(f'Assertion Error {ae} - message: {send_message}')
+    #     except ssl.SSLEOFError as soe:
+    #         self.Logs.error(f"SSLEOFError: {soe} - {send_message}")
+    #     except ssl.SSLError as se:
+    #         self.Logs.error(f"SSLError: {se} - {send_message}")
+    #     except OSError as oe:
+    #         self.Logs.error(f"OSError: {oe} - {send_message}")
 
     def send_response(self, responses:list[bytes]) -> None:
         try:
@@ -335,18 +303,18 @@ class Irc:
             for data in responses:
                 response = data.decode(self.CHARSET[1],'replace').split()
                 self.cmd(response)
-            self.Base.logs.error(f'UnicodeEncodeError: {ue}')
-            self.Base.logs.error(response)
+            self.Logs.error(f'UnicodeEncodeError: {ue}')
+            self.Logs.error(response)
 
         except UnicodeDecodeError as ud:
             for data in responses:
                 response = data.decode(self.CHARSET[1],'replace').split()
                 self.cmd(response)
-            self.Base.logs.error(f'UnicodeDecodeError: {ud}')
-            self.Base.logs.error(response)
+            self.Logs.error(f'UnicodeDecodeError: {ud}')
+            self.Logs.error(response)
 
         except AssertionError as ae:
-            self.Base.logs.error(f"Assertion error : {ae}")
+            self.Logs.error(f"Assertion error : {ae}")
 
     def unload(self) -> None:
         # This is only to reference the method
@@ -405,7 +373,7 @@ class Irc:
         # 2. Executer la fonction
         try:
             if not class_name in self.loaded_classes:
-                self.Base.logs.error(f"La class [{class_name} n'existe pas !!]")
+                self.Logs.error(f"La class [{class_name} n'existe pas !!]")
                 return False
 
             class_instance = self.loaded_classes[class_name]
@@ -415,12 +383,12 @@ class Irc:
 
             self.Base.running_timers.append(t)
 
-            self.Base.logs.debug(f"Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
+            self.Logs.debug(f"Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
-            self.Base.logs.error(f'Assertion Error -> {ae}')
+            self.Logs.error(f'Assertion Error -> {ae}')
         except TypeError as te:
-            self.Base.logs.error(f"Type error -> {te}")
+            self.Logs.error(f"Type error -> {te}")
 
     def __create_tasks(self, obj: object, method_name: str, param:list) -> None:
         """#### Ajouter les méthodes a éxecuter dans un dictionnaire
@@ -439,7 +407,7 @@ class Irc:
             'param': param
             }
 
-        self.Base.logs.debug(f'Function to execute : {str(self.Base.periodic_func)}')
+        self.Logs.debug(f'Function to execute : {str(self.Base.periodic_func)}')
         self.send_ping_to_sereur()
         return None
 
@@ -462,8 +430,8 @@ class Irc:
 
             # Si le module est déja chargé
             if 'mods.' + module_name in sys.modules:
-                self.Base.logs.info("Module déja chargé ...")
-                self.Base.logs.info('module name = ' + module_name)
+                self.Logs.info("Module déja chargé ...")
+                self.Logs.info('module name = ' + module_name)
                 if class_name in self.loaded_classes:
                     # Si le module existe dans la variable globale retourne False
                     self.Protocol.sendPrivMsg(
@@ -502,7 +470,7 @@ class Irc:
                         msg=f"Module {module_name} ne contient pas de méthode cmd",
                         channel=self.Config.SERVICE_CHANLOG
                     )
-                self.Base.logs.critical(f"The Module {module_name} has not been loaded because cmd method is not available")
+                self.Logs.critical(f"The Module {module_name} has not been loaded because cmd method is not available")
                 self.Base.db_delete_module(module_name)
                 return False
 
@@ -512,31 +480,33 @@ class Irc:
             # Enregistrer le module dans la base de données
             if not init:
                 self.Base.db_record_module(fromuser, module_name)
+
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} chargé",
                         channel=self.Config.SERVICE_CHANLOG
                     )
 
-            # self.Base.logs.info(self.loaded_classes)
-            self.Base.logs.info(f"Module {class_name} has been loaded")
+            self.Logs.info(f"Module {class_name} has been loaded")
+
             return True
 
         except ModuleNotFoundError as moduleNotFound:
-            self.Base.logs.error(f"MODULE_NOT_FOUND: {moduleNotFound}")
+            self.Logs.error(f"MODULE_NOT_FOUND: {moduleNotFound}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"[ {self.Config.COLORS.red}MODULE_NOT_FOUND{self.Config.COLORS.black} ]: {moduleNotFound}",
                         channel=self.Config.SERVICE_CHANLOG
                     )
             self.Base.db_delete_module(module_name)
-        except Exception as e:
-            self.Base.logs.error(f"Something went wrong with a module you want to load : {e}")
+        except Exception as err:
+            self.Logs.error(f"Something went wrong with a module you want to load : {err}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ {self.Config.COLORS.red}ERROR{self.Config.COLORS.black} ]: {e}",
+                        msg=f"[ {self.Config.COLORS.red}ERROR{self.Config.COLORS.black} ]: {err}",
                         channel=self.Config.SERVICE_CHANLOG
                     )
+            self.Base.db_delete_module(module_name)
 
     def unload_module(self, mod_name: str) -> bool:
         """Unload a module
@@ -572,7 +542,7 @@ class Irc:
                 return True
 
         except Exception as err:
-            self.Base.logs.error(f"General Error: {err}")
+            self.Logs.error(f"General Error: {err}")
             return False
 
     def reload_module(self, from_user: str, mod_name: str) -> bool:
@@ -581,9 +551,9 @@ class Irc:
             class_name = module_name.split('_')[1].capitalize()  # ==> Defender
 
             if 'mods.' + module_name in sys.modules:
-                self.Base.logs.info('Unload the module ...')
+                self.Logs.info('Unload the module ...')
                 self.loaded_classes[class_name].unload()
-                self.Base.logs.info('Module Already Loaded ... reloading the module ...')
+                self.Logs.info('Module Already Loaded ... reloading the module ...')
                 the_module = sys.modules['mods.' + module_name]
                 importlib.reload(the_module)
 
@@ -617,7 +587,7 @@ class Irc:
                     )
 
         except TypeError as te:
-            self.Base.logs.error(f"A TypeError raised: {te}")
+            self.Logs.error(f"A TypeError raised: {te}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"A TypeError raised: {te}",
@@ -625,7 +595,7 @@ class Irc:
                     )
             self.Base.db_delete_module(module_name)
         except AttributeError as ae:
-            self.Base.logs.error(f"Missing Attribute: {ae}")
+            self.Logs.error(f"Missing Attribute: {ae}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Missing Attribute: {ae}",
@@ -633,7 +603,7 @@ class Irc:
                     )
             self.Base.db_delete_module(module_name)
         except KeyError as ke:
-            self.Base.logs.error(f"Key Error: {ke}")
+            self.Logs.error(f"Key Error: {ke}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Key Error: {ke}",
@@ -641,7 +611,7 @@ class Irc:
                     )
             self.Base.db_delete_module(module_name)
         except Exception as e:
-            self.Base.logs.error(f"Something went wrong with a module you want to reload: {e}")
+            self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
             self.Protocol.sendPrivMsg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Something went wrong with the module: {e}",
@@ -673,7 +643,7 @@ class Irc:
             return None
 
         if not self.Admin.delete(uid):
-            self.Base.logs.critical(f'UID: {uid} was not deleted')
+            self.Logs.critical(f'UID: {uid} was not deleted')
 
         return None
 
@@ -682,7 +652,7 @@ class Irc:
         get_user = self.User.get_User(nickname)
         if get_user is None:
             response = f'This nickname {nickname} does not exist, it is not possible to create this user'
-            self.Base.logs.warning(response)
+            self.Logs.warning(response)
             return response
 
         nickname = get_user.nickname
@@ -690,7 +660,7 @@ class Irc:
 
         if level > 4:
             response = "Impossible d'ajouter un niveau > 4"
-            self.Base.logs.warning(response)
+            self.Logs.warning(response)
             return response
 
         hostname = get_user.hostname
@@ -711,12 +681,12 @@ class Irc:
                     ''', mes_donnees)
             response = f"{nickname} ajouté en tant qu'administrateur de niveau {level}"
             self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Base.logs.info(response)
+            self.Logs.info(response)
             return response
         else:
             response = f'{nickname} Existe déjà dans les users enregistrés'
             self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Base.logs.info(response)
+            self.Logs.info(response)
             return response
 
     def is_cmd_allowed(self, nickname:str, cmd:str) -> bool:
@@ -789,18 +759,18 @@ class Irc:
             interm_response.pop(0)
 
             if len(original_response) == 0 or len(original_response) == 1:
-                self.Base.logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
+                self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
                 return False
 
             if len(original_response) == 7:
                 if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
                     data_copy = original_response.copy()
                     data_copy[6] = '**********'
-                    self.Base.logs.debug(f">> {data_copy}")
+                    self.Logs.debug(f">> {data_copy}")
                 else:
-                    self.Base.logs.debug(f">> {original_response}")
+                    self.Logs.debug(f">> {original_response}")
             else:
-                self.Base.logs.debug(f">> {original_response}")
+                self.Logs.debug(f">> {original_response}")
 
             match original_response[0]:
 
@@ -814,12 +784,9 @@ class Irc:
                     # 'PREFIX=(qaohv)~&@%+', 'SID=001', 'MLOCK', 'TS=1703793941', 'EXTSWHOIS']
 
                     # GET SERVER ID HOST
-                    if len(original_response) > 5:
-                        if '=' in original_response[5]:
-                            serveur_hosting_id = str(original_response[5]).split('=')
-                            self.HSID = serveur_hosting_id[1]
-                            self.Config.HSID = serveur_hosting_id[1]
-                            return False
+                    self.Protocol.on_protoctl(serverMsg=original_response)
+
+                    return None
 
                 case _:
                     pass
@@ -840,15 +807,8 @@ class Irc:
                     self.Protocol.on_umode2(serverMsg=original_response)
 
                 case 'SQUIT':
-                    # ['@msgid=QOEolbRxdhpVW5c8qLkbAU;time=2024-09-21T17:33:16.547Z', 'SQUIT', 'defender.deb.biz.st', ':Connection', 'closed']
-                    server_hostname = interm_response[1]
-                    uid_to_delete = ''
-                    for s_user in self.User.UID_DB:
-                        if s_user.hostname == server_hostname and 'S' in s_user.umodes:
-                            uid_to_delete = s_user.uid
 
-                    self.User.delete(uid_to_delete)
-                    self.Channel.delete_user_from_all_channel(uid_to_delete)
+                    self.Protocol.on_squit(serverMsg=original_response)
 
                 case 'REPUTATION':
                     # :001 REPUTATION 127.0.0.1 118
@@ -868,10 +828,10 @@ class Irc:
 
                         # Possibilité de déclancher les bans a ce niveau.
                     except IndexError as ie:
-                        self.Base.logs.error(f'{ie}')
+                        self.Logs.error(f'{ie}')
                     except ValueError as ve:
                         self.first_score = 0
-                        self.Base.logs.error(f'Impossible to convert first_score: {ve}')
+                        self.Logs.error(f'Impossible to convert first_score: {ve}')
 
                 case '320':
                     #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
@@ -908,16 +868,16 @@ class Irc:
                             print(f"# VERSION  :    {version}                       ")
                             print(f"################################################")
 
-                            self.Base.logs.info(f"################### DEFENDER ###################")
-                            self.Base.logs.info(f"#               SERVICE CONNECTE                ")
-                            self.Base.logs.info(f"# SERVEUR  :    {self.Config.SERVEUR_IP}        ")
-                            self.Base.logs.info(f"# PORT     :    {self.Config.SERVEUR_PORT}      ")
-                            self.Base.logs.info(f"# SSL      :    {self.Config.SERVEUR_SSL}       ")
-                            self.Base.logs.info(f"# SSL VER  :    {self.Config.SSL_VERSION}       ")
-                            self.Base.logs.info(f"# NICKNAME :    {self.Config.SERVICE_NICKNAME}  ")
-                            self.Base.logs.info(f"# CHANNEL  :    {self.Config.SERVICE_CHANLOG}   ")
-                            self.Base.logs.info(f"# VERSION  :    {version}                       ")
-                            self.Base.logs.info(f"################################################")
+                            self.Logs.info(f"################### DEFENDER ###################")
+                            self.Logs.info(f"#               SERVICE CONNECTE                ")
+                            self.Logs.info(f"# SERVEUR  :    {self.Config.SERVEUR_IP}        ")
+                            self.Logs.info(f"# PORT     :    {self.Config.SERVEUR_PORT}      ")
+                            self.Logs.info(f"# SSL      :    {self.Config.SERVEUR_SSL}       ")
+                            self.Logs.info(f"# SSL VER  :    {self.Config.SSL_VERSION}       ")
+                            self.Logs.info(f"# NICKNAME :    {self.Config.SERVICE_NICKNAME}  ")
+                            self.Logs.info(f"# CHANNEL  :    {self.Config.SERVICE_CHANLOG}   ")
+                            self.Logs.info(f"# VERSION  :    {version}                       ")
+                            self.Logs.info(f"################################################")
 
                             if self.Base.check_for_new_version(False):
                                 self.Protocol.sendPrivMsg(
@@ -950,7 +910,6 @@ class Irc:
             match original_response[2]:
 
                 case 'VERSION':
-
                     self.Protocol.on_version_msg(original_response)
 
                 case 'QUIT':
@@ -978,7 +937,7 @@ class Irc:
                 case 'PART':
 
                     self.Protocol.on_part(serverMsg=original_response)
- 
+
                 case 'UID':
                     try:
                         self.Protocol.on_uid(serverMsg=original_response)
@@ -987,7 +946,7 @@ class Irc:
                             classe_object.cmd(original_response)
 
                     except Exception as err:
-                        self.Base.logs.error(f'General Error: {err}')
+                        self.Logs.error(f'General Error: {err}')
 
                 case 'PRIVMSG':
                     try:
@@ -1002,11 +961,11 @@ class Irc:
                             if cmd[1] == 'PRIVMSG' and str(cmd[3]).replace(self.Config.SERVICE_PREFIX,'') == ':auth':
                                 cmd_copy = cmd.copy()
                                 cmd_copy[5] = '**********'
-                                self.Base.logs.info(f'>> {cmd_copy}')
+                                self.Logs.info(f'>> {cmd_copy}')
                             else:
-                                self.Base.logs.info(f'>> {cmd}')
+                                self.Logs.info(f'>> {cmd}')
                         else:
-                            self.Base.logs.info(f'>> {cmd}')
+                            self.Logs.info(f'>> {cmd}')
 
                         pattern = fr'(:\{self.Config.SERVICE_PREFIX})(.*)$'
                         hcmds = re.search(pattern, ' '.join(cmd)) # va matcher avec tout les caractéres aprés le .
@@ -1017,7 +976,7 @@ class Irc:
                             arg = convert_to_string.split()
                             arg.remove(f':{self.Config.SERVICE_PREFIX}')
                             if not arg[0].lower() in self.commands:
-                                self.Base.logs.debug(f"This command {arg[0]} is not available")
+                                self.Logs.debug(f"This command {arg[0]} is not available")
                                 self.Protocol.sendNotice(
                                     nick_from=self.Config.SERVICE_NICKNAME,
                                     nick_to=user_trigger,
@@ -1057,7 +1016,7 @@ class Irc:
                                     return False
 
                                 if not arg[0].lower() in self.commands:
-                                    self.Base.logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
+                                    self.Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
                                     return False
 
                                 cmd_to_send = convert_to_string.replace(':','')
@@ -1070,7 +1029,7 @@ class Irc:
                                 self._hcmds(user_trigger, fromchannel, arg, cmd)
 
                     except IndexError as io:
-                        self.Base.logs.error(f'{io}')
+                        self.Logs.error(f'{io}')
 
                 case _:
                     pass
@@ -1081,10 +1040,10 @@ class Irc:
                     classe_object.cmd(original_response)
 
         except IndexError as ie:
-            self.Base.logs.error(f"{ie} / {original_response} / length {str(len(original_response))}")
+            self.Logs.error(f"{ie} / {original_response} / length {str(len(original_response))}")
         except Exception as err:
-            self.Base.logs.error(f"General Error: {err}")
-            self.Base.logs.error(f"General Error: {traceback.format_exc()}")
+            self.Logs.error(f"General Error: {err}")
+            self.Logs.error(f"General Error: {traceback.format_exc()}")
 
     def _hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
         """_summary_
@@ -1138,7 +1097,7 @@ class Irc:
                         )
 
                 except IndexError as ie:
-                    self.Base.logs.error(f'{ie}')
+                    self.Logs.error(f'{ie}')
 
             case 'deauth':
 
@@ -1171,7 +1130,7 @@ class Irc:
                     return False
 
                 if current_nickname is None:
-                    self.Base.logs.critical(f"This nickname [{fromuser}] don't exist")
+                    self.Logs.critical(f"This nickname [{fromuser}] don't exist")
                     return False
 
                 # Credentials sent from the user
@@ -1183,7 +1142,7 @@ class Irc:
                 config_password = self.Config.PASSWORD
 
                 if current_nickname != cmd_owner:
-                    self.Base.logs.critical(f"The current nickname [{fromuser}] is different than the nickname sent [{cmd_owner}] !")
+                    self.Logs.critical(f"The current nickname [{fromuser}] is different than the nickname sent [{cmd_owner}] !")
                     self.Protocol.sendNotice(
                         nick_from=dnickname,
                         nick_to=fromuser,
@@ -1192,7 +1151,7 @@ class Irc:
                     return False
 
                 if current_nickname != config_owner:
-                    self.Base.logs.critical(f"The current nickname [{current_nickname}] is different than the configuration owner [{config_owner}] !")
+                    self.Logs.critical(f"The current nickname [{current_nickname}] is different than the configuration owner [{config_owner}] !")
                     self.Protocol.sendNotice(
                         nick_from=dnickname,
                         nick_to=fromuser,
@@ -1201,7 +1160,7 @@ class Irc:
                     return False
 
                 if cmd_owner != config_owner:
-                    self.Base.logs.critical(f"The nickname sent [{cmd_owner}] is different than the configuration owner [{config_owner}] !")
+                    self.Logs.critical(f"The nickname sent [{cmd_owner}] is different than the configuration owner [{config_owner}] !")
                     self.Protocol.sendNotice(
                         nick_from=dnickname,
                         nick_to=fromuser,
@@ -1283,13 +1242,13 @@ class Irc:
                     response = self.create_defender_user(newnickname, newlevel, password)
 
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{response}")
-                    self.Base.logs.info(response)
+                    self.Logs.info(response)
 
                 except IndexError as ie:
-                    self.Base.logs.error(f'_hcmd addaccess: {ie}')
+                    self.Logs.error(f'_hcmd addaccess: {ie}')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
                 except TypeError as te:
-                    self.Base.logs.error(f'_hcmd addaccess: out of index : {te}')
+                    self.Logs.error(f'_hcmd addaccess: out of index : {te}')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
 
             case 'editaccess':
@@ -1343,9 +1302,9 @@ class Irc:
                             self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Impossible de modifier l'utilisateur {str(user_new_level)}")
 
                 except TypeError as te:
-                    self.Base.logs.error(f"Type error : {te}")
+                    self.Logs.error(f"Type error : {te}")
                 except ValueError as ve:
-                    self.Base.logs.error(f"Value Error : {ve}")
+                    self.Logs.error(f"Value Error : {ve}")
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
 
             case 'delaccess':
@@ -1355,7 +1314,7 @@ class Irc:
 
                 if user_to_del != user_confirmation:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer")
-                    self.Base.logs.warning(f':{dnickname} NOTICE {fromuser} : Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer')
+                    self.Logs.warning(f':{dnickname} NOTICE {fromuser} : Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer')
                     return None
 
                 if len(cmd) < 3:
@@ -1382,7 +1341,7 @@ class Irc:
                     level_user_to_del = info_user[1]
                     if current_user_level <= level_user_to_del:
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You are not allowed to delete this access")
-                        self.Base.logs.warning(f':{dnickname} NOTICE {fromuser} : You are not allowed to delete this access')
+                        self.Logs.warning(f':{dnickname} NOTICE {fromuser} : You are not allowed to delete this access')
                         return None
 
                     data_to_delete = {'user': user_to_del}
@@ -1393,7 +1352,7 @@ class Irc:
                         self.Admin.delete(user_to_del)
                     else:
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
-                        self.Base.logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
+                        self.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
 
             case 'help':
 
@@ -1432,9 +1391,9 @@ class Irc:
                     mod_name = str(cmd[1])
                     self.load_module(fromuser, mod_name)
                 except KeyError as ke:
-                    self.Base.logs.error(f"Key Error: {ke} - list recieved: {cmd}")
+                    self.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
                 except Exception as err:
-                    self.Base.logs.error(f"General Error: {ke} - list recieved: {cmd}")
+                    self.Logs.error(f"General Error: {ke} - list recieved: {cmd}")
 
             case 'unload':
                 # unload mod_defender
@@ -1442,7 +1401,7 @@ class Irc:
                     module_name = str(cmd[1]).lower()                              # Le nom du module. exemple: mod_defender
                     self.unload_module(module_name)
                 except Exception as err:
-                    self.Base.logs.error(f"General Error: {err}")
+                    self.Logs.error(f"General Error: {err}")
 
             case 'reload':
                 # reload mod_defender
@@ -1450,7 +1409,7 @@ class Irc:
                     module_name = str(cmd[1]).lower()   # ==> mod_defender
                     self.reload_module(from_user=fromuser, mod_name=module_name)
                 except Exception as e:
-                    self.Base.logs.error(f"Something went wrong with a module you want to reload: {e}")
+                    self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
                     self.Protocol.sendPrivMsg(
                         nick_from=dnickname,
                         msg=f"Something went wrong with the module: {e}",
@@ -1473,12 +1432,12 @@ class Irc:
                         msg=f"Arrêt du service {dnickname}"
                     )
                     self.Protocol.squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
-                    self.Base.logs.info(f'Arrêt du server {dnickname}')
+                    self.Logs.info(f'Arrêt du server {dnickname}')
                     self.Config.DEFENDER_RESTART = 0
                     self.signal = False
 
                 except IndexError as ie:
-                    self.Base.logs.error(f'{ie}')
+                    self.Logs.error(f'{ie}')
 
             case 'restart':
                 reason = []
@@ -1499,7 +1458,7 @@ class Irc:
                 self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
 
                 self.Protocol.squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
-                self.Base.logs.info(f'Redémarrage du server {dnickname}')
+                self.Logs.info(f'Redémarrage du server {dnickname}')
                 self.loaded_classes.clear()
                 self.Config.DEFENDER_RESTART = 1                 # Set restart status to 1 saying that the service will restart
                 self.Config.DEFENDER_INIT = 1                    # set init to 1 saying that the service will be re initiated
@@ -1554,6 +1513,7 @@ class Irc:
                     self.Config.SERVEUR_ID = serveur_id
                     self.Protocol.sendPrivMsg(nick_from=self.Config.SERVICE_NICKNAME, msg='You need to restart defender !', channel=self.Config.SERVICE_CHANLOG)
 
+                self.Base.delete_logger(self.Config.LOGGING_NAME)
                 self.Base = self.Loader.BaseModule.Base(self.Config, self.Settings)
 
                 importlib.reload(mod_unreal6)
@@ -1572,7 +1532,7 @@ class Irc:
 
             case 'show_modules':
 
-                self.Base.logs.debug(self.loaded_classes)
+                self.Logs.debug(self.loaded_classes)
                 all_modules  = self.Base.get_all_modules()
                 loaded = False
 

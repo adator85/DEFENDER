@@ -208,6 +208,9 @@ class MConfig:
     DEBUG_LEVEL:Literal[10, 20, 30, 40, 50] = 20
     """Logs level: DEBUG 10 | INFO 20 | WARNING 30 | ERROR 40 | CRITICAL 50. (default: 20)"""
 
+    LOGGING_NAME: str = "defender"
+    """The name of the Logging instance"""
+
     TABLE_ADMIN: str = "core_admin"
     """Admin table"""
 

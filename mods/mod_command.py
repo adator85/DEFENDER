@@ -160,9 +160,9 @@ class Command():
                         nick_to=self.user_to_notice,
                         msg=f"[{red}ERROR MSG{nogc}] {message}"
                     )
-                    self.Base.logs.error(f"{cmd[1]} - {message}")
+                    self.Logs.error(f"{cmd[1]} - {message}")
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -177,7 +177,7 @@ class Command():
                         msg=f"[{green}SERVER MSG{nogc}] {message}"
                     )
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -200,7 +200,7 @@ class Command():
                             self.Protocol.sendNotice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No kline")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -217,7 +217,7 @@ class Command():
                                              )
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -708,7 +708,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the topic")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -726,7 +726,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the wallops message")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -744,7 +744,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the globops message")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -762,7 +762,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the global notice message")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -783,7 +783,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} WHOIS {nickname}')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -803,7 +803,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} NAMES {chan}')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -829,7 +829,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} INVITE {nickname} {chan}')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -842,7 +842,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} INVITE {fromuser} {self.Config.SERVICE_CHANLOG}')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -852,7 +852,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} MAP')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -868,7 +868,7 @@ class Command():
 
                     self.Protocol.send2socket(f':{dnickname} SVSMODE {nickname} {umode}')
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -920,7 +920,7 @@ class Command():
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSJOIN {nickname} {channel}')
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -936,7 +936,7 @@ class Command():
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSPART {nickname} {channel}')
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -952,7 +952,7 @@ class Command():
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SAJOIN {nickname} {channel}')
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -968,7 +968,7 @@ class Command():
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SAPART {nickname} {channel}')
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -991,7 +991,7 @@ class Command():
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSNICK {nickname} {newnickname} {unixtime}')
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1009,7 +1009,7 @@ class Command():
 
                     self.Protocol.send2socket(f":{service_id} KILL {nickname} {kill_reason} ({self.Config.COLORS.red}{dnickname}{self.Config.COLORS.nogc})")
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSNICK nickname newnickname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1036,7 +1036,7 @@ class Command():
                     self.Protocol.gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1057,7 +1057,7 @@ class Command():
                     self.Protocol.ungline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1084,7 +1084,7 @@ class Command():
                     self.Protocol.kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1104,7 +1104,7 @@ class Command():
                     self.Protocol.unkline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1131,7 +1131,7 @@ class Command():
 
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} TKL + s {nickname} {hostname} {dnickname} {expire_time} {set_at_timestamp} :{shun_reason}")
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1151,7 +1151,7 @@ class Command():
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} TKL - s {nickname} {hostname} {dnickname}")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1162,7 +1162,7 @@ class Command():
                     self.Protocol.send2socket(f":{self.Config.SERVICE_ID} STATS G")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1173,7 +1173,7 @@ class Command():
                     self.Protocol.send2socket(f":{self.Config.SERVICE_ID} STATS s")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
@@ -1184,7 +1184,7 @@ class Command():
                     self.Protocol.send2socket(f":{self.Config.SERVICE_ID} STATS k")
 
                 except KeyError as ke:
-                    self.Base.logs.error(ke)
+                    self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')

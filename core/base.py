@@ -187,14 +187,26 @@ class Base:
             os.makedirs(logs_directory)
 
         # Init logs object
-        self.logs = logging
-        self.logs.basicConfig(level=self.Config.DEBUG_LEVEL,
-                              filename=f'logs{self.Config.OS_SEP}defender.log',
-                              encoding='UTF-8',
-                              format='%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
+        self.logs = logging.getLogger(self.Config.LOGGING_NAME)
+        self.logs.setLevel(self.Config.DEBUG_LEVEL)
 
-        logger = logging.getLogger()
-        logger.addFilter(self.replace_filter)
+        # Add Handlers
+        file_hanlder = logging.FileHandler(f'logs{self.Config.OS_SEP}defender.log',encoding='UTF-8')
+        file_hanlder.setLevel(self.Config.DEBUG_LEVEL)
+
+        # Define log format
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
+
+        # Apply log format
+        file_hanlder.setFormatter(formatter)
+
+        # Add handler to logs
+        self.logs.addHandler(file_hanlder)
+
+        # Apply the filter
+        self.logs.addFilter(self.replace_filter)
+
+        # self.logs.Logger('defender').addFilter(self.replace_filter)
         self.logs.info('#################### STARTING DEFENDER ####################')
 
         return None
@@ -214,6 +226,21 @@ class Base:
 
         return response  # Retourne True pour permettre l'affichage du message
 
+    def delete_logger(self, logger_name: str) -> None:
+
+        # Récupérer le logger
+        logger = logging.getLogger(logger_name)
+
+        # Retirer tous les gestionnaires du logger et les fermer
+        for handler in logger.handlers[:]:  # Utiliser une copie de la liste
+            logger.removeHandler(handler)
+            handler.close()
+
+        # Supprimer le logger du dictionnaire global
+        logging.Logger.manager.loggerDict.pop(logger_name, None)
+
+        return None
+
     def log_cmd(self, user_cmd:str, cmd:str) -> None:
         """Enregistre les commandes envoyées par les utilisateurs
 
@@ -222,7 +249,7 @@ class Base:
         """
         cmd_list = cmd.split()
         if len(cmd_list) == 3:
-            if cmd_list[0].replace('.', '') == 'auth':
+            if cmd_list[0].replace(self.Config.SERVICE_PREFIX, '') == 'auth':
                 cmd_list[1] = '*******'
                 cmd_list[2] = '*******'
                 cmd = ' '.join(cmd_list)

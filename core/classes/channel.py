@@ -60,36 +60,30 @@ class Channel:
 
         return result
 
-    def delete(self, name: str) -> bool:
+    def delete(self, channel_name: str) -> bool:
 
-        result = False
+        chanObj = self.get_Channel(channel_name)
 
-        for record in self.UID_CHANNEL_DB:
-            if record.name == name:
-                # If the channel exist, then remove it and return True.
-                # As soon as the channel found, return True and stop the loop
-                self.UID_CHANNEL_DB.remove(record)
-                result = True
-                # self.Logs.debug(f'Channel ({record.name}) has been created')
-                return result
+        if chanObj is None:
+            return False
 
-        if not result:
-            self.Logs.critical(f'The Channel {name} was not deleted')
+        self.UID_CHANNEL_DB.remove(chanObj)
 
-        return result
+        return True
 
-    def delete_user_from_channel(self, chan_name: str, uid:str) -> bool:
+    def delete_user_from_channel(self, channel_name: str, uid:str) -> bool:
         try:
             result = False
-            chan_name = chan_name.lower()
 
-            for record in self.UID_CHANNEL_DB:
-                if record.name == chan_name:
-                    for user_id in record.uids:
-                        if self.Base.clean_uid(user_id) == uid:
-                            record.uids.remove(user_id)
-                            # self.Logs.debug(f'The UID {uid} has been removed, here is the new object: {record}')
-                            result = True
+            chanObj = self.get_Channel(channel_name.lower())
+
+            if chanObj is None:
+                return result
+
+            for userid in chanObj.uids:
+                if self.Base.clean_uid(userid) == self.Base.clean_uid(uid):
+                    chanObj.uids.remove(userid)
+                    result = True
 
             self.clean_channel()
 
@@ -126,14 +120,13 @@ class Channel:
         except Exception as err:
             self.Logs.error(f'{err}')
 
-    def get_Channel(self, name: str) -> Union['MChannel', None]:
+    def get_Channel(self, channel_name: str) -> Union['MChannel', None]:
 
         Channel = None
-        for record in self.UID_CHANNEL_DB:
-            if record.name == name:
-                Channel = record
 
-        # self.Logs.debug(f'Search {name} -- result = {Channel}')
+        for record in self.UID_CHANNEL_DB:
+            if record.name == channel_name:
+                Channel = record
 
         return Channel
 
@@ -169,9 +162,9 @@ class Channel:
             else:
                 return True
         except TypeError as te:
-            self.logs.error(f'TypeError: [{channelToCheck}] - {te}')
+            self.Logs.error(f'TypeError: [{channelToCheck}] - {te}')
         except Exception as err:
-            self.logs.error(f'Error Not defined: {err}')
+            self.Logs.error(f'Error Not defined: {err}')
 
     def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:
         """You can add a channel or delete a channel.
