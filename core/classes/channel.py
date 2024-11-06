@@ -108,6 +108,27 @@ class Channel:
         except ValueError as ve:
             self.Logs.error(f'{ve}')
 
+    def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
+        try:
+            result = False
+            chanObj = self.get_Channel(channel_name)
+            self.Logs.debug(f"** {__name__}")
+
+            if chanObj is None:
+                result = self.insert(MChannel(channel_name, uids=[uid]))
+                # self.Logs.debug(f"** {__name__} - result: {result}")
+                # self.Logs.debug(f'New Channel Created: ({chanObj})')
+                return result
+
+            chanObj.uids.append(uid)
+            del_duplicates = list(set(chanObj.uids))
+            chanObj.uids = del_duplicates
+            # self.Logs.debug(f'New Channel Created: ({chanObj})')
+
+            return True
+        except Exception as err:
+            self.Logs.error(f'{err}')
+
     def clean_channel(self) -> None:
         """Remove Channels if empty
         """

@@ -138,11 +138,11 @@ class Irc:
                 ssl_connexion.connect(connexion_information)
                 self.IrcSocket:SSLSocket = ssl_connexion
                 self.Config.SSL_VERSION = self.IrcSocket.version()
-                self.Logs.info(f"Connexion en mode SSL : Version = {self.Config.SSL_VERSION}")
+                self.Logs.info(f"-- Connexion en mode SSL : Version = {self.Config.SSL_VERSION}")
             else:
                 soc.connect(connexion_information)
                 self.IrcSocket:socket.socket = soc
-                self.Logs.info("Connexion en mode normal")
+                self.Logs.info("-- Connexion en mode normal")
 
             return None
 
@@ -165,7 +165,7 @@ class Irc:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
-        self.Logs.debug(f'SSLContext initiated with verified mode {ctx.verify_mode}')
+        self.Logs.debug(f'-- SSLContext initiated with verified mode {ctx.verify_mode}')
 
         return ctx
 
@@ -192,7 +192,7 @@ class Irc:
 
                         while self.IrcSocket.fileno() != -1:
                             time.sleep(0.5)
-                            self.Logs.warning('--> Waiting for socket to close ...')
+                            self.Logs.warning('--* Waiting for socket to close ...')
 
                         # Reload configuration
                         self.Logs.debug('Reloading configuration')
@@ -237,7 +237,7 @@ class Irc:
 
             self.IrcSocket.shutdown(socket.SHUT_RDWR)
             self.IrcSocket.close()
-            self.Logs.info("--> Fermeture de Defender ...")
+            self.Logs.info("-- Fermeture de Defender ...")
             sys.exit(0)
 
         except AssertionError as ae:
@@ -264,33 +264,6 @@ class Irc:
             for chan_name in result_query:
                 chan = chan_name[0]
                 self.Protocol.sjoin(channel=chan)
-
-    # def send2socket(self, send_message:str, print_log: bool = True) -> None:
-    #     """Envoit les commandes à envoyer au serveur.
-
-    #     Args:
-    #         string (Str): contient la commande à envoyer au serveur.
-    #     """
-    #     try:
-    #         with self.Base.lock:
-    #             self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0]))
-    #             if print_log:
-    #                 self.Logs.debug(f'< {send_message}')
-
-    #     except UnicodeDecodeError:
-    #         self.Logs.error(f'Decode Error try iso-8859-1 - message: {send_message}')
-    #         self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
-    #     except UnicodeEncodeError:
-    #         self.Logs.error(f'Encode Error try iso-8859-1 - message: {send_message}')
-    #         self.IrcSocket.send(f"{send_message}\r\n".encode(self.CHARSET[0],'replace'))
-    #     except AssertionError as ae:
-    #         self.Logs.warning(f'Assertion Error {ae} - message: {send_message}')
-    #     except ssl.SSLEOFError as soe:
-    #         self.Logs.error(f"SSLEOFError: {soe} - {send_message}")
-    #     except ssl.SSLError as se:
-    #         self.Logs.error(f"SSLError: {se} - {send_message}")
-    #     except OSError as oe:
-    #         self.Logs.error(f"OSError: {oe} - {send_message}")
 
     def send_response(self, responses:list[bytes]) -> None:
         try:
@@ -801,6 +774,9 @@ class Irc:
                     # if self.Config.ABUSEIPDB == 1:
                     #     self.Base.create_thread(self.abuseipdb_scan, (cmd[7], ))
                     pass
+
+                case 'VERSION':
+                    self.Protocol.on_version_msg(original_response)
 
                 case 'UMODE2':
                     # [':adator_', 'UMODE2', '-i']
@@ -1456,6 +1432,7 @@ class Irc:
 
                 self.User.UID_DB.clear()                # Clear User Object
                 self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
+                self.Base.delete_logger(self.Config.LOGGING_NAME)
 
                 self.Protocol.squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
                 self.Logs.info(f'Redémarrage du server {dnickname}')
@@ -1527,8 +1504,8 @@ class Irc:
                         msg=f'> Module [{mod}] reloaded', 
                         channel=self.Config.SERVICE_CHANLOG
                         )
-
-                self.reload_module(fromuser, 'mod_command')
+                for mod in self.Base.get_all_modules():
+                    self.reload_module(fromuser, mod)
 
             case 'show_modules':
 

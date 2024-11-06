@@ -92,7 +92,7 @@ class Defender():
         self.__init_module()
 
         # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
+        self.Logs.debug(f'-- Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
 
@@ -351,7 +351,7 @@ class Defender():
             if not get_reputation.isWebirc:
                 # Si le user ne vient pas de webIrc
 
-                self.Protocol.send2socket(f":{service_id} SAJOIN {jailed_nickname} {salon_jail}")
+                self.Protocol.sendSajoin(nick_to_sajoin=jailed_nickname, channel_name=salon_jail)
                 self.Protocol.sendPrivMsg(nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f" [{color_red} REPUTATION {nogc}] : Connexion de {jailed_nickname} ({jailed_score}) ==> {salon_jail}",
                     channel=salon_logs
@@ -402,10 +402,10 @@ class Defender():
                     if self.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score_connexion) <= int(reputation_seuil):
                         self.Protocol.sendPrivMsg(
                             nick_from=service_id,
-                            msg=f":{service_id} PRIVMSG {dchanlog} :[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
+                            msg=f"[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
                             channel=dchanlog
                             )
-                        self.Protocol.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code ")
+                        self.Protocol.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code")
                         self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} REPUTATION {user.remote_ip} 0")
 
                         self.Logs.info(f"Nickname: {user.nickname} KILLED after {str(reputation_timer)} minutes of inactivity")
@@ -1080,7 +1080,7 @@ class Defender():
                                 currentDateTime = self.Base.get_datetime()
                                 self.Reputation.insert(
                                     self.Loader.Definition.MReputation(
-                                        **_User,
+                                        **_User.__dict__,
                                         secret_code=self.Base.get_random(8)
                                         # uid=_User.uid, nickname=_User.nickname, username=_User.username, realname=_User.realname, 
                                         # hostname=_User.hostname, umodes=_User.umodes, vhost=_User.vhost, ip=_User.remote_ip, score=_User.score_connexion,
@@ -1112,14 +1112,14 @@ class Defender():
 
                                 if not isWebirc:
                                     if parsed_chan != self.Config.SALON_JAIL:
-                                        self.Protocol.send2socket(f":{service_id} SAPART {get_reputation.nickname} {parsed_chan}")
+                                        self.Protocol.sendSapart(nick_to_sapart=get_reputation.nickname, channel_name=parsed_chan)
 
                                 if self.ModConfig.reputation_ban_all_chan == 1 and not isWebirc:
                                     if parsed_chan != self.Config.SALON_JAIL:
                                         self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +b {get_reputation.nickname}!*@*")
                                         self.Protocol.send2socket(f":{service_id} KICK {parsed_chan} {get_reputation.nickname}")
 
-                            self.Logs.debug(f'SJOIN parsed_uid : {parsed_UID}')
+                                self.Logs.debug(f'SJOIN parsed_uid : {parsed_UID}')
 
                     except KeyError as ke:
                         self.Logs.error(f"key error SJOIN : {ke}")
@@ -1249,7 +1249,7 @@ class Defender():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=" No code is requested ...")
                         return False
 
-                    jailed_IP = get_reputation.ip
+                    jailed_IP = get_reputation.remote_ip
                     jailed_salon = self.Config.SALON_JAIL
                     reputation_seuil = self.ModConfig.reputation_seuil
                     welcome_salon = self.Config.SALON_LIBERER
@@ -1269,8 +1269,8 @@ class Defender():
 
                         self.Reputation.delete(jailed_UID)
                         self.Logs.debug(f'{jailed_UID} - {jailed_nickname} removed from REPUTATION_DB')
-                        self.Protocol.send2socket(f":{service_id} SAPART {jailed_nickname} {jailed_salon}")
-                        self.Protocol.send2socket(f":{service_id} SAJOIN {jailed_nickname} {welcome_salon}")
+                        self.Protocol.sendSapart(nick_to_sapart=jailed_nickname, channel_name=jailed_salon)
+                        self.Protocol.sendSajoin(nick_to_sajoin=jailed_nickname, channel_name=welcome_salon)
                         self.Protocol.send2socket(f":{link} REPUTATION {jailed_IP} {self.ModConfig.reputation_score_after_release}")
                         self.User.get_User(jailed_UID).score_connexion = reputation_seuil + 1
                         self.Protocol.sendPrivMsg(nick_from=dnickname,
@@ -1285,7 +1285,7 @@ class Defender():
                             )
                         self.Protocol.sendPrivMsg(
                                 nick_from=dnickname,
-                                msg=f"[{color_green} MAUVAIS PASSWORD {color_black}]", 
+                                msg=f"[{color_green} MAUVAIS PASSWORD {color_black}] You have typed a wrong code. for recall your password is: {self.Config.SERVICE_PREFIX}code {get_reputation.secret_code}",
                                 nick_to=jailed_nickname
                             )
 

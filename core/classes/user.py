@@ -76,22 +76,26 @@ class User:
         new_modes = modes[1:]
 
         existing_umodes = userObj.umodes
-        final_umodes = userObj.umodes
+        umodes = userObj.umodes
 
         if action == '+':
 
             for nm in new_modes:
                 if nm not in existing_umodes:
-                    final_umodes += nm
+                    umodes += nm
 
         elif action == '-':
             for nm in new_modes:
                 if nm in existing_umodes:
-                    final_umodes = final_umodes.replace(nm, '')
+                    umodes = umodes.replace(nm, '')
         else:
             return False
 
-        userObj.umodes = final_umodes
+        liste_umodes = list(umodes)
+        final_umodes_liste = [x for x in self.Base.Settings.USER_MODES if x in liste_umodes]
+        final_umodes = ''.join(final_umodes_liste)
+
+        userObj.umodes = f"+{final_umodes}"
 
         return response
 

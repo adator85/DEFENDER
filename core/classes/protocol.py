@@ -10,9 +10,10 @@ class Protocol:
     def __init__(self, protocol: Literal['unreal6','inspircd'], ircInstance: 'Irc'):
 
         self.Protocol = None
-        if protocol == 'unreal6':
-            self.Protocol: Unrealircd6 = Unrealircd6(ircInstance)
-        elif protocol == 'inspircd': # InspIRCd
-            self.Protocol: Inspircd = Inspircd(ircInstance)
-        else:
-            self.Protocol = None
+        match protocol:
+            case 'unreal6':
+                self.Protocol: Unrealircd6 = Unrealircd6(ircInstance)
+            case 'inspircd':
+                self.Protocol: Inspircd = Inspircd(ircInstance)
+            case _:
+                self.Protocol: Unrealircd6 = Unrealircd6(ircInstance)

@@ -55,7 +55,7 @@ class Command():
         self.__init_module()
 
         # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
+        self.Logs.debug(f'-- Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
 
@@ -810,26 +810,26 @@ class Command():
             case 'invite':
                 try:
                     if len(cmd) < 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #CHANNEL NICKNAME")
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
-                    chan = str(cmd[1])
-                    nickname = str(cmd[2])
+                    nickname = str(cmd[1])
+                    chan = str(cmd[2])
 
                     if not self.Channel.Is_Channel(chan):
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel nickname")
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
                     if self.User.get_nickname(nickname) is None:
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Nickname not found !")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel NICKNAME")
+                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
                     self.Protocol.send2socket(f':{dnickname} INVITE {nickname} {chan}')
 
                 except KeyError as ke:
-                    self.Logs.error(ke)
+                    self.Logs.error(f"KeyError: {ke}")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -842,7 +842,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} INVITE {fromuser} {self.Config.SERVICE_CHANLOG}')
 
                 except KeyError as ke:
-                    self.Logs.error(ke)
+                    self.Logs.error(f"KeyError: {ke}")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -852,7 +852,7 @@ class Command():
                     self.Protocol.send2socket(f':{dnickname} MAP')
 
                 except KeyError as ke:
-                    self.Logs.error(ke)
+                    self.Logs.error(f"KeyError: {ke}")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -866,7 +866,7 @@ class Command():
                     nickname = str(cmd[1])
                     umode = str(cmd[2])
 
-                    self.Protocol.send2socket(f':{dnickname} SVSMODE {nickname} {umode}')
+                    self.Protocol.sendSvsmode(nickname=nickname, user_mode=umode)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
@@ -950,7 +950,8 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                         return None
 
-                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SAJOIN {nickname} {channel}')
+                    self.Protocol.sendSajoin(nick_to_sajoin=nickname, channel_name=channel)
+
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
@@ -966,7 +967,7 @@ class Command():
                         self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                         return None
 
-                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SAPART {nickname} {channel}')
+                    self.Protocol.sendSapart(nick_to_sapart=nickname, channel_name=channel)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:

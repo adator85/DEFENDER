@@ -15,6 +15,8 @@ class Inspircd:
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
 
+        self.__Base.logs.info(f"** Loading protocol [{__name__}]")
+
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
 
@@ -122,21 +124,28 @@ class Inspircd:
         version = self.__Config.CURRENT_VERSION
         unixtime = self.__Base.get_unixtime()
 
-        self.send2socket(f":{server_id} PASS :{password}")
-        self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
-        # self.__Irc.send2socket(f":{sid} PROTOCTL NICKv2 VHP UMODE2 NICKIP SJOIN SJOIN2 SJ3 NOQUIT TKLEXT MLOCK SID MTAGS")
-        self.send2socket(f":{server_id} PROTOCTL EAUTH={link},,,{service_name}-v{version}")
-        self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
-        self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
-        self.send2socket(f":{server_id} {nickname} :Reserved for services")
-        #self.__Irc.send2socket(f":{sid} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * * :{realname}")
-        self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        # self.__Irc.send2socket(f":{server_id} SJOIN {unixtime} {chan} + :{service_id}")
-        self.sjoin(chan)
-        self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
 
-        self.send2socket(f":{service_id} MODE {chan} {cmodes}")
-        self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
+        self.send2socket(f"CAPAB START 1206")
+        self.send2socket(f"CAPAB CHANMODES :list:ban=b param-set:limit=l param:key=k prefix:10000:voice=+v prefix:30000:op=@o simple:inviteonly=i simple:moderated=m simple:noextmsg=n simple:private=p simple:secret=s simple:topiclock=t")
+        self.send2socket(f"CAPAB USERMODES :param-set:snomask=s simple:invisible=i simple:oper=o simple:wallops=w")
+        self.send2socket(f"CAPAB CAPABILITIES :NICKMAX=30 CHANMAX=64 MAXMODES=20 IDENTMAX=10 MAXQUIT=255 MAXTOPIC=307 MAXKICK=255 MAXREAL=128 MAXAWAY=200 MAXHOST=64 MAXLINE=512 CASEMAPPING=ascii GLOBOPS=0")
+        self.send2socket(f"CAPAB END")
+        self.send2socket(f"SERVER {link} wobble {server_id} 079 :{service_name}")
+
+
+        # self.__Irc.send2socket(f":{sid} PROTOCTL NICKv2 VHP UMODE2 NICKIP SJOIN SJOIN2 SJ3 NOQUIT TKLEXT MLOCK SID MTAGS")
+        # self.send2socket(f":{server_id} PROTOCTL EAUTH={link},,,{service_name}-v{version}")
+        # self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
+        # self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
+        # self.send2socket(f":{server_id} {nickname} :Reserved for services")
+        # #self.__Irc.send2socket(f":{sid} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * * :{realname}")
+        # self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
+        # # self.__Irc.send2socket(f":{server_id} SJOIN {unixtime} {chan} + :{service_id}")
+        # self.sjoin(chan)
+        # self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
+
+        # self.send2socket(f":{service_id} MODE {chan} {cmodes}")
+        # self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
 
         self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
 

@@ -66,7 +66,7 @@ class Base:
 
     def __get_latest_defender_version(self) -> None:
         try:
-            self.logs.debug(f'Looking for a new version available on Github')
+            self.logs.debug(f'-- Looking for a new version available on Github')
             token = ''
             json_url = f'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
             headers = {
@@ -100,13 +100,13 @@ class Base:
             bool: True if there is a new version available
         """
         try:
-            self.logs.debug(f'Checking for a new service version')
+            self.logs.debug(f'-- Checking for a new service version')
 
             # Assigner la version actuelle de Defender
             self.__set_current_defender_version()
             # Récuperer la dernier version disponible dans github
             if online:
-                self.logs.debug(f'Retrieve the latest version from Github')
+                self.logs.debug(f'-- Retrieve the latest version from Github')
                 self.__get_latest_defender_version()
 
             isNewVersion = False
@@ -465,7 +465,7 @@ class Base:
 
             self.running_timers.append(t)
 
-            self.logs.debug(f"Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug(f"-- Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
             self.logs.error(f'Assertion Error -> {ae}')
@@ -490,7 +490,7 @@ class Base:
             th.start()
 
             self.running_threads.append(th)
-            self.logs.debug(f"Thread ID : {str(th.ident)} | Thread name : {th.getName()} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.getName()} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
             self.logs.error(f'{ae}')
@@ -523,9 +523,9 @@ class Base:
                 if not timer.is_alive():
                     timer.cancel()
                     self.running_timers.remove(timer)
-                    self.logs.info(f"Timer {str(timer)} removed")
+                    self.logs.info(f"-- Timer {str(timer)} removed")
                 else:
-                    self.logs.debug(f"===> Timer {str(timer)} Still running ...")
+                    self.logs.debug(f"--* Timer {str(timer)} Still running ...")
 
         except AssertionError as ae:
             self.logs.error(f'Assertion Error -> {ae}')
@@ -539,7 +539,7 @@ class Base:
                     # print(thread.getName(), thread.is_alive(), sep=' / ')
                     if not thread.is_alive():
                         self.running_threads.remove(thread)
-                        self.logs.info(f"Thread {str(thread.getName())} {str(thread.native_id)} removed")
+                        self.logs.info(f"-- Thread {str(thread.getName())} {str(thread.native_id)} removed")
 
             # print(threading.enumerate())
         except AssertionError as ae:
@@ -554,7 +554,7 @@ class Base:
 
             soc.close()
             self.running_sockets.remove(soc)
-            self.logs.debug(f"Socket ==> closed {str(soc.fileno())}")
+            self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
 
     def shutdown(self) -> None:
         """Methode qui va préparer l'arrêt complêt du service
@@ -599,7 +599,7 @@ class Base:
 
         engine = create_engine(f'sqlite:///{full_path_db}.db', echo=False)
         cursor = engine.connect()
-        self.logs.info("database connexion has been initiated")
+        self.logs.info("-- database connexion has been initiated")
         return engine, cursor
 
     def __create_db(self) -> None:

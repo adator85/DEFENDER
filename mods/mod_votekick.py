@@ -64,7 +64,7 @@ class Votekick():
         self.__init_module()
 
         # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
+        self.Logs.debug(f'-- Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
 
@@ -286,9 +286,8 @@ class Votekick():
         match command:
 
             case 'vote':
-                option = str(cmd[1]).lower()
 
-                if len(command) == 1:
+                if len(cmd) == 1:
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote activate #channel')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote deactivate #channel')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote +')
@@ -297,6 +296,9 @@ class Votekick():
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote status')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote submit nickname')
                     self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote verdict')
+                    return None
+
+                option = str(cmd[1]).lower()
 
                 match option:
 

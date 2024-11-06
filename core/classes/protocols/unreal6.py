@@ -2,6 +2,7 @@ from re import match, findall
 from datetime import datetime
 from typing import TYPE_CHECKING
 from ssl import SSLEOFError, SSLError
+from dataclasses import dataclass
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -14,6 +15,9 @@ class Unrealircd6:
         self.__Irc = ircInstance
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
+        self.__Settings = ircInstance.Base.Settings
+
+        self.__Base.logs.info(f"** Loading protocol [{__name__}]")
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -55,8 +59,8 @@ class Unrealircd6:
         """
         try:
             batch_size      = self.__Config.BATCH_SIZE
-            User_from    = self.__Irc.User.get_User(nick_from)
-            User_to      = self.__Irc.User.get_User(nick_to) if nick_to is None else None
+            User_from       = self.__Irc.User.get_User(nick_from)
+            User_to         = self.__Irc.User.get_User(nick_to) if not nick_to is None else None
 
             if User_from is None:
                 self.__Base.logs.error(f"The sender nickname [{nick_from}] do not exist")
@@ -71,8 +75,10 @@ class Unrealircd6:
                 for i in range(0, len(str(msg)), batch_size):
                     batch = str(msg)[i:i+batch_size]
                     self.send2socket(f":{nick_from} PRIVMSG {User_to.uid} :{batch}")
+
         except Exception as err:
             self.__Base.logs.error(f"General Error: {err}")
+            self.__Base.logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
 
     def sendNotice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
@@ -122,21 +128,18 @@ class Unrealircd6:
         version = self.__Config.CURRENT_VERSION
         unixtime = self.__Base.get_unixtime()
 
-        self.send2socket(f":{server_id} PASS :{password}")
+        self.send2socket(f":{server_id} PASS :{password}", print_log=False)
         self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
         # self.__Irc.send2socket(f":{sid} PROTOCTL NICKv2 VHP UMODE2 NICKIP SJOIN SJOIN2 SJ3 NOQUIT TKLEXT MLOCK SID MTAGS")
         self.send2socket(f":{server_id} PROTOCTL EAUTH={link},,,{service_name}-v{version}")
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
         self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
         self.send2socket(f":{server_id} {nickname} :Reserved for services")
-        #self.__Irc.send2socket(f":{sid} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * * :{realname}")
         self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        # self.__Irc.send2socket(f":{server_id} SJOIN {unixtime} {chan} + :{service_id}")
         self.sjoin(chan)
         self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
-
         self.send2socket(f":{service_id} MODE {chan} {cmodes}")
-        self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
+        # self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
 
         self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
 
@@ -148,8 +151,15 @@ class Unrealircd6:
         return None
 
     def set_nick(self, newnickname: str) -> None:
-
+        """Change nickname of the server
+        \n This method will also update the User object
+        Args:
+            newnickname (str): New nickname of the server
+        """
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} NICK {newnickname}")
+
+        userObj = self.__Irc.User.get_User(self.__Config.SERVICE_NICKNAME)
+        self.__Irc.User.update(userObj.uid, newnickname)
         return None
 
     def squit(self, server_id: str, server_link: str, reason: str) -> None:
@@ -180,12 +190,17 @@ class Unrealircd6:
         return None
 
     def sjoin(self, channel: str) -> None:
+        """Server will join a channel with pre defined umodes
 
+        Args:
+            channel (str): Channel to join
+        """
         if not self.__Irc.Channel.Is_Channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
+        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} {self.__Config.SERVICE_UMODES} :{self.__Config.SERVICE_ID}")
+        self.send2socket(f":{self.__Config.SERVICE_ID} MODE {channel} {self.__Config.SERVICE_UMODES} {self.__Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
@@ -215,6 +230,62 @@ class Unrealircd6:
 
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def sendSajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
+        """_summary_
+
+        Args:
+            nick_to_sajoin (str): _description_
+            channel_name (str): _description_
+        """
+        try:
+
+            userObj = self.__Irc.User.get_User(uidornickname=nick_to_sajoin)
+            chanObj = self.__Irc.Channel.get_Channel(channel_name)
+            service_uid = self.__Config.SERVICE_ID
+
+            if userObj is None:
+                # User not exist: leave
+                return None
+
+            if chanObj is None:
+                # Channel not exist
+                if not self.__Irc.Channel.Is_Channel(channel_name):
+                    # Incorrect channel: leave
+                    return None
+
+                # Create the new channel with the uid
+                newChanObj = self.__Irc.Loader.Definition.MChannel(name=channel_name, uids=[userObj.uid])
+                self.__Irc.Channel.insert(newChanObj)
+                self.send2socket(f":{service_uid} SAJOIN {userObj.nickname} {newChanObj.name}")
+
+            else:
+                self.__Irc.Channel.add_user_to_a_channel(channel_name=channel_name, uid=userObj.uid)
+                self.send2socket(f":{service_uid} SAJOIN {userObj.nickname} {chanObj.name}")
+
+            return None
+
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def sendSvsmode(self, nickname: str, user_mode: str) -> None:
+        try:
+
+            userObj = self.__Irc.User.get_User(uidornickname=nickname)
+            service_uid = self.__Config.SERVICE_ID
+
+            if userObj is None:
+                # User not exist: leave
+                return None
+
+            self.send2socket(f':{service_uid} SVSMODE {nickname} {user_mode}')
+
+            # Update new mode
+            self.__Irc.User.update_mode(userObj.uid, user_mode)
+
+            return None
+        except Exception as err:
+                self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
     def sendQuit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
@@ -304,6 +375,9 @@ class Unrealircd6:
             return None
 
         self.send2socket(f":{userObj.uid} JOIN {channel} {passwordChannel}", print_log=print_log)
+
+        if uidornickname == self.__Config.SERVICE_NICKNAME or uidornickname == self.__Config.SERVICE_ID:
+            self.send2socket(f":{self.__Config.SERVICE_ID} MODE {channel} {self.__Config.SERVICE_UMODES} {self.__Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
@@ -415,10 +489,13 @@ class Unrealircd6:
         Args:
             serverMsg (list[str]): Original server message
         """
+        # ['PROTOCTL', 'CHANMODES=beI,fkL,lFH,cdimnprstzCDGKMNOPQRSTVZ', 'USERMODES=diopqrstwxzBDGHIRSTWZ', 'BOOTED=1728815798', 'PREFIX=(qaohv)~&@%+', 'SID=001', 'MLOCK', 'TS=1730662755', 'EXTSWHOIS']
         if len(serverMsg) > 5:
             if '=' in serverMsg[5]:
                 serveur_hosting_id = str(serverMsg[5]).split('=')
                 self.__Config.HSID = serveur_hosting_id[1]
+            if 'USERMODES=' in serverMsg[2]:
+                self.__Settings.USER_MODES = list(serverMsg[2].split('=')[1])
 
         return None
 
@@ -457,27 +534,28 @@ class Unrealircd6:
             # ':001T6VU3F', '001JGWB2K', '@11ZAAAAAB', 
             # '001F16WGR', '001X9YMGQ', '*+001DYPFGP', '@00BAAAAAJ', '001AAGOG9', '001FMFVG8', '001DAEEG7', 
             # '&~G:unknown-users', '"~G:websocket-users', '"~G:known-users', '"~G:webirc-users']
-            serverMsg.pop(0)
-            channel = str(serverMsg[3]).lower()
-            len_cmd = len(serverMsg)
+            serverMsg_copy = serverMsg.copy()
+            serverMsg_copy.pop(0)
+            channel = str(serverMsg_copy[3]).lower()
+            len_cmd = len(serverMsg_copy)
             list_users:list = []
             occurence = 0
             start_boucle = 0
 
             # Trouver le premier user
             for i in range(len_cmd):
-                s: list = findall(fr':', serverMsg[i])
+                s: list = findall(fr':', serverMsg_copy[i])
                 if s:
                     occurence += 1
                     if occurence == 2:
                         start_boucle = i
 
             # Boucle qui va ajouter l'ensemble des users (UID)
-            for i in range(start_boucle, len(serverMsg)):
-                parsed_UID = str(serverMsg[i])
+            for i in range(start_boucle, len(serverMsg_copy)):
+                parsed_UID = str(serverMsg_copy[i])
                 clean_uid = self.__Irc.User.clean_uid(parsed_UID)
                 if not clean_uid is None and len(clean_uid) == 9:
-                    list_users.append(parsed_UID)
+                    list_users.append(clean_uid)
 
             if list_users:
                 self.__Irc.Channel.insert(
@@ -682,7 +760,11 @@ class Unrealircd6:
         """
         try:
             # ['@label=0073', ':0014E7P06', 'VERSION', 'PyDefender']
-            getUser  = self.__Irc.User.get_User(self.__Irc.User.clean_uid(serverMsg[1]))
+            serverMsg_copy = serverMsg.copy()
+            if '@' in list(serverMsg_copy[0])[0]:
+                serverMsg_copy.pop(0)
+
+            getUser  = self.__Irc.User.get_User(self.__Irc.User.clean_uid(serverMsg_copy[0]))
 
             if getUser is None:
                 return None
@@ -693,6 +775,9 @@ class Unrealircd6:
             modules = self.__Base.get_all_modules()
             response_005 = ' | '.join(modules)
             self.send2socket(f':{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server')
+
+            response_005 = ''.join(self.__Settings.USER_MODES)
+            self.send2socket(f":{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server")
 
             return None
 
