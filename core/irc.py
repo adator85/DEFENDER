@@ -230,6 +230,7 @@ class Irc:
                     self.Logs.error(f"SSLEOFError __connect_to_irc: {soe} - {data}")
                 except ssl.SSLError as se:
                     self.Logs.error(f"SSLError __connect_to_irc: {se} - {data}")
+                    sys.exit(1)
                 except OSError as oe:
                     self.Logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
                 except (socket.error, ConnectionResetError):
@@ -768,7 +769,12 @@ class Irc:
                 return False
 
             match original_response[1]:
-
+                
+                case 'PING':
+                    # Sending PONG response to the serveur
+                    self.Protocol.on_server_ping(original_response)
+                    return None
+                
                 case 'SLOG':
                     # self.Base.scan_ports(cmd[7])
                     # if self.Config.ABUSEIPDB == 1:

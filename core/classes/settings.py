@@ -7,8 +7,8 @@ class Settings:
     RUNNING_THREADS: list[Thread]   = []
     RUNNING_SOCKETS: list[socket]   = []
     PERIODIC_FUNC: dict[object]     = {}
-    LOCK: RLock = RLock()
+    LOCK: RLock                     = RLock()
 
     CONSOLE: bool                   = True
 
-    USER_MODES: list[str]        = []
+    USER_MODES: list[str]           = []

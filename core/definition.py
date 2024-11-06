@@ -187,6 +187,9 @@ class MConfig:
     CLONE_CMODES: str = "+nts"
     """Clone channel modes (ex. +nts)"""
 
+    CLONE_UMODES: str = '+iwxz'
+    """Clone User modes (ex. +iwxz)"""
+
     CLONE_LOG_HOST_EXEMPT: list[str] = field(default_factory=list[str])
     """Hosts that clones will not log"""
 

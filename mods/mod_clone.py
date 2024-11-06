@@ -157,7 +157,6 @@ class Clone():
 
     def generate_clones(self, group: str = 'Default') -> None:
         try:
-            # :5TC UID Q 1 1727473203 qb4u localhost 5TC00000Q * Sdiop  network/service/test * AAAAAAAAAAAAAAAAAAAAAQ== :qbot4u
 
             fakeEN = self.fakeEN
             fakeFR = self.fakeFR
@@ -167,7 +166,7 @@ class Clone():
             generate_uid = fakeEN.random_sample(chaine, 6)
             uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
 
-            umodes = '+iwxz'
+            umodes = self.Config.CLONE_UMODES
 
             # Generate Username
             chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -210,16 +209,16 @@ class Clone():
                 checkUid = self.Clone.uid_exists(uid=uid)
 
             clone = self.Definition.MClone(
-                        connected=False, 
-                        nickname=nickname, 
-                        username=username, 
+                        connected=False,
+                        nickname=nickname,
+                        username=username,
                         realname=realname,
                         hostname=hostname,
                         umodes=umodes,
-                        uid=uid, 
-                        remote_ip=decoded_ip, 
-                        vhost=vhost, 
-                        group=group, 
+                        uid=uid,
+                        remote_ip=decoded_ip,
+                        vhost=vhost,
+                        group=group,
                         channels=[]
                         )
 

@@ -126,26 +126,11 @@ class Inspircd:
 
 
         self.send2socket(f"CAPAB START 1206")
-        self.send2socket(f"CAPAB CHANMODES :list:ban=b param-set:limit=l param:key=k prefix:10000:voice=+v prefix:30000:op=@o simple:inviteonly=i simple:moderated=m simple:noextmsg=n simple:private=p simple:secret=s simple:topiclock=t")
-        self.send2socket(f"CAPAB USERMODES :param-set:snomask=s simple:invisible=i simple:oper=o simple:wallops=w")
         self.send2socket(f"CAPAB CAPABILITIES :NICKMAX=30 CHANMAX=64 MAXMODES=20 IDENTMAX=10 MAXQUIT=255 MAXTOPIC=307 MAXKICK=255 MAXREAL=128 MAXAWAY=200 MAXHOST=64 MAXLINE=512 CASEMAPPING=ascii GLOBOPS=0")
         self.send2socket(f"CAPAB END")
-        self.send2socket(f"SERVER {link} wobble {server_id} 079 :{service_name}")
-
-
-        # self.__Irc.send2socket(f":{sid} PROTOCTL NICKv2 VHP UMODE2 NICKIP SJOIN SJOIN2 SJ3 NOQUIT TKLEXT MLOCK SID MTAGS")
-        # self.send2socket(f":{server_id} PROTOCTL EAUTH={link},,,{service_name}-v{version}")
-        # self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
-        # self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
-        # self.send2socket(f":{server_id} {nickname} :Reserved for services")
-        # #self.__Irc.send2socket(f":{sid} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * * :{realname}")
-        # self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        # # self.__Irc.send2socket(f":{server_id} SJOIN {unixtime} {chan} + :{service_id}")
-        # self.sjoin(chan)
-        # self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
-
-        # self.send2socket(f":{service_id} MODE {chan} {cmodes}")
-        # self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
+        self.send2socket(f"SERVER {link} {password} {server_id} :{info}")
+        self.send2socket(f"BURST {unixtime}")
+        self.send2socket(f":{server_id} ENDBURST")
 
         self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
 
@@ -565,9 +550,12 @@ class Inspircd:
             serverMsg (list[str]): List of str coming from the server
         """
         try:
+            # InspIRCd 3:
+            # <- :3IN PING 808
+            # -> :808 PONG 3IN
 
-            pong = str(serverMsg[1]).replace(':','')
-            self.send2socket(f"PONG :{pong}", print_log=False)
+            hsid = str(serverMsg[0]).replace(':','')
+            self.send2socket(f":{self.__Config.SERVEUR_ID} PONG {hsid}", print_log=True)
 
             return None
         except Exception as err:
