@@ -13,27 +13,39 @@ import ast
 import requests
 
 from dataclasses import fields
-from typing import Union, Literal
+from typing import Union, Literal, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
-from core.loadConf import ConfigDataModel
+from core.definition import MConfig
+
+if TYPE_CHECKING:
+    from core.classes.settings import Settings
 
 class Base:
 
-    def __init__(self, Config: ConfigDataModel) -> None:
+    def __init__(self, Config: MConfig, settings: 'Settings') -> None:
 
         self.Config = Config                                    # Assigner l'objet de configuration
+        self.Settings: Settings = settings
         self.init_log_system()                                  # Demarrer le systeme de log
         self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
 
-        self.running_timers:list[threading.Timer] = []          # Liste des timers en cours
-        self.running_threads:list[threading.Thread] = []        # Liste des threads en cours
-        self.running_sockets: list[socket.socket] = []          # Les sockets ouvert
-        self.periodic_func:dict[object] = {}                    # Liste des fonctions en attentes
+        # Liste des timers en cours
+        self.running_timers:list[threading.Timer] = self.Settings.RUNNING_TIMERS
 
-        self.lock = threading.RLock()                           # Création du lock
+        # Liste des threads en cours
+        self.running_threads:list[threading.Thread] = self.Settings.RUNNING_THREADS
+
+        # Les sockets ouvert
+        self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
+
+        # Liste des fonctions en attentes
+        self.periodic_func:dict[object] = self.Settings.PERIODIC_FUNC
+
+        # Création du lock
+        self.lock = self.Settings.LOCK
 
         self.install: bool = False                              # Initialisation de la variable d'installation
         self.engine, self.cursor = self.db_init()               # Initialisation de la connexion a la base de données
@@ -48,16 +60,15 @@ class Base:
         with open(version_filename, 'r') as version_data:
             current_version:dict[str, str] = json.load(version_data)
 
-        self.Config.current_version = current_version['version']
+        self.Config.CURRENT_VERSION = current_version['version']
 
         return None
 
     def __get_latest_defender_version(self) -> None:
         try:
-            self.logs.debug(f'Looking for a new version available on Github')
-            # print(f'===> Looking for a new version available on Github')
+            self.logs.debug(f'-- Looking for a new version available on Github')
             token = ''
-            json_url = f'https://raw.githubusercontent.com/adator85/IRC_DEFENDER_MODULES/main/version.json'
+            json_url = f'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
             headers = {
                 'Authorization': f'token {token}',
                 'Accept': 'application/vnd.github.v3.raw'  # Indique à GitHub que nous voulons le contenu brut du fichier
@@ -71,7 +82,7 @@ class Base:
             response.raise_for_status()  # Vérifie si la requête a réussi
             json_response:dict = response.json()
             # self.LATEST_DEFENDER_VERSION = json_response["version"]
-            self.Config.latest_version = json_response['version']
+            self.Config.LATEST_VERSION = json_response['version']
 
             return None
         except requests.HTTPError as err:
@@ -89,18 +100,18 @@ class Base:
             bool: True if there is a new version available
         """
         try:
-            self.logs.debug(f'Checking for a new service version')
+            self.logs.debug(f'-- Checking for a new service version')
 
             # Assigner la version actuelle de Defender
             self.__set_current_defender_version()
             # Récuperer la dernier version disponible dans github
             if online:
-                self.logs.debug(f'Retrieve the latest version from Github')
+                self.logs.debug(f'-- Retrieve the latest version from Github')
                 self.__get_latest_defender_version()
 
             isNewVersion = False
-            latest_version = self.Config.latest_version
-            current_version = self.Config.current_version
+            latest_version = self.Config.LATEST_VERSION
+            current_version = self.Config.CURRENT_VERSION
 
             curr_major , curr_minor, curr_patch = current_version.split('.')
             last_major, last_minor, last_patch = latest_version.split('.')
@@ -120,6 +131,10 @@ class Base:
             return isNewVersion
         except ValueError as ve:
             self.logs.error(f'Impossible to convert in version number : {ve}')
+        except AttributeError as atterr:
+            self.logs.error(f'Attribute Error: {atterr}')
+        except Exception as err:
+            self.logs.error(f'General Error: {err}')
 
     def get_unixtime(self) -> int:
         """
@@ -159,7 +174,7 @@ class Base:
         Returns:
             None: Aucun retour
         """
-        sql_insert = f"INSERT INTO {self.Config.table_log} (datetime, server_msg) VALUES (:datetime, :server_msg)"
+        sql_insert = f"INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)"
         mes_donnees = {'datetime': str(self.get_datetime()),'server_msg': f'{log_message}'}
         self.db_execute_query(sql_insert, mes_donnees)
 
@@ -167,18 +182,62 @@ class Base:
 
     def init_log_system(self) -> None:
         # Create folder if not available
-        logs_directory = f'logs{os.sep}'
+        logs_directory = f'logs{self.Config.OS_SEP}'
         if not os.path.exists(f'{logs_directory}'):
             os.makedirs(logs_directory)
 
         # Init logs object
-        self.logs = logging
-        self.logs.basicConfig(level=self.Config.DEBUG_LEVEL,
-                              filename='logs/defender.log',
-                              encoding='UTF-8',
-                              format='%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
+        self.logs = logging.getLogger(self.Config.LOGGING_NAME)
+        self.logs.setLevel(self.Config.DEBUG_LEVEL)
 
+        # Add Handlers
+        file_hanlder = logging.FileHandler(f'logs{self.Config.OS_SEP}defender.log',encoding='UTF-8')
+        file_hanlder.setLevel(self.Config.DEBUG_LEVEL)
+
+        # Define log format
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
+
+        # Apply log format
+        file_hanlder.setFormatter(formatter)
+
+        # Add handler to logs
+        self.logs.addHandler(file_hanlder)
+
+        # Apply the filter
+        self.logs.addFilter(self.replace_filter)
+
+        # self.logs.Logger('defender').addFilter(self.replace_filter)
         self.logs.info('#################### STARTING DEFENDER ####################')
+
+        return None
+
+    def replace_filter(self, record: logging.LogRecord) -> bool:
+
+        response = True
+        filter: list[str] = ['PING', f":{self.Config.SERVICE_PREFIX}auth"]
+
+        # record.msg = record.getMessage().replace("PING", "[REDACTED]")
+        if self.Settings.CONSOLE:
+            print(record.getMessage())
+
+        for f in filter:
+            if f in record.getMessage():
+                response = False
+
+        return response  # Retourne True pour permettre l'affichage du message
+
+    def delete_logger(self, logger_name: str) -> None:
+
+        # Récupérer le logger
+        logger = logging.getLogger(logger_name)
+
+        # Retirer tous les gestionnaires du logger et les fermer
+        for handler in logger.handlers[:]:  # Utiliser une copie de la liste
+            logger.removeHandler(handler)
+            handler.close()
+
+        # Supprimer le logger du dictionnaire global
+        logging.Logger.manager.loggerDict.pop(logger_name, None)
 
         return None
 
@@ -190,12 +249,12 @@ class Base:
         """
         cmd_list = cmd.split()
         if len(cmd_list) == 3:
-            if cmd_list[0].replace('.', '') == 'auth':
+            if cmd_list[0].replace(self.Config.SERVICE_PREFIX, '') == 'auth':
                 cmd_list[1] = '*******'
                 cmd_list[2] = '*******'
                 cmd = ' '.join(cmd_list)
 
-        insert_cmd_query = f"INSERT INTO {self.Config.table_commande} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
+        insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
         mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'commande': cmd}
         self.db_execute_query(insert_cmd_query, mes_donnees)
 
@@ -210,7 +269,7 @@ class Base:
         Returns:
             bool: True si le module existe déja dans la base de données sinon False
         """
-        query = f"SELECT id FROM {self.Config.table_module} WHERE module_name = :module_name"
+        query = f"SELECT id FROM {self.Config.TABLE_MODULE} WHERE module_name = :module_name"
         mes_donnes = {'module_name': module_name}
         results = self.db_execute_query(query, mes_donnes)
 
@@ -228,7 +287,7 @@ class Base:
 
         if not self.db_isModuleExist(module_name):
             self.logs.debug(f"Le module {module_name} n'existe pas alors ont le créer")
-            insert_cmd_query = f"INSERT INTO {self.Config.table_module} (datetime, user, module_name, isdefault) VALUES (:datetime, :user, :module_name, :isdefault)"
+            insert_cmd_query = f"INSERT INTO {self.Config.TABLE_MODULE} (datetime, user, module_name, isdefault) VALUES (:datetime, :user, :module_name, :isdefault)"
             mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'module_name': module_name, 'isdefault': isdefault}
             self.db_execute_query(insert_cmd_query, mes_donnees)
         else:
@@ -243,7 +302,7 @@ class Base:
             user_cmd (str): le user qui a rechargé le module
             module_name (str): le module a rechargé
         """
-        update_cmd_query = f"UPDATE {self.Config.table_module} SET datetime = :datetime, user = :user WHERE module_name = :module_name"
+        update_cmd_query = f"UPDATE {self.Config.TABLE_MODULE} SET datetime = :datetime, user = :user WHERE module_name = :module_name"
         mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'module_name': module_name}
         self.db_execute_query(update_cmd_query, mes_donnees)
 
@@ -255,7 +314,7 @@ class Base:
         Args:
             cmd (str): le module a supprimer
         """
-        insert_cmd_query = f"DELETE FROM {self.Config.table_module} WHERE module_name = :module_name"
+        insert_cmd_query = f"DELETE FROM {self.Config.TABLE_MODULE} WHERE module_name = :module_name"
         mes_donnees = {'module_name': module_name}
         self.db_execute_query(insert_cmd_query, mes_donnees)
 
@@ -278,7 +337,7 @@ class Base:
         try:
             response = True
             current_date = self.get_datetime()
-            core_table = self.Config.table_config
+            core_table = self.Config.TABLE_CONFIG
 
             # Add local parameters to DB
             for field in fields(dataclassObj):
@@ -342,7 +401,7 @@ class Base:
 
     def db_update_core_config(self, module_name:str, dataclassObj: object, param_key:str, param_value: str) -> bool:
 
-        core_table = self.Config.table_config
+        core_table = self.Config.TABLE_CONFIG
         # Check if the param exist
         if not hasattr(dataclassObj, param_key):
             self.logs.error(f"Le parametre {param_key} n'existe pas dans la variable global")
@@ -374,62 +433,9 @@ class Base:
 
         return True
 
-    def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:
-        """You can add a channel or delete a channel.
-
-        Args:
-            action (Literal[&#39;add&#39;,&#39;del&#39;]): Action on the database
-            module_name (str): The module name (mod_test)
-            channel_name (str): The channel name (With #)
-
-        Returns:
-            bool: True if action done
-        """
-        try:
-            channel_name = channel_name.lower() if self.Is_Channel(channel_name) else None
-            core_table = 'core_channel'
-
-            if not channel_name:
-                self.logs.warn(f'The channel [{channel_name}] is not correct')
-                return False
-
-            match action:
-
-                case 'add':
-                    mes_donnees = {'module_name': module_name, 'channel_name': channel_name}
-                    response = self.db_execute_query(f"SELECT id FROM {core_table} WHERE module_name = :module_name AND channel_name = :channel_name", mes_donnees)
-                    isChannelExist = response.fetchone()
-
-                    if isChannelExist is None:
-                        mes_donnees = {'datetime': self.get_datetime(), 'channel_name': channel_name, 'module_name': module_name}
-                        insert = self.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
-                        if insert.rowcount:
-                            self.logs.debug(f'New channel added: channel={channel_name} / module_name={module_name}')
-                            return True
-                    else:
-                        return False
-                    pass
-
-                case 'del':
-                    mes_donnes = {'channel_name': channel_name, 'module_name': module_name}
-                    response = self.db_execute_query(f"DELETE FROM {core_table} WHERE channel_name = :channel_name AND module_name = :module_name", mes_donnes)
-
-                    if response.rowcount > 0:
-                        self.logs.debug(f'Channel deleted: channel={channel_name} / module: {module_name}')
-                        return True
-                    else:
-                        
-                        return False
-
-                case _:
-                    return False
-
-        except Exception as err:
-            self.logs.error(err)
-
     def db_create_first_admin(self) -> None:
 
-        user = self.db_execute_query(f"SELECT id FROM {self.Config.table_admin}")
+        user = self.db_execute_query(f"SELECT id FROM {self.Config.TABLE_ADMIN}")
         if not user.fetchall():
             admin = self.Config.OWNER
             password = self.crypt_password(self.Config.PASSWORD)
@@ -442,7 +448,7 @@ class Base:
                            'level': 5
                            }
             self.db_execute_query(f"""
-                                  INSERT INTO {self.Config.table_admin} 
+                                  INSERT INTO {self.Config.TABLE_ADMIN} 
                                   (createdOn, user, password, hostname, vhost, level) 
                                   VALUES 
                                   (:createdOn, :user, :password, :hostname, :vhost, :level)"""
@@ -459,7 +465,7 @@ class Base:
 
             self.running_timers.append(t)
 
-            self.logs.debug(f"Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug(f"-- Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
             self.logs.error(f'Assertion Error -> {ae}')
@@ -484,10 +490,29 @@ class Base:
             th.start()
 
             self.running_threads.append(th)
-            self.logs.debug(f"Thread ID : {str(th.ident)} | Thread name : {th.getName()} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.getName()} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
             self.logs.error(f'{ae}')
+
+    def thread_count(self, thread_name: str) -> int:
+        """This method return the number of existing threads 
+        currently running or not running
+
+        Args:
+            thread_name (str): The name of the thread
+
+        Returns:
+            int: Number of threads
+        """
+        with self.lock:
+            count = 0
+
+            for thr in self.running_threads:
+                if thread_name == thr.getName():
+                    count += 1
+
+            return count
 
     def garbage_collector_timer(self) -> None:
         """Methode qui supprime les timers qui ont finis leurs job
@@ -498,9 +523,9 @@ class Base:
                 if not timer.is_alive():
                     timer.cancel()
                     self.running_timers.remove(timer)
-                    self.logs.info(f"Timer {str(timer)} removed")
+                    self.logs.info(f"-- Timer {str(timer)} removed")
                 else:
-                    self.logs.debug(f"===> Timer {str(timer)} Still running ...")
+                    self.logs.debug(f"--* Timer {str(timer)} Still running ...")
 
         except AssertionError as ae:
             self.logs.error(f'Assertion Error -> {ae}')
@@ -511,9 +536,10 @@ class Base:
         try:
             for thread in self.running_threads:
                 if thread.getName() != 'heartbeat':
+                    # print(thread.getName(), thread.is_alive(), sep=' / ')
                     if not thread.is_alive():
                         self.running_threads.remove(thread)
-                        self.logs.info(f"Thread {str(thread.getName())} {str(thread.native_id)} removed")
+                        self.logs.info(f"-- Thread {str(thread.getName())} {str(thread.native_id)} removed")
 
             # print(threading.enumerate())
         except AssertionError as ae:
@@ -528,7 +554,7 @@ class Base:
 
             soc.close()
             self.running_sockets.remove(soc)
-            self.logs.debug(f"Socket ==> closed {str(soc.fileno())}")
+            self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
 
     def shutdown(self) -> None:
         """Methode qui va préparer l'arrêt complêt du service
@@ -564,8 +590,8 @@ class Base:
 
     def db_init(self) -> tuple[Engine, Connection]:
 
-        db_directory = self.Config.db_path
-        full_path_db = self.Config.db_path + self.Config.db_name
+        db_directory = self.Config.DB_PATH
+        full_path_db = self.Config.DB_PATH + self.Config.DB_NAME
 
         if not os.path.exists(db_directory):
             self.install = True
@@ -573,19 +599,19 @@ class Base:
 
         engine = create_engine(f'sqlite:///{full_path_db}.db', echo=False)
         cursor = engine.connect()
-        self.logs.info("database connexion has been initiated")
+        self.logs.info("-- database connexion has been initiated")
         return engine, cursor
 
     def __create_db(self) -> None:
 
-        table_core_log = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_log} (
+        table_core_log = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_LOG} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             datetime TEXT,
             server_msg TEXT
             ) 
         '''
 
-        table_core_config = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_config} (
+        table_core_config = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_CONFIG} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             datetime TEXT,
             module_name TEXT,
@@ -594,7 +620,7 @@ class Base:
             )
         '''
 
-        table_core_log_command = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_commande} (
+        table_core_log_command = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_COMMAND} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             datetime TEXT,
             user TEXT,
@@ -602,7 +628,7 @@ class Base:
             )
         '''
 
-        table_core_module = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_module} (
+        table_core_module = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_MODULE} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             datetime TEXT,
             user TEXT,
@@ -611,7 +637,7 @@ class Base:
             )
         '''
         
-        table_core_channel = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_channel} (
+        table_core_channel = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_CHANNEL} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             datetime TEXT,
             module_name TEXT,
@@ -619,7 +645,7 @@ class Base:
             )
         '''
 
-        table_core_admin = f'''CREATE TABLE IF NOT EXISTS {self.Config.table_admin} (
+        table_core_admin = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_ADMIN} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             createdOn TEXT,
             user TEXT,
@@ -717,16 +743,19 @@ class Base:
             self.logs.critical(f'This remote ip is not valid : {ve}')
             return None
 
-    # def encode_ip(self, remote_ip_address: str) -> Union[str, None]:
+    def encode_ip(self, remote_ip_address: str) -> Union[str, None]:
 
-    #     binary_ip = b64encode()
-    #     try:
-    #         decoded_ip = ipaddress.ip_address(binary_ip)
+        binary_ip = socket.inet_aton(remote_ip_address)
+        try:
+            encoded_ip = b64encode(binary_ip).decode()
 
-    #         return decoded_ip.exploded
-    #     except ValueError as ve:
-    #         self.logs.critical(f'This remote ip is not valid : {ve}')
-    #         return None
+            return encoded_ip
+        except ValueError as ve:
+            self.logs.critical(f'This remote ip is not valid : {ve}')
+            return None
+        except Exception as err:
+            self.logs.critical(f'General Error: {err}')
+            return None
 
     def get_random(self, lenght:int) -> str:
         """
@@ -756,7 +785,7 @@ class Base:
         # Vider le dictionnaire de fonction
         self.periodic_func.clear()
 
-    def clean_uid(self, uid:str) -> str:
+    def clean_uid(self, uid:str) -> Union[str, None]:
         """Clean UID by removing @ / % / + / ~ / * / :
 
         Args:
@@ -765,34 +794,13 @@ class Base:
         Returns:
             str: Clean UID without any sign
         """
-
-        pattern = fr'[:|@|%|\+|~|\*]*'
-        parsed_UID = re.sub(pattern, '', uid)
-
-        return parsed_UID
-
-    def Is_Channel(self, channelToCheck: str) -> bool:
-        """Check if the string has the # caractere and return True if this is a channel
-
-        Args:
-            channelToCheck (str): The string to test if it is a channel or not
-
-        Returns:
-            bool: True if the string is a channel / False if this is not a channel
-        """
         try:
-            
-            if channelToCheck is None:
-                return False
+            if uid is None:
+                return None
 
-            pattern = fr'^#'
-            isChannel = re.findall(pattern, channelToCheck)
+            pattern = fr'[:|@|%|\+|~|\*]*'
+            parsed_UID = re.sub(pattern, '', uid)
 
-            if not isChannel:
-                return False
-            else:
-                return True
+            return parsed_UID
         except TypeError as te:
-            self.logs.error(f'TypeError: [{channelToCheck}] - {te}')
-        except Exception as err:
-            self.logs.error(f'Error Not defined: {err}')
+            self.logs.error(f'Type Error: {te}')

@@ -1,5 +1,8 @@
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, fields
-from core.irc import Irc
+
+if TYPE_CHECKING:
+    from core.irc import Irc
 
 class Test():
 
@@ -10,13 +13,19 @@ class Test():
         param_exemple1: str
         param_exemple2: int
 
-    def __init__(self, ircInstance:Irc) -> None:
+    def __init__(self, ircInstance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
         self.Irc = ircInstance
+
+        # Add Loader Object to the module (Mandatory)
+        self.Loader = ircInstance.Loader
+
+        # Add server protocol Object to the module (Mandatory)
+        self.Protocol = ircInstance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
         self.Config = ircInstance.Config
@@ -32,6 +41,9 @@ class Test():
 
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
+
+        # Add Reputation object to the module (Optional)
+        self.Reputation = ircInstance.Reputation
 
         # Create module commands (Mandatory)
         self.commands_level = {
@@ -129,11 +141,11 @@ class Test():
 
             return None
         except KeyError as ke:
-            self.Base.logs.error(f"Key Error: {ke}")
+            self.Logs.error(f"Key Error: {ke}")
         except IndexError as ie:
-            self.Base.logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
+            self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
         except Exception as err:
-            self.Base.logs.error(f"General Error: {err}")
+            self.Logs.error(f"General Error: {err}")
 
     def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
@@ -147,11 +159,11 @@ class Test():
             case 'test-command':
                 try:
 
-                    self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : This is a notice to the sender ...")
-                    self.Irc.send2socket(f":{dnickname} PRIVMSG {fromuser} : This is private message to the sender ...")
+                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
+                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Irc.send2socket(f":{dnickname} PRIVMSG {fromchannel} : This is channel message to the sender ...")
+                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)
