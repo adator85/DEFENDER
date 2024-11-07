@@ -298,7 +298,7 @@ class Clone():
                         if getClone.uid != self.Config.SERVICE_ID:
                             final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
                             self.Protocol.sendPrivMsg(
-                                nick_from=senderObj.uid,
+                                nick_from=getClone.uid,
                                 msg=final_message,
                                 channel=self.Config.CLONE_CHANNEL
                             )
