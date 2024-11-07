@@ -9,6 +9,6 @@ class Settings:
     PERIODIC_FUNC: dict[object]     = {}
     LOCK: RLock                     = RLock()
 
-    CONSOLE: bool                   = True
+    CONSOLE: bool                   = False
 
     USER_MODES: list[str]           = []
