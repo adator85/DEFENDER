@@ -688,24 +688,19 @@ class Irc:
 
         return is_command_allowed
 
-    def debug(self, debug_msg:str) -> None:
-
-        # if self.Config.DEBUG == 1:
-        #     if type(debug_msg) == list:
-        #         if debug_msg[0] != 'PING':
-        #             print(f"[{self.Base.get_datetime()}] - {debug_msg}")
-        #     else:
-        #         
-        print(f"[{self.Base.get_datetime()}] - {debug_msg}")
-
-        return None
-
     def logs(self, log_msg:str) -> None:
+        """Log to database if you want
 
-        mes_donnees = {'datetime': self.Base.get_datetime(), 'server_msg': log_msg}
-        self.Base.db_execute_query('INSERT INTO sys_logs (datetime, server_msg) VALUES (:datetime, :server_msg)', mes_donnees)
+        Args:
+            log_msg (str): the message to log
+        """
+        try:
+            mes_donnees = {'datetime': self.Base.get_datetime(), 'server_msg': log_msg}
+            self.Base.db_execute_query(f'INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)', mes_donnees)
 
-        return None
+            return None
+        except Exception as err:
+            self.Logs.error(f"General Error: {err}")
 
     def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.Config.SERVICE_NICKNAME
