@@ -61,7 +61,7 @@ class Install:
         venv_folder = '.pyenv'
         unix_user_home_directory = os.path.expanduser("~")
         unix_systemd_folder = os.path.join(unix_user_home_directory, '.config', 'systemd', 'user')
-        defender_main_executable = os.path.join(defender_install_folder, 'main.py')
+        defender_main_executable = os.path.join(defender_install_folder, 'defender.py')
 
         self.config = self.CoreConfig(
                 install_log_file='install.log',
