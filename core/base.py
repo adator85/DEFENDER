@@ -194,14 +194,19 @@ class Base:
         file_hanlder = logging.FileHandler(f'logs{self.Config.OS_SEP}defender.log',encoding='UTF-8')
         file_hanlder.setLevel(self.Config.DEBUG_LEVEL)
 
+        stdout_handler = logging.StreamHandler()
+        stdout_handler.setLevel(50)
+
         # Define log format
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
 
         # Apply log format
         file_hanlder.setFormatter(formatter)
+        stdout_handler.setFormatter(formatter)
 
         # Add handler to logs
         self.logs.addHandler(file_hanlder)
+        self.logs.addHandler(stdout_handler)
 
         # Apply the filter
         self.logs.addFilter(self.replace_filter)
@@ -217,8 +222,8 @@ class Base:
         filter: list[str] = ['PING', f":{self.Config.SERVICE_PREFIX}auth"]
 
         # record.msg = record.getMessage().replace("PING", "[REDACTED]")
-        if self.Settings.CONSOLE:
-            print(record.getMessage())
+        # if self.Settings.CONSOLE:
+            # print(record.getMessage())
 
         for f in filter:
             if f in record.getMessage():
