@@ -4,10 +4,9 @@ import time
 import re
 import psutil
 import requests
-from dataclasses import dataclass, fields, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Union, TYPE_CHECKING
-from sys import exit
 import core.definition as df
 
 #   Le module crée devra réspecter quelques conditions
@@ -141,7 +140,9 @@ class Defender():
         self.Base.create_thread(func=self.thread_local_scan)
         self.Base.create_thread(func=self.thread_psutil_scan)
         self.Base.create_thread(func=self.thread_reputation_timer)
-        self.Base.create_thread(func=self.thread_autolimit)
+
+        if self.ModConfig.autolimit == 1:
+            self.Base.create_thread(func=self.thread_autolimit)
 
         if self.ModConfig.reputation == 1:
             self.Protocol.sjoin(self.Config.SALON_JAIL)
@@ -149,7 +150,7 @@ class Defender():
 
         return None
 
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
+    def __set_commands(self, commands: dict[int, list[str]]) -> None:
         """### Rajoute les commandes du module au programme principal
 
         Args:
@@ -157,7 +158,7 @@ class Defender():
         """
         for level, com in commands.items():
             for c in commands[level]:
-                if not c in self.Irc.commands:
+                if c not in self.Irc.commands:
                     self.Irc.commands_level[level].append(c)
                     self.Irc.commands.append(c)
 
@@ -173,31 +174,15 @@ class Defender():
             None: Aucun retour n'es attendu
         """
 
-        table_channel = '''CREATE TABLE IF NOT EXISTS def_channels (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            datetime TEXT,
-            channel TEXT
-            ) 
-        '''
+        # table_autoop = '''CREATE TABLE IF NOT EXISTS defender_autoop (
+        #     id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #     datetime TEXT,
+        #     nickname TEXT,
+        #     channel TEXT
+        #     )
+        # '''
 
-        table_config = '''CREATE TABLE IF NOT EXISTS def_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            datetime TEXT,
-            parameter TEXT,
-            value TEXT
-            ) 
-        '''
-
-        table_trusted = '''CREATE TABLE IF NOT EXISTS def_trusted (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            datetime TEXT,
-            user TEXT,
-            host TEXT,
-            vhost TEXT
-            )
-        '''
-
-        # self.Base.db_execute_query(table_channel)
+        # self.Base.db_execute_query(table_autoop)
         # self.Base.db_execute_query(table_config)
         # self.Base.db_execute_query(table_trusted)
         return None
@@ -255,7 +240,7 @@ class Defender():
         exec_query = self.Base.db_execute_query(query, {"user": nickname})
         response = exec_query.fetchone()
 
-        if not response is None:
+        if response is not None:
             q_insert = "INSERT INTO def_trusted (datetime, user, host, vhost) VALUES (?, ?, ?, ?)"
             mes_donnees = {'datetime': self.Base.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
             exec_query = self.Base.db_execute_query(q_insert, mes_donnees)
@@ -301,7 +286,8 @@ class Defender():
 
         # Convertir la date enregistrée dans UID_DB en un objet {datetime}
         connected_time_string = get_user.connexion_datetime
-        if type(connected_time_string) == datetime:
+
+        if isinstance(connected_time_string, datetime):
             connected_time = connected_time_string
         else:
             connected_time = datetime.strptime(connected_time_string, "%Y-%m-%d %H:%M:%S.%f")
@@ -386,7 +372,6 @@ class Defender():
             service_id = self.Config.SERVICE_ID
             dchanlog = self.Config.SERVICE_CHANLOG
             color_red = self.Config.COLORS.red
-            color_black = self.Config.COLORS.black
             nogc = self.Config.COLORS.nogc
             salon_jail = self.Config.SALON_JAIL
 
@@ -480,7 +465,7 @@ class Defender():
         unixtime = self.Base.get_unixtime()
         get_diff_secondes = 0
 
-        if not get_detected_uid in self.flood_system:
+        if get_detected_uid not in self.flood_system:
             self.flood_system[get_detected_uid] = {
                     'nbr_msg': 0,
                     'first_msg_time': unixtime
@@ -694,7 +679,7 @@ class Defender():
             # Formatted output
             decodedResponse = json.loads(response.text)
 
-            if not 'data' in decodedResponse:
+            if 'data' not in decodedResponse:
                 return None
 
             result = {
@@ -707,7 +692,6 @@ class Defender():
             service_id = self.Config.SERVICE_ID
             service_chanlog = self.Config.SERVICE_CHANLOG
             color_red = self.Config.COLORS.red
-            color_black = self.Config.COLORS.black
             nogc = self.Config.COLORS.nogc
 
             # pseudo!ident@host
@@ -780,7 +764,6 @@ class Defender():
         service_id = self.Config.SERVICE_ID
         service_chanlog = self.Config.SERVICE_CHANLOG
         color_red = self.Config.COLORS.red
-        color_black = self.Config.COLORS.black
         nogc = self.Config.COLORS.nogc
 
         url = f'https://freeipapi.com/api/json/{remote_ip}'
@@ -797,7 +780,7 @@ class Defender():
 
             status_code = response.status_code
             if status_code == 429:
-                self.Logs.warning(f'Too Many Requests - The rate limit for the API has been exceeded.')
+                self.Logs.warning('Too Many Requests - The rate limit for the API has been exceeded.')
                 return None
             elif status_code != 200:
                 self.Logs.warning(f'status code = {str(status_code)}')
@@ -873,10 +856,9 @@ class Defender():
         service_id = self.Config.SERVICE_ID
         service_chanlog = self.Config.SERVICE_CHANLOG
         color_red = self.Config.COLORS.red
-        color_black = self.Config.COLORS.black
         nogc = self.Config.COLORS.nogc
 
-        url = f"https://developers18334.cloudfilt.com/"
+        url = "https://developers18334.cloudfilt.com/"
 
         data = {
             'ip': remote_ip,
@@ -941,7 +923,7 @@ class Defender():
     def thread_autolimit(self) -> None:
 
         if self.ModConfig.autolimit == 0:
-            self.Logs.debug(f"autolimit deactivated ... canceling the thread")
+            self.Logs.debug("autolimit deactivated ... canceling the thread")
             return None
 
         while self.Irc.autolimit_started:
@@ -958,7 +940,7 @@ class Defender():
         while self.autolimit_isRunning:
 
             if self.ModConfig.autolimit == 0:
-                self.Logs.debug(f"autolimit deactivated ... stopping the current thread")
+                self.Logs.debug("autolimit deactivated ... stopping the current thread")
                 break
 
             for chan in self.Channel.UID_CHANNEL_DB:
@@ -967,14 +949,14 @@ class Defender():
                         self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + self.ModConfig.autolimit_amount}")
                         chan_copy["uids_count"] = len(chan.uids)
 
-                if not chan.name in chan_list:
+                if chan.name not in chan_list:
                     chan_list.append(chan.name)
                     chanObj_copy.append({"name": chan.name, "uids_count": 0})
 
             # Verifier si un salon a été vidé
             current_chan_in_list = [d.name for d in self.Channel.UID_CHANNEL_DB]
             for c in chan_list:
-                if not c in current_chan_in_list:
+                if c not in current_chan_in_list:
                     chan_list.remove(c)
 
             # Si c'est la premiere execution
@@ -1059,12 +1041,12 @@ class Defender():
                     _User = self.User.get_User(str(cmd[7]))
 
                     # If user is not service or IrcOp then scan them
-                    if not re.match(fr'^.*[S|o?].*$', _User.umodes):
-                        self.abuseipdb_UserModel.append(_User) if self.ModConfig.abuseipdb_scan == 1 and not _User.remote_ip in self.Config.WHITELISTED_IP else None
-                        self.freeipapi_UserModel.append(_User) if self.ModConfig.freeipapi_scan == 1 and not _User.remote_ip in self.Config.WHITELISTED_IP else None
-                        self.cloudfilt_UserModel.append(_User) if self.ModConfig.cloudfilt_scan == 1 and not _User.remote_ip in self.Config.WHITELISTED_IP else None
-                        self.psutil_UserModel.append(_User) if self.ModConfig.psutil_scan == 1 and not _User.remote_ip in self.Config.WHITELISTED_IP else None
-                        self.localscan_UserModel.append(_User) if self.ModConfig.local_scan == 1 and not _User.remote_ip in self.Config.WHITELISTED_IP else None
+                    if not re.match(r'^.*[S|o?].*$', _User.umodes):
+                        self.abuseipdb_UserModel.append(_User) if self.ModConfig.abuseipdb_scan == 1 and _User.remote_ip not in self.Config.WHITELISTED_IP else None
+                        self.freeipapi_UserModel.append(_User) if self.ModConfig.freeipapi_scan == 1 and _User.remote_ip not in self.Config.WHITELISTED_IP else None
+                        self.cloudfilt_UserModel.append(_User) if self.ModConfig.cloudfilt_scan == 1 and _User.remote_ip not in self.Config.WHITELISTED_IP else None
+                        self.psutil_UserModel.append(_User) if self.ModConfig.psutil_scan == 1 and _User.remote_ip not in self.Config.WHITELISTED_IP else None
+                        self.localscan_UserModel.append(_User) if self.ModConfig.local_scan == 1 and _User.remote_ip not in self.Config.WHITELISTED_IP else None
 
                     if _User is None:
                         self.Logs.critical(f'This UID: [{cmd[7]}] is not available please check why')
@@ -1075,9 +1057,9 @@ class Defender():
 
                     if self.Config.DEFENDER_INIT == 0:
                         # Si le user n'es pas un service ni un IrcOP
-                        if not re.match(fr'^.*[S|o?].*$', _User.umodes):
+                        if not re.match(r'^.*[S|o?].*$', _User.umodes):
                             if reputation_flag == 1 and _User.score_connexion <= reputation_seuil:
-                                currentDateTime = self.Base.get_datetime()
+                                # currentDateTime = self.Base.get_datetime()
                                 self.Reputation.insert(
                                     self.Loader.Definition.MReputation(
                                         **_User.__dict__,
@@ -1107,7 +1089,7 @@ class Defender():
                                 self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +b ~security-group:unknown-users")
                                 self.Protocol.send2socket(f":{service_id} MODE {parsed_chan} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
 
-                            if not get_reputation is None:
+                            if get_reputation is not None:
                                 isWebirc = get_reputation.isWebirc
 
                                 if not isWebirc:
@@ -1187,7 +1169,7 @@ class Defender():
 
                     get_user_reputation = self.Reputation.get_Reputation(final_UID)
 
-                    if not get_user_reputation is None:
+                    if get_user_reputation is not None:
                         final_nickname = get_user_reputation.nickname
                         for chan in self.Channel.UID_CHANNEL_DB:
                             if chan.name != jail_salon and ban_all_chan == 1:
@@ -1522,7 +1504,7 @@ class Defender():
 
                 except ValueError as ve:
                     self.Logs.warning(f'{ve}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" La valeur devrait etre un entier >= 0")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" La valeur devrait etre un entier >= 0")
 
             case 'proxy_scan':
 
@@ -1729,14 +1711,14 @@ class Defender():
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_after_release     ==> {self.ModConfig.reputation_score_after_release}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_ban_all_chan      ==> {self.ModConfig.reputation_ban_all_chan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_timer             ==> {self.ModConfig.reputation_timer}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [Proxy_scan]')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=' [Proxy_scan]')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.local_scan == 1 else color_red}local_scan{nogc}                 ==> {self.ModConfig.local_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.psutil_scan == 1 else color_red}psutil_scan{nogc}                ==> {self.ModConfig.psutil_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.abuseipdb_scan == 1 else color_red}abuseipdb_scan{nogc}             ==> {self.ModConfig.abuseipdb_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.freeipapi_scan == 1 else color_red}freeipapi_scan{nogc}             ==> {self.ModConfig.freeipapi_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.cloudfilt_scan == 1 else color_red}cloudfilt_scan{nogc}             ==> {self.ModConfig.cloudfilt_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.flood == 1 else color_red}Flood{nogc}]                                ==> {self.ModConfig.flood}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_action                      ==> Coming soon')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg='      flood_action                      ==> Coming soon')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {self.ModConfig.flood_message}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_time                        ==> {self.ModConfig.flood_time}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_timer                       ==> {self.ModConfig.flood_timer}')
@@ -1748,7 +1730,7 @@ class Defender():
                     nickoruid = cmd[1]
                     UserObject = self.User.get_User(nickoruid)
 
-                    if not UserObject is None:
+                    if UserObject is not None:
                         channels: list = []
                         for chan in self.Channel.UID_CHANNEL_DB:
                             for uid_in_chan in chan.uids:
@@ -1784,10 +1766,10 @@ class Defender():
 
                 if activation == 'on':
                     for chan in self.Channel.UID_CHANNEL_DB:
-                        if not chan.name in channel_to_dont_quit:
+                        if chan.name not in channel_to_dont_quit:
                             self.Protocol.send_join_chan(uidornickname=dnickname, channel=chan.name)
                 if activation == 'off':
                     for chan in self.Channel.UID_CHANNEL_DB:
-                        if not chan.name in channel_to_dont_quit:
+                        if chan.name not in channel_to_dont_quit:
                             self.Protocol.part(uidornickname=dnickname, channel=chan.name)
                     self.join_saved_channels()

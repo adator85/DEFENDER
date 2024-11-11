@@ -1184,6 +1184,10 @@ class Irc:
 
             case 'auth':
                 # ['auth', 'adator', 'password']
+                if len(cmd) != 3:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} [nickname] [password]")
+                    return None
+
                 current_command = cmd[0]
                 user_to_log = self.User.get_nickname(cmd[1])
                 password = cmd[2]
@@ -1241,25 +1245,30 @@ class Irc:
             case 'editaccess':
                 # .editaccess [USER] [PASSWORD] [LEVEL]
                 try:
-                    user_to_edit = cmd[1]
-                    user_new_level = int(cmd[3])
-                    user_password = self.Base.crypt_password(cmd[2])
-
-                    if len(cmd) < 4 or len(cmd) > 4:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
+                    if len(cmd) < 3:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} editaccess [nickname] [NEWPASSWORD] [NEWLEVEL]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
                         return None
+
+                    user_to_edit = cmd[1]
+                    user_password = self.Base.crypt_password(cmd[2])
 
                     get_admin = self.Admin.get_Admin(fromuser)
                     if get_admin is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This user {fromuser} has no Admin access")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no Admin access")
                         return None
 
                     current_user = self.User.get_nickname(fromuser)
                     current_uid = self.User.get_uid(fromuser)
                     current_user_level = get_admin.level
 
+                    user_new_level = int(cmd[3]) if len(cmd) == 4 else get_admin.level
+
+                    if current_user == fromuser:
+                        user_new_level = get_admin.level
+
                     if user_new_level > 5:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Maximum authorized level is 5")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Maximum authorized level is 5")
                         return None
 
                     # Rechercher le user dans la base de données.
@@ -1271,9 +1280,9 @@ class Irc:
                     if not isUserExist is None:
 
                         if current_user_level < int(isUserExist[1]):
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You are not allowed to edit this access")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You are not allowed to edit this access")
                             return None
-                        
+
                         if current_user_level == int(isUserExist[1]) and current_user != user_to_edit:
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You can't edit access of a user with same level")
                             return None

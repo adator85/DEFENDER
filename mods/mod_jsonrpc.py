@@ -57,6 +57,7 @@ class Jsonrpc():
         # Insert module commands into the core one (Mandatory)
         self.__set_commands(self.commands_level)
         logging.getLogger('websockets').setLevel(logging.WARNING)
+        logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
 
         # Create you own tables (Mandatory)
         # self.__create_tables()
@@ -64,13 +65,6 @@ class Jsonrpc():
         # Load module configuration and sync with core one (Mandatory)
         self.__load_module_configuration()
         # End of mandatory methods you can start your customization #
-
-        # self.UnrealIrcdRpcLive: Live = Live(
-        #                 req_method='unixsocket',
-        #                 path_to_socket_file=self.Config.JSONRPC_PATH_TO_SOCKET_FILE,
-        #                 callback_object_instance=self,
-        #                 callback_method_name='callback_sent_to_irc'
-        #                )
 
         self.UnrealIrcdRpcLive: Live = Live(
                     req_method='websocket',
@@ -235,6 +229,11 @@ class Jsonrpc():
                     match option:
 
                         case 'on':
+
+                            # for logger_name, logger in logging.root.manager.loggerDict.items():
+                            #     if isinstance(logger, logging.Logger):
+                            #         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{logger_name} - {logger.level}")
+
                             for thread in self.Base.running_threads:
                                 if thread.getName() == 'thread_start_jsonrpc':
                                     if thread.is_alive():
