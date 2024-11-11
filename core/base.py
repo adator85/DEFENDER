@@ -721,6 +721,23 @@ class Base:
         except TypeError:
             return value
 
+    def convert_to_int(self, value: any) -> Union[int, None]:
+        """Convert a value to int
+
+        Args:
+            value (any): Value to convert to int if possible
+
+        Returns:
+            Union[int, None]: Return the int value or None if not possible
+        """
+        try:
+            response = int(value)
+            return response
+        except ValueError:
+            return None
+        except TypeError:
+            return None
+
     def is_valid_ip(self, ip_to_control:str) -> bool:
 
         try:

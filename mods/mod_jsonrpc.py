@@ -91,14 +91,14 @@ class Jsonrpc():
         self.subscribed = False
 
         if self.Rpc.Error.code != 0:
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                 nick_from=self.Config.SERVICE_NICKNAME,
                 msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.Error.message}", 
                 channel=self.Config.SERVICE_CHANLOG
                 )
 
         if self.UnrealIrcdRpcLive.Error.code != 0:
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
@@ -153,7 +153,7 @@ class Jsonrpc():
         red = self.Config.COLORS.red
 
         if json_response.result == True:
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                 nick_from=self.Config.SERVICE_NICKNAME,
                 msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
                 channel=dchanlog)
@@ -167,7 +167,7 @@ class Jsonrpc():
 
         build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
 
-        self.Protocol.sendPrivMsg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
+        self.Protocol.send_priv_msg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
 
     def thread_start_jsonrpc(self):
 
@@ -175,7 +175,7 @@ class Jsonrpc():
             self.UnrealIrcdRpcLive.subscribe(["all"])
             self.subscribed = True
         else:
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
@@ -229,8 +229,8 @@ class Jsonrpc():
                     option = str(cmd[1]).lower()
 
                     if len(command) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
 
                     match option:
 
@@ -238,13 +238,13 @@ class Jsonrpc():
                             for thread in self.Base.running_threads:
                                 if thread.getName() == 'thread_start_jsonrpc':
                                     if thread.is_alive():
-                                        self.Protocol.sendPrivMsg(
+                                        self.Protocol.send_priv_msg(
                                             nick_from=self.Config.SERVICE_NICKNAME,
                                             msg=f"Thread {thread.getName()} is running",
                                             channel=dchannel
                                             )
                                     else:
-                                        self.Protocol.sendPrivMsg(
+                                        self.Protocol.send_priv_msg(
                                             nick_from=self.Config.SERVICE_NICKNAME,
                                             msg=f"Thread {thread.getName()} is not running, wait untill the process will be cleaned up",
                                             channel=dchannel
@@ -265,7 +265,7 @@ class Jsonrpc():
                     option = str(cmd[1]).lower()
 
                     if len(command) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
 
                     match option:
 
@@ -279,37 +279,37 @@ class Jsonrpc():
 
                             UserInfo = rpc.User.get(uid_to_get)
                             if rpc.Error.code != 0:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.Error.message}')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.Error.message}')
                                 return None
 
                             chan_list = []
                             for chan in UserInfo.user.channels:
                                 chan_list.append(chan.name)
 
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {chan_list}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {chan_list}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
 
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
                             
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
 
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
 
                 except IndexError as ie:
                     self.Logs.error(ie)
@@ -319,11 +319,11 @@ class Jsonrpc():
 
                     self.Base.create_thread(self.thread_ask_ia, ('',))
 
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" This is a notice to the sender ...")
-                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg="This is private message to the sender ...", nick_to=fromuser)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This is a notice to the sender ...")
+                    self.Protocol.send_priv_msg(nick_from=dnickname, msg="This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg="This is channel message to the sender ...", channel=fromchannel)
+                        self.Protocol.send_priv_msg(nick_from=dnickname, msg="This is channel message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)

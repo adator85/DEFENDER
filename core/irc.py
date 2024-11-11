@@ -408,7 +408,7 @@ class Irc:
                 self.Logs.info('module name = ' + module_name)
                 if class_name in self.loaded_classes:
                     # Si le module existe dans la variable globale retourne False
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Le module {module_name} est déja chargé ! si vous souhaiter le recharge tapez {self.Config.SERVICE_PREFIX}reload {module_name}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -425,7 +425,7 @@ class Irc:
                 if not init:
                     self.Base.db_record_module(fromuser, module_name)
 
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} chargé",
                         channel=self.Config.SERVICE_CHANLOG
@@ -439,7 +439,7 @@ class Irc:
             create_instance_of_the_class = my_class(self.ircObject)             # Créer une nouvelle instance de la classe
 
             if not hasattr(create_instance_of_the_class, 'cmd'):
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} ne contient pas de méthode cmd",
                         channel=self.Config.SERVICE_CHANLOG
@@ -455,7 +455,7 @@ class Irc:
             if not init:
                 self.Base.db_record_module(fromuser, module_name)
 
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} chargé",
                         channel=self.Config.SERVICE_CHANLOG
@@ -467,7 +467,7 @@ class Irc:
 
         except ModuleNotFoundError as moduleNotFound:
             self.Logs.error(f"MODULE_NOT_FOUND: {moduleNotFound}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"[ {self.Config.COLORS.red}MODULE_NOT_FOUND{self.Config.COLORS.black} ]: {moduleNotFound}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -475,7 +475,7 @@ class Irc:
             self.Base.db_delete_module(module_name)
         except Exception as err:
             self.Logs.error(f"Something went wrong with a module you want to load : {err}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"[ {self.Config.COLORS.red}ERROR{self.Config.COLORS.black} ]: {err}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -508,7 +508,7 @@ class Irc:
                 # Supprimer le module de la base de données
                 self.Base.db_delete_module(module_name)
 
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} supprimé",
                         channel=self.Config.SERVICE_CHANLOG
@@ -547,14 +547,14 @@ class Irc:
                 self.loaded_classes[class_name] = new_instance
 
                 self.Base.db_update_module(from_user, mod_name)
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} rechargé",
                         channel=self.Config.SERVICE_CHANLOG
                     )
                 return False
             else:
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Module {module_name} n'est pas chargé !",
                         channel=self.Config.SERVICE_CHANLOG
@@ -562,7 +562,7 @@ class Irc:
 
         except TypeError as te:
             self.Logs.error(f"A TypeError raised: {te}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"A TypeError raised: {te}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -570,7 +570,7 @@ class Irc:
             self.Base.db_delete_module(module_name)
         except AttributeError as ae:
             self.Logs.error(f"Missing Attribute: {ae}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Missing Attribute: {ae}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -578,7 +578,7 @@ class Irc:
             self.Base.db_delete_module(module_name)
         except KeyError as ke:
             self.Logs.error(f"Key Error: {ke}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Key Error: {ke}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -586,7 +586,7 @@ class Irc:
             self.Base.db_delete_module(module_name)
         except Exception as e:
             self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
-            self.Protocol.sendPrivMsg(
+            self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Something went wrong with the module: {e}",
                         channel=self.Config.SERVICE_CHANLOG
@@ -621,21 +621,31 @@ class Irc:
 
         return None
 
-    def create_defender_user(self, nickname:str, level: int, password:str) -> str:
+    def create_defender_user(self, nickname: str, level: int, password: str) -> str:
+
+        # > addaccess [nickname] [level] [password]
 
         get_user = self.User.get_User(nickname)
+        level = self.Base.convert_to_int(level)
+        password = password
+
         if get_user is None:
             response = f'This nickname {nickname} does not exist, it is not possible to create this user'
             self.Logs.warning(response)
             return response
 
-        nickname = get_user.nickname
-        response = ''
+        if level is None:
+            response = f'The level [{level}] must be a number from 1 to 4'
+            self.Logs.warning(response)
+            return response
 
         if level > 4:
             response = "Impossible d'ajouter un niveau > 4"
             self.Logs.warning(response)
             return response
+
+        nickname = get_user.nickname
+        response = ''
 
         hostname = get_user.hostname
         vhost = get_user.vhost
@@ -654,12 +664,12 @@ class Irc:
                     (:datetime, :user, :password, :hostname, :vhost, :level)
                     ''', mes_donnees)
             response = f"{nickname} ajouté en tant qu'administrateur de niveau {level}"
-            self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
+            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
             self.Logs.info(response)
             return response
         else:
             response = f'{nickname} Existe déjà dans les users enregistrés'
-            self.Protocol.sendNotice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
+            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
             self.Logs.info(response)
             return response
 
@@ -706,10 +716,10 @@ class Irc:
         dnickname = self.Config.SERVICE_NICKNAME
 
         if self.Base.check_for_new_version(True):
-            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.Config.CURRENT_VERSION} >>> {self.Config.LATEST_VERSION}")
-            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
+            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.Config.CURRENT_VERSION} >>> {self.Config.LATEST_VERSION}")
+            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
         else:
-            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=" You have the latest version of defender")
+            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" You have the latest version of defender")
 
         return None
 
@@ -857,14 +867,14 @@ class Irc:
                             self.Logs.info(f"################################################")
 
                             if self.Base.check_for_new_version(False):
-                                self.Protocol.sendPrivMsg(
+                                self.Protocol.send_priv_msg(
                                     nick_from=self.Config.SERVICE_NICKNAME,
                                     msg=f" New Version available {version}",
                                     channel=self.Config.SERVICE_CHANLOG
                                 )
 
                         # Initialisation terminé aprés le premier PING
-                        self.Protocol.sendPrivMsg(
+                        self.Protocol.send_priv_msg(
                             nick_from=self.Config.SERVICE_NICKNAME,
                             msg=f"[{self.Config.COLORS.green}INFORMATION{self.Config.COLORS.nogc}] >> Defender is ready",
                             channel=self.Config.SERVICE_CHANLOG
@@ -954,7 +964,7 @@ class Irc:
                             arg.remove(f':{self.Config.SERVICE_PREFIX}')
                             if not arg[0].lower() in self.commands:
                                 self.Logs.debug(f"This command {arg[0]} is not available")
-                                self.Protocol.sendNotice(
+                                self.Protocol.send_notice(
                                     nick_from=self.Config.SERVICE_NICKNAME,
                                     nick_to=user_trigger,
                                     msg=f"This command [{self.Config.COLORS.bold}{arg[0]}{self.Config.COLORS.bold}] is not available"
@@ -1061,13 +1071,13 @@ class Irc:
             case 'notallowed':
                 try:
                     current_command = cmd[0]
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         msg=f'[ {self.Config.COLORS.red}{current_command}{self.Config.COLORS.black} ] - Accès Refusé à {self.User.get_nickname(fromuser)}',
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f'Accès Refusé'
@@ -1082,7 +1092,7 @@ class Irc:
                 uid_to_deauth = self.User.get_uid(fromuser)
                 self.delete_db_admin(uid_to_deauth)
 
-                self.Protocol.sendPrivMsg(
+                self.Protocol.send_priv_msg(
                         msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais déconnecter de {dnickname}",
                         nick_from=dnickname,
                         channel=dchanlog
@@ -1099,7 +1109,7 @@ class Irc:
                 result_db = result.fetchone()
 
                 if result_db[0] > 0:
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"You can't use this command anymore ! Please use [{self.Config.SERVICE_PREFIX}auth] instead"
@@ -1120,7 +1130,7 @@ class Irc:
 
                 if current_nickname != cmd_owner:
                     self.Logs.critical(f"The current nickname [{fromuser}] is different than the nickname sent [{cmd_owner}] !")
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"The current nickname [{fromuser}] is different than the nickname sent [{cmd_owner}] !"
@@ -1129,7 +1139,7 @@ class Irc:
 
                 if current_nickname != config_owner:
                     self.Logs.critical(f"The current nickname [{current_nickname}] is different than the configuration owner [{config_owner}] !")
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"The current nickname [{current_nickname}] is different than the configuration owner [{config_owner}] !"
@@ -1138,7 +1148,7 @@ class Irc:
 
                 if cmd_owner != config_owner:
                     self.Logs.critical(f"The nickname sent [{cmd_owner}] is different than the configuration owner [{config_owner}] !")
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"The nickname sent [{cmd_owner}] is different than the configuration owner [{config_owner}] !"
@@ -1148,25 +1158,25 @@ class Irc:
                 if cmd_owner == config_owner and cmd_password == config_password:
                     self.Base.db_create_first_admin()
                     self.insert_db_admin(current_uid, 5)
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"Connexion a {dnickname} réussie!"
                         )
                 else:
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} a tapé un mauvais mot de pass",
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"Mot de passe incorrecte"
@@ -1180,7 +1190,7 @@ class Irc:
 
                 if fromuser != user_to_log:
                     # If the current nickname is different from the nickname you want to log in with
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Your current nickname is different from the nickname you want to log in with")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Your current nickname is different from the nickname you want to log in with")
                     return False
 
                 if not user_to_log is None:
@@ -1192,25 +1202,25 @@ class Irc:
                     if not user_from_db is None:
                         uid_user = self.User.get_uid(user_to_log)
                         self.insert_db_admin(uid_user, user_from_db[1])
-                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                   msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.nogc} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
                                                   channel=dchanlog)
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Connexion a {dnickname} réussie!")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Connexion a {dnickname} réussie!")
                     else:
-                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                   msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.nogc} - {self.User.get_nickname(fromuser)} a tapé un mauvais mot de pass",
                                                   channel=dchanlog)
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Mot de passe incorrecte")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Mot de passe incorrecte")
 
                 else:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"L'utilisateur {user_to_log} n'existe pas")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"L'utilisateur {user_to_log} n'existe pas")
 
             case 'addaccess':
                 try:
                     # .addaccess adator 5 password
                     if len(cmd) < 4:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} addaccess [nickname] [level] [password]")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} addaccess [nickname] [level] [password]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
 
                     newnickname = cmd[1]
                     newlevel = self.Base.int_if_possible(cmd[2])
@@ -1218,15 +1228,15 @@ class Irc:
 
                     response = self.create_defender_user(newnickname, newlevel, password)
 
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{response}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{response}")
                     self.Logs.info(response)
 
                 except IndexError as ie:
                     self.Logs.error(f'_hcmd addaccess: {ie}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
                 except TypeError as te:
                     self.Logs.error(f'_hcmd addaccess: out of index : {te}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
 
             case 'editaccess':
                 # .editaccess [USER] [PASSWORD] [LEVEL]
@@ -1236,12 +1246,12 @@ class Irc:
                     user_password = self.Base.crypt_password(cmd[2])
 
                     if len(cmd) < 4 or len(cmd) > 4:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
                         return None
 
                     get_admin = self.Admin.get_Admin(fromuser)
                     if get_admin is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" This user {fromuser} has no Admin access")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This user {fromuser} has no Admin access")
                         return None
 
                     current_user = self.User.get_nickname(fromuser)
@@ -1249,7 +1259,7 @@ class Irc:
                     current_user_level = get_admin.level
 
                     if user_new_level > 5:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Maximum authorized level is 5")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Maximum authorized level is 5")
                         return None
 
                     # Rechercher le user dans la base de données.
@@ -1261,11 +1271,11 @@ class Irc:
                     if not isUserExist is None:
 
                         if current_user_level < int(isUserExist[1]):
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" You are not allowed to edit this access")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You are not allowed to edit this access")
                             return None
                         
                         if current_user_level == int(isUserExist[1]) and current_user != user_to_edit:
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" You can't edit access of a user with same level")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You can't edit access of a user with same level")
                             return None
 
                         # Le user existe dans la base de données
@@ -1273,16 +1283,16 @@ class Irc:
                         sql_update = f"UPDATE {self.Config.TABLE_ADMIN} SET level = :level, password = :password WHERE user = :user"
                         exec_query = self.Base.db_execute_query(sql_update, data_to_update)
                         if exec_query.rowcount > 0:
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" User {user_to_edit} has been modified with level {str(user_new_level)}")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" User {user_to_edit} has been modified with level {str(user_new_level)}")
                             self.Admin.update_level(user_to_edit, user_new_level)
                         else:
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Impossible de modifier l'utilisateur {str(user_new_level)}")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Impossible de modifier l'utilisateur {str(user_new_level)}")
 
                 except TypeError as te:
                     self.Logs.error(f"Type error : {te}")
                 except ValueError as ve:
                     self.Logs.error(f"Value Error : {ve}")
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
 
             case 'delaccess':
                 # .delaccess [USER] [CONFIRMUSER]
@@ -1290,18 +1300,18 @@ class Irc:
                 user_confirmation = cmd[2]
 
                 if user_to_del != user_confirmation:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer")
                     self.Logs.warning(f':{dnickname} NOTICE {fromuser} : Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer')
                     return None
 
                 if len(cmd) < 3:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}delaccess [USER] [CONFIRMUSER]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}delaccess [USER] [CONFIRMUSER]")
                     return None
 
                 get_admin = self.Admin.get_Admin(fromuser)
 
                 if get_admin is None:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no admin access")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no admin access")
                     return None
 
                 current_user = self.User.get_nickname(fromuser)
@@ -1317,7 +1327,7 @@ class Irc:
                 if not info_user is None:
                     level_user_to_del = info_user[1]
                     if current_user_level <= level_user_to_del:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You are not allowed to delete this access")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are not allowed to delete this access")
                         self.Logs.warning(f':{dnickname} NOTICE {fromuser} : You are not allowed to delete this access')
                         return None
 
@@ -1325,10 +1335,10 @@ class Irc:
                     sql_delete = f"DELETE FROM {self.Config.TABLE_ADMIN} WHERE user = :user"
                     exec_query = self.Base.db_execute_query(sql_delete, data_to_delete)
                     if exec_query.rowcount > 0:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"User {user_to_del} has been deleted !")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"User {user_to_del} has been deleted !")
                         self.Admin.delete(user_to_del)
                     else:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
                         self.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
 
             case 'help':
@@ -1340,13 +1350,13 @@ class Irc:
                 else:
                     user_level = 0
 
-                self.Protocol.sendNotice(nick_from=dnickname,nick_to=fromuser,msg=f" ***************** LISTE DES COMMANDES *****************")
-                self.Protocol.sendNotice(nick_from=dnickname,nick_to=fromuser,msg=f" ")
+                self.Protocol.send_notice(nick_from=dnickname,nick_to=fromuser,msg=f" ***************** LISTE DES COMMANDES *****************")
+                self.Protocol.send_notice(nick_from=dnickname,nick_to=fromuser,msg=f" ")
                 for levDef in self.commands_level:
 
                     if int(user_level) >= int(count_level_definition):
 
-                        self.Protocol.sendNotice(nick_from=dnickname,nick_to=fromuser,
+                        self.Protocol.send_notice(nick_from=dnickname,nick_to=fromuser,
                                                  msg=f" ***************** {self.Config.COLORS.nogc}[ {self.Config.COLORS.green}LEVEL {str(levDef)} {self.Config.COLORS.nogc}] *****************"
                                                  )
 
@@ -1354,13 +1364,13 @@ class Irc:
                         for i in range(0, len(self.commands_level[count_level_definition]), batch):
                             groupe = self.commands_level[count_level_definition][i:i + batch]  # Extraire le groupe
                             batch_commands = ' | '.join(groupe)
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {batch_commands}")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {batch_commands}")
 
-                        self.Protocol.sendNotice(nick_from=dnickname,nick_to=fromuser,msg=f" ")
+                        self.Protocol.send_notice(nick_from=dnickname,nick_to=fromuser,msg=f" ")
 
                     count_level_definition += 1
 
-                self.Protocol.sendNotice(nick_from=dnickname,nick_to=fromuser,msg=f" ***************** FIN DES COMMANDES *****************")
+                self.Protocol.send_notice(nick_from=dnickname,nick_to=fromuser,msg=f" ***************** FIN DES COMMANDES *****************")
 
             case 'load':
                 try:
@@ -1387,7 +1397,7 @@ class Irc:
                     self.reload_module(from_user=fromuser, mod_name=module_name)
                 except Exception as e:
                     self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=dnickname,
                         msg=f"Something went wrong with the module: {e}",
                         channel=dchanlog
@@ -1403,7 +1413,7 @@ class Irc:
                     self.Base.shutdown()
                     self.Base.execute_periodic_action()
 
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"Arrêt du service {dnickname}"
@@ -1422,7 +1432,7 @@ class Irc:
                     reason.append(cmd[i])
                 final_reason = ' '.join(reason)
 
-                self.Protocol.sendNotice(
+                self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
                     msg=f"Redémarrage du service {dnickname}"
@@ -1476,7 +1486,7 @@ class Irc:
 
                 for key, value in conf_bkp_dict.items():
                     if config_dict[key] != value:
-                        self.Protocol.sendPrivMsg(
+                        self.Protocol.send_priv_msg(
                             nick_from=self.Config.SERVICE_NICKNAME,
                             msg=f'[{key}]: {value} ==> {config_dict[key]}', 
                             channel=self.Config.SERVICE_CHANLOG
@@ -1489,7 +1499,7 @@ class Irc:
 
                 if restart_flag:
                     self.Config.SERVEUR_ID = serveur_id
-                    self.Protocol.sendPrivMsg(nick_from=self.Config.SERVICE_NICKNAME, msg='You need to restart defender !', channel=self.Config.SERVICE_CHANLOG)
+                    self.Protocol.send_priv_msg(nick_from=self.Config.SERVICE_NICKNAME, msg='You need to restart defender !', channel=self.Config.SERVICE_CHANLOG)
 
                 self.Base.delete_logger(self.Config.LOGGING_NAME)
                 self.Base = self.Loader.BaseModule.Base(self.Config, self.Settings)
@@ -1500,7 +1510,7 @@ class Irc:
                 self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, self.ircObject).Protocol
 
                 for mod in mods:
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f'> Module [{mod}] reloaded', 
                         channel=self.Config.SERVICE_CHANLOG
@@ -1525,14 +1535,14 @@ class Irc:
                             loaded = True
 
                     if loaded:
-                        self.Protocol.sendNotice(
+                        self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=f"{module} - {self.Config.COLORS.green}Loaded{self.Config.COLORS.nogc} by {loaded_user} on {loaded_datetime}"
                         )
                         loaded = False
                     else:
-                        self.Protocol.sendNotice(
+                        self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=f"{module} - {self.Config.COLORS.red}Not Loaded{self.Config.COLORS.nogc}"
@@ -1542,13 +1552,13 @@ class Irc:
 
                 if self.Base.running_timers:
                     for the_timer in self.Base.running_timers:
-                        self.Protocol.sendNotice(
+                        self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=f">> {the_timer.getName()} - {the_timer.is_alive()}"
                         )
                 else:
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg="Aucun timers en cours d'execution"
@@ -1557,7 +1567,7 @@ class Irc:
             case 'show_threads':
 
                 for thread in self.Base.running_threads:
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f">> {thread.getName()} ({thread.is_alive()})"
@@ -1572,7 +1582,7 @@ class Irc:
                         parsed_UID = re.sub(pattern, '', uid)
                         list_nicknames.append(self.User.get_nickname(parsed_UID))
 
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"Channel: {chan.name} - Users: {list_nicknames}"
@@ -1580,9 +1590,9 @@ class Irc:
 
             case 'show_users':
                 count_users = len(self.User.UID_DB)
-                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Total Connected Users: {count_users}")
+                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Total Connected Users: {count_users}")
                 for db_user in self.User.UID_DB:
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"UID : {db_user.uid} - isWebirc: {db_user.isWebirc} - isWebSocket: {db_user.isWebsocket} - Nickname: {db_user.nickname} - Connection: {db_user.connexion_datetime}"
@@ -1591,7 +1601,7 @@ class Irc:
             case 'show_admins':
 
                 for db_admin in self.Admin.UID_ADMIN_DB:
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Level: {db_admin.level} - Connection: {db_admin.connexion_datetime}"
@@ -1602,7 +1612,7 @@ class Irc:
                 config_dict = self.Config.__dict__
 
                 for key, value in config_dict.items():
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f'{key} > {value}'
@@ -1610,14 +1620,14 @@ class Irc:
 
             case 'uptime':
                 uptime = self.get_defender_uptime()
-                self.Protocol.sendNotice(
+                self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
                     msg=f"{uptime}"
                 )
 
             case 'copyright':
-                self.Protocol.sendNotice(
+                self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
                     msg=f"# Defender V.{self.Config.CURRENT_VERSION} Developped by adator® #"

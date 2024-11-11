@@ -48,7 +48,7 @@ class Unrealircd6:
         except AttributeError as ae:
             self.__Base.logs.critical(f"Attribute Error: {ae}")
 
-    def sendPrivMsg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -80,7 +80,7 @@ class Unrealircd6:
             self.__Base.logs.error(f"General Error: {err}")
             self.__Base.logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
 
-    def sendNotice(self, nick_from: str, nick_to: str, msg: str) -> None:
+    def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
 
         Args:
@@ -206,7 +206,7 @@ class Unrealircd6:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
         return None
 
-    def sendSapart(self, nick_to_sapart: str, channel_name: str) -> None:
+    def send_sapart(self, nick_to_sapart: str, channel_name: str) -> None:
         """_summary_
 
         Args:
@@ -231,7 +231,7 @@ class Unrealircd6:
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def sendSajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
+    def send_sajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
         """_summary_
 
         Args:
@@ -268,7 +268,7 @@ class Unrealircd6:
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def sendSvsmode(self, nickname: str, user_mode: str) -> None:
+    def send_svs_mode(self, nickname: str, user_mode: str) -> None:
         try:
 
             userObj = self.__Irc.User.get_User(uidornickname=nickname)
@@ -287,7 +287,7 @@ class Unrealircd6:
         except Exception as err:
                 self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def sendQuit(self, uid: str, reason: str, print_log: True) -> None:
+    def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
         - Delete uid from User object
         - Delete uid from Clone object
@@ -316,7 +316,7 @@ class Unrealircd6:
 
         return None
 
-    def sendUID(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -354,7 +354,7 @@ class Unrealircd6:
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def sendChanJoin(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -383,7 +383,7 @@ class Unrealircd6:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
         return None
 
-    def sendChanPart(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
+    def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
         """Part from a channel
 
         Args:
@@ -742,7 +742,7 @@ class Unrealircd6:
                 ping_response = current_unixtime - recieved_unixtime
 
                 # self.__Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
-                self.sendNotice(
+                self.send_notice(
                     nick_from=dnickname,
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"

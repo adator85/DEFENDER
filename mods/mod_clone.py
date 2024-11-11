@@ -73,7 +73,7 @@ class Clone():
         self.__load_module_configuration()
 
         self.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.sendChanJoin(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
+        self.Protocol.send_join_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.CLONE_CHANNEL} +o {self.Config.SERVICE_NICKNAME}")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +nts")
@@ -140,7 +140,7 @@ class Clone():
         self.Channel.db_query_channel(action='del', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -nts")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -k {self.Config.CLONE_CHANNEL_PASSWORD}")
-        self.Protocol.sendChanPart(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
+        self.Protocol.send_part_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
         return None
 
@@ -244,8 +244,8 @@ class Clone():
                 break
 
             if not clone.connected:
-                self.Protocol.sendUID(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, print_log=False)
-                self.Protocol.sendChanJoin(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
+                self.Protocol.send_uid(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, print_log=False)
+                self.Protocol.send_join_chan(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
 
             time.sleep(interval)
             clone.connected = True
@@ -257,7 +257,7 @@ class Clone():
             clone_to_kill.append(clone.uid)
 
         for clone_uid in clone_to_kill:
-            self.Protocol.sendQuit(clone_uid, 'Gooood bye', print_log=False)
+            self.Protocol.send_quit(clone_uid, 'Gooood bye', print_log=False)
 
         del clone_to_kill
 
@@ -297,7 +297,7 @@ class Clone():
 
                         if getClone.uid != self.Config.SERVICE_ID:
                             final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
-                            self.Protocol.sendPrivMsg(
+                            self.Protocol.send_priv_msg(
                                 nick_from=getClone.uid,
                                 msg=final_message,
                                 channel=self.Config.CLONE_CHANNEL
@@ -319,11 +319,11 @@ class Clone():
                 case 'clone':
 
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
 
                     option = str(cmd[1]).lower()
 
@@ -344,8 +344,8 @@ class Clone():
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group]")
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Exemple /msg {dnickname} clone connect 6 Ambiance")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group]")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Exemple /msg {dnickname} clone connect 6 Ambiance")
 
                         case 'kill':
                             try:
@@ -360,12 +360,12 @@ class Clone():
                                 else:
                                     cloneObj = self.Clone.get_Clone(clone_name)
                                     if not cloneObj is None:
-                                        self.Protocol.sendQuit(cloneObj.uid, 'Goood bye', print_log=False)
+                                        self.Protocol.send_quit(cloneObj.uid, 'Goood bye', print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill all")
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill clone_nickname")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill all")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill clone_nickname")
 
                         case 'join':
                             try:
@@ -376,17 +376,17 @@ class Clone():
                                 if clone_name.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
-                                        self.Protocol.sendChanJoin(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
+                                        self.Protocol.send_join_chan(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
                                         if not self.Clone.get_uid(clone_name) is None:
-                                            self.Protocol.sendChanJoin(uidornickname=clone_name, channel=clone_channel_to_join, print_log=False)
+                                            self.Protocol.send_join_chan(uidornickname=clone_name, channel=clone_channel_to_join, print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join all #channel")
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join clone_nickname #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join all #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join clone_nickname #channel")
 
                         case 'part':
                             try:
@@ -397,25 +397,25 @@ class Clone():
                                 if clone_name.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
-                                        self.Protocol.sendChanPart(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
+                                        self.Protocol.send_part_chan(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
                                         clone_uid = self.Clone.get_uid(clone_name)
                                         if not clone_uid is None:
-                                            self.Protocol.sendChanPart(uidornickname=clone_uid, channel=clone_channel_to_part, print_log=False)
+                                            self.Protocol.send_part_chan(uidornickname=clone_uid, channel=clone_channel_to_part, print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part all #channel")
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part clone_nickname #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part all #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part clone_nickname #channel")
 
                         case 'list':
                             try:
                                 clone_count = len(self.Clone.UID_CLONE_DB)
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f">> Number of connected clones: {clone_count}")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f">> Number of connected clones: {clone_count}")
                                 for clone_name in self.Clone.UID_CLONE_DB:
-                                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, 
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
                                                              msg=f">> Nickname: {clone_name.nickname} | Username: {clone_name.username} | Realname: {clone_name.realname} | Vhost: {clone_name.vhost} | UID: {clone_name.uid} | Group: {clone_name.group} | Connected: {clone_name.connected}")
                             except Exception as err:
                                 self.Logs.error(f'{err}')
@@ -429,7 +429,7 @@ class Clone():
                                 final_message = ' '.join(cmd[4:])
 
                                 if clone_channel is None or not self.Clone.exists(clone_name):
-                                    self.Protocol.sendNotice(
+                                    self.Protocol.send_notice(
                                         nick_from=dnickname,
                                         nick_to=fromuser,
                                         msg=f"/msg {dnickname} clone say [clone_nickname] #channel message"
@@ -437,22 +437,22 @@ class Clone():
                                     return None
 
                                 if self.Clone.exists(clone_name):
-                                    self.Protocol.sendPrivMsg(nick_from=clone_name, msg=final_message, channel=clone_channel)
+                                    self.Protocol.send_priv_msg(nick_from=clone_name, msg=final_message, channel=clone_channel)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.sendNotice(
+                                self.Protocol.send_notice(
                                         nick_from=dnickname,
                                         nick_to=fromuser,
                                         msg=f"/msg {dnickname} clone say [clone_nickname] #channel message"
                                     )
 
                         case _:
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
 
         except IndexError as ie:
             self.Logs.error(f'Index Error: {ie}')

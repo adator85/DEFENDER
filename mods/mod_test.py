@@ -159,11 +159,11 @@ class Test():
             case 'test-command':
                 try:
 
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
-                    self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
+                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Protocol.sendPrivMsg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
+                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)
