@@ -46,7 +46,7 @@ class Inspircd:
         except AttributeError as ae:
             self.__Base.logs.critical(f"Attribute Error: {ae}")
 
-    def sendPrivMsg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -76,7 +76,7 @@ class Inspircd:
         except Exception as err:
             self.__Base.logs.error(f"General Error: {err}")
 
-    def sendNotice(self, nick_from: str, nick_to: str, msg: str) -> None:
+    def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
 
         Args:
@@ -179,7 +179,7 @@ class Inspircd:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
         return None
 
-    def sendQuit(self, uid: str, reason: str, print_log: True) -> None:
+    def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
 
         Args:
@@ -205,7 +205,7 @@ class Inspircd:
 
         return None
 
-    def sendUID(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
         """Send UID to the server
 
         Args:
@@ -243,7 +243,7 @@ class Inspircd:
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def sendChanJoin(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -269,7 +269,7 @@ class Inspircd:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
         return None
 
-    def sendChanPart(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
+    def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
         """Part from a channel
 
         Args:
@@ -633,7 +633,7 @@ class Inspircd:
                 ping_response = current_unixtime - recieved_unixtime
 
                 # self.__Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
-                self.sendNotice(
+                self.send_notice(
                     nick_from=dnickname,
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"

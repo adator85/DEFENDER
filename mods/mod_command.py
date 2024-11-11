@@ -155,7 +155,7 @@ class Command():
             case '403' | '401':
                 try:
                     message = ' '.join(cmd[3:])
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=self.user_to_notice,
                         msg=f"[{red}ERROR MSG{nogc}] {message}"
@@ -171,7 +171,7 @@ class Command():
                     # [':irc.deb.biz.st', '006', 'Dev-PyDefender', ':`-services.deb.biz.st', '------', '|', 'Users:', '9', '(47.37%)', '[00B]']
                     # [':irc.deb.biz.st', '018', 'Dev-PyDefender', ':4', 'servers', 'and', '19', 'users,', 'average', '4.75', 'users', 'per', 'server']
                     message = ' '.join(cmd[3:])
-                    self.Protocol.sendNotice(
+                    self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=self.user_to_notice,
                         msg=f"[{green}SERVER MSG{nogc}] {message}"
@@ -193,11 +193,11 @@ class Command():
 
                     match type_of_stats:
                         case 's':
-                            self.Protocol.sendNotice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No shun")
+                            self.Protocol.send_notice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No shun")
                         case 'G':
-                            self.Protocol.sendNotice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No gline")
+                            self.Protocol.send_notice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No gline")
                         case 'k':
-                            self.Protocol.sendNotice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No kline")
+                            self.Protocol.send_notice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No kline")
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -212,7 +212,7 @@ class Command():
                     author = str(cmd[7])
                     reason = ' '.join(cmd[8:])
 
-                    self.Protocol.sendNotice(nick_from=dnickname,nick_to=self.user_to_notice, 
+                    self.Protocol.send_notice(nick_from=dnickname,nick_to=self.user_to_notice, 
                                              msg=f"{bold}Author{nogc}: {author} - {bold}Host{nogc}: {host} - {bold}Reason{nogc}: {reason}"
                                              )
 
@@ -307,7 +307,7 @@ class Command():
                 # [':adator', 'PRIVMSG', '#services', ':.o', '#services', 'dktmb']
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -325,7 +325,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd OP: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -334,7 +334,7 @@ class Command():
                 # .deop #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -352,7 +352,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOP: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -361,7 +361,7 @@ class Command():
                 # .owner #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -379,7 +379,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd OWNER: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -388,7 +388,7 @@ class Command():
                 # .deowner #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -406,7 +406,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -415,7 +415,7 @@ class Command():
                 # .protect #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -433,7 +433,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -442,7 +442,7 @@ class Command():
                 # .deprotect #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -460,7 +460,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -469,7 +469,7 @@ class Command():
                 # .halfop #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -487,7 +487,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd halfop: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -496,7 +496,7 @@ class Command():
                 # .dehalfop #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -514,7 +514,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEHALFOP: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -523,7 +523,7 @@ class Command():
                 # .voice #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -541,7 +541,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd VOICE: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -550,7 +550,7 @@ class Command():
                 # .devoice #channel user
                 try:
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
                         return False
 
                     if len(cmd) == 1:
@@ -568,7 +568,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEVOICE: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -577,7 +577,7 @@ class Command():
                 try:
                     sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sentchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                         return False
 
                     nickname = cmd[2]
@@ -586,7 +586,7 @@ class Command():
                     self.Logs.debug(f'{fromuser} has banned {nickname} from {sentchannel}')
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd BAN: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -595,7 +595,7 @@ class Command():
                 try:
                     sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sentchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
                     nickname = cmd[2]
 
@@ -604,7 +604,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd UNBAN: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} unban [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} unban [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -613,7 +613,7 @@ class Command():
                 try:
                     sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sentchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
                     nickname = cmd[2]
                     final_reason = ' '.join(cmd[3:])
@@ -623,7 +623,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd KICK: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kick [#SALON] [NICKNAME] [REASON]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kick [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -632,7 +632,7 @@ class Command():
                 try:
                     sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sentchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
                     nickname = cmd[2]
                     final_reason = ' '.join(cmd[3:])
@@ -643,7 +643,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd KICKBAN: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kickban [#SALON] [NICKNAME] [REASON]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kickban [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -652,12 +652,12 @@ class Command():
                 try:
                     sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sent_channel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}JOIN #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}JOIN #channel")
                         return False
 
                     # self.Protocol.send2socket(f':{service_id} JOIN {sent_channel}')
-                    self.Protocol.sendChanJoin(uidornickname=dnickname,channel=sent_channel)
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} JOINED {sent_channel}")
+                    self.Protocol.send_join_chan(uidornickname=dnickname,channel=sent_channel)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} JOINED {sent_channel}")
                     self.Channel.db_query_channel('add', self.module_name, sent_channel)
 
                 except IndexError as ie:
@@ -670,15 +670,15 @@ class Command():
                 try:
                     sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
                     if sent_channel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}PART #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}PART #channel")
                         return False
 
                     if sent_channel ==  dchanlog:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} CAN'T LEFT {sent_channel} AS IT IS LOG CHANNEL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} CAN'T LEFT {sent_channel} AS IT IS LOG CHANNEL")
                         return False
 
-                    self.Protocol.sendChanPart(uidornickname=dnickname, channel=sent_channel)
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} LEFT {sent_channel}")
+                    self.Protocol.send_part_chan(uidornickname=dnickname, channel=sent_channel)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} LEFT {sent_channel}")
                     
                     self.Channel.db_query_channel('del', self.module_name, sent_channel)
 
@@ -690,14 +690,14 @@ class Command():
             case 'topic':
                 try:
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
                         return None
 
                     chan = str(cmd[1])
                     if not self.Channel.Is_Channel(chan):
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
                         return None
 
                     topic_msg = ' '.join(cmd[2:]).strip()
@@ -705,7 +705,7 @@ class Command():
                     if topic_msg:
                         self.Protocol.send2socket(f':{dnickname} TOPIC {chan} :{topic_msg}')
                     else:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the topic")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the topic")
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -715,7 +715,7 @@ class Command():
             case 'wallops':
                 try:
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} WALLOPS THE_WALLOPS_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} WALLOPS THE_WALLOPS_MESSAGE")
                         return None
 
                     wallops_msg = ' '.join(cmd[1:]).strip()
@@ -723,7 +723,7 @@ class Command():
                     if wallops_msg:
                         self.Protocol.send2socket(f':{dnickname} WALLOPS {wallops_msg} ({dnickname})')
                     else:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the wallops message")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the wallops message")
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -733,7 +733,7 @@ class Command():
             case 'globops':
                 try:
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} GLOBOPS THE_GLOBOPS_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} GLOBOPS THE_GLOBOPS_MESSAGE")
                         return None
 
                     globops_msg = ' '.join(cmd[1:]).strip()
@@ -741,7 +741,7 @@ class Command():
                     if globops_msg:
                         self.Protocol.send2socket(f':{dnickname} GLOBOPS {globops_msg} ({dnickname})')
                     else:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the globops message")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the globops message")
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -751,15 +751,15 @@ class Command():
             case 'gnotice':
                 try:
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} THE_GLOBAL_NOTICE_MESSAGE")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} THE_GLOBAL_NOTICE_MESSAGE")
                         return None
 
                     gnotice_msg = ' '.join(cmd[1:]).strip()
 
                     if gnotice_msg:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.Config.COLORS.red}GLOBAL NOTICE{self.Config.COLORS.nogc}] {gnotice_msg}")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.Config.COLORS.red}GLOBAL NOTICE{self.Config.COLORS.nogc}] {gnotice_msg}")
                     else:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the global notice message")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You need to specify the global notice message")
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -770,14 +770,14 @@ class Command():
                 try:
                     self.user_to_notice = fromuser
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME")
                         return None
 
                     nickname = str(cmd[1])
 
                     if self.User.get_nickname(nickname) is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Nickname not found !")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nickname not found !")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME")
                         return None
 
                     self.Protocol.send2socket(f':{dnickname} WHOIS {nickname}')
@@ -790,14 +790,14 @@ class Command():
             case 'names':
                 try:
                     if len(cmd) == 1:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #CHANNEL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #CHANNEL")
                         return None
 
                     chan = str(cmd[1])
 
                     if not self.Channel.Is_Channel(chan):
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel")
                         return None
 
                     self.Protocol.send2socket(f':{dnickname} NAMES {chan}')
@@ -810,20 +810,20 @@ class Command():
             case 'invite':
                 try:
                     if len(cmd) < 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
                     nickname = str(cmd[1])
                     chan = str(cmd[2])
 
                     if not self.Channel.Is_Channel(chan):
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The channel must start with #")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
                     if self.User.get_nickname(nickname) is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"Nickname not found !")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nickname not found !")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
 
                     self.Protocol.send2socket(f':{dnickname} INVITE {nickname} {chan}')
@@ -836,7 +836,7 @@ class Command():
             case 'inviteme':
                 try:
                     if len(cmd) == 0:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()}")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()}")
                         return None
 
                     self.Protocol.send2socket(f':{dnickname} INVITE {fromuser} {self.Config.SERVICE_CHANLOG}')
@@ -860,13 +860,13 @@ class Command():
                 try:
                     # .umode nickname +mode
                     if len(cmd) < 2:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [NICKNAME] [+/-]mode")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [NICKNAME] [+/-]mode")
                         return None
 
                     nickname = str(cmd[1])
                     umode = str(cmd[2])
 
-                    self.Protocol.sendSvsmode(nickname=nickname, user_mode=umode)
+                    self.Protocol.send_svs_mode(nickname=nickname, user_mode=umode)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
@@ -878,11 +878,11 @@ class Command():
                 try:
 
                     if len(cmd) < 2:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
                         return None
 
                     if fromchannel is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
                         return None
 
                     if len(cmd) == 2:
@@ -890,7 +890,7 @@ class Command():
                         if self.Channel.Is_Channel(fromchannel):
                             self.Protocol.send2socket(f":{dnickname} MODE {fromchannel} {channel_mode}")
                         else:
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : Channel [{fromchannel}] is not correct should start with #")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : Channel [{fromchannel}] is not correct should start with #")
                         return None
 
                     if len(cmd) == 3:
@@ -901,7 +901,7 @@ class Command():
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd OP: {str(e)}')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -915,14 +915,14 @@ class Command():
                     nickname = str(cmd[1])
                     channel = str(cmd[2])
                     if len(cmd) != 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
                         return None
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSJOIN {nickname} {channel}')
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'svspart':
@@ -931,14 +931,14 @@ class Command():
                     nickname = str(cmd[1])
                     channel = str(cmd[2])
                     if len(cmd) != 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
                         return None
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSPART {nickname} {channel}')
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'sajoin':
@@ -947,15 +947,15 @@ class Command():
                     nickname = str(cmd[1])
                     channel = str(cmd[2])
                     if len(cmd) < 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                         return None
 
-                    self.Protocol.sendSajoin(nick_to_sajoin=nickname, channel_name=channel)
+                    self.Protocol.send_sajoin(nick_to_sajoin=nickname, channel_name=channel)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'sapart':
@@ -964,14 +964,14 @@ class Command():
                     nickname = str(cmd[1])
                     channel = str(cmd[2])
                     if len(cmd) < 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                         return None
 
-                    self.Protocol.sendSapart(nick_to_sapart=nickname, channel_name=channel)
+                    self.Protocol.send_sapart(nick_to_sapart=nickname, channel_name=channel)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'svsnick':
@@ -982,11 +982,11 @@ class Command():
                     unixtime = self.Base.get_unixtime()
 
                     if self.User.get_nickname(nickname) is None:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
                         return None
 
                     if len(cmd) != 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
                         return None
 
                     self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSNICK {nickname} {newnickname} {unixtime}')
@@ -994,7 +994,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kill':
@@ -1002,7 +1002,7 @@ class Command():
                     # 'kill', 'gline', 'ungline', 'shun', 'unshun'
                     # .kill nickname reason
                     if len(cmd) < 3:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname reason")
                         return None
 
                     nickname = str(cmd[1])
@@ -1012,7 +1012,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSNICK nickname newnickname")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSNICK nickname newnickname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'gline':
@@ -1020,7 +1020,7 @@ class Command():
                     # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
                     # .gline [nickname] [host] [reason]
                     if len(cmd) < 4:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     nickname = str(cmd[1])
@@ -1030,8 +1030,8 @@ class Command():
                     gline_reason = ' '.join(cmd[3:])
 
                     if nickname == '*' and hostname == '*':
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     self.Protocol.gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
@@ -1039,7 +1039,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'ungline':
@@ -1048,7 +1048,7 @@ class Command():
                     # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
                     # .ungline nickname host
                     if len(cmd) < 2:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                         return None
 
                     nickname = str(cmd[1])
@@ -1060,7 +1060,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kline':
@@ -1068,7 +1068,7 @@ class Command():
                     # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
                     # .gline [nickname] [host] [reason]
                     if len(cmd) < 4:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     nickname = str(cmd[1])
@@ -1078,8 +1078,8 @@ class Command():
                     gline_reason = ' '.join(cmd[3:])
 
                     if nickname == '*' and hostname == '*':
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     self.Protocol.kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
@@ -1087,7 +1087,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'unkline':
@@ -1096,7 +1096,7 @@ class Command():
                     # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
                     # .ungline nickname host
                     if len(cmd) < 2:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                         return None
 
                     nickname = str(cmd[1])
@@ -1107,7 +1107,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'shun':
@@ -1116,7 +1116,7 @@ class Command():
                     # .shun [nickname] [host] [reason]
 
                     if len(cmd) < 4:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     nickname = str(cmd[1])
@@ -1126,15 +1126,15 @@ class Command():
                     shun_reason = ' '.join(cmd[3:])
 
                     if nickname == '*' and hostname == '*':
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You want to close the server ? i would recommand ./unrealircd stop :)")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} TKL + s {nickname} {hostname} {dnickname} {expire_time} {set_at_timestamp} :{shun_reason}")
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'unshun':
@@ -1143,7 +1143,7 @@ class Command():
                     # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
                     # .unshun nickname host
                     if len(cmd) < 2:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                         return None
 
                     nickname = str(cmd[1])
@@ -1154,7 +1154,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'glinelist':
@@ -1165,7 +1165,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'shunlist':
@@ -1176,7 +1176,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'klinelist':
@@ -1187,7 +1187,7 @@ class Command():
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case _:

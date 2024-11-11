@@ -122,7 +122,7 @@ class Votekick():
     def unload(self) -> None:
         try:
             for chan in self.VOTE_CHANNEL_DB:
-                self.Protocol.sendChanPart(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)
+                self.Protocol.send_part_chan(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)
 
             self.VOTE_CHANNEL_DB = []
             self.Logs.debug(f'Delete memory DB VOTE_CHANNEL_DB: {self.VOTE_CHANNEL_DB}')
@@ -238,7 +238,7 @@ class Votekick():
             if chan.channel_name == channel:
                 target_user = self.User.get_nickname(chan.target_user)
                 if chan.vote_for > chan.vote_against:
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=dnickname,
                         msg=f"User {self.Config.COLORS.bold}{target_user}{self.Config.COLORS.nogc} has {chan.vote_against} votes against and {chan.vote_for} votes for. For this reason, it'll be kicked from the channel",
                         channel=channel
@@ -246,7 +246,7 @@ class Votekick():
                     self.Protocol.send2socket(f":{dnickname} KICK {channel} {target_user} Following the vote, you are not welcome in {channel}")
                     self.Channel.delete_user_from_channel(channel, self.User.get_uid(target_user))
                 elif chan.vote_for <= chan.vote_against:
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=dnickname,
                         msg=f"User {self.Config.COLORS.bold}{target_user}{self.Config.COLORS.nogc} has {chan.vote_against} votes against and {chan.vote_for} votes for. For this reason, it\'ll remain in the channel",
                         channel=channel
@@ -254,7 +254,7 @@ class Votekick():
 
                 # Init the system
                 if self.init_vote_system(channel):
-                    self.Protocol.sendPrivMsg(
+                    self.Protocol.send_priv_msg(
                         nick_from=dnickname,
                         msg="System vote re initiated",
                         channel=channel
@@ -288,14 +288,14 @@ class Votekick():
             case 'vote':
 
                 if len(cmd) == 1:
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote activate #channel')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote deactivate #channel')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote +')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote -')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote cancel')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote status')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote submit nickname')
-                    self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote verdict')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote activate #channel')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote deactivate #channel')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote +')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote -')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote cancel')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote status')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote submit nickname')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote verdict')
                     return None
 
                 option = str(cmd[1]).lower()
@@ -306,12 +306,12 @@ class Votekick():
                         try:
                             # vote activate #channel
                             if self.Admin.get_Admin(fromuser) is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' :Your are not allowed to execute this command')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' :Your are not allowed to execute this command')
                                 return None
 
                             sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
                             self.insert_vote_channel(
                                 self.VoteChannelModel(
@@ -325,30 +325,30 @@ class Votekick():
 
                             self.Channel.db_query_channel('add', self.module_name, sentchannel)
 
-                            self.Protocol.sendChanJoin(uidornickname=dnickname, channel=sentchannel)
+                            self.Protocol.send_join_chan(uidornickname=dnickname, channel=sentchannel)
                             self.Protocol.send2socket(f":{dnickname} SAMODE {sentchannel} +o {dnickname}")
-                            self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                            self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="You can now use !submit <nickname> to decide if he will stay or not on this channel ",
                                                       channel=sentchannel
                                                       )
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option} #channel')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option} #welcome')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option} #channel')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option} #welcome')
 
                     case 'deactivate':
                         try:
                             # vote deactivate #channel
                             if self.Admin.get_Admin(fromuser) is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f" Your are not allowed to execute this command")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" Your are not allowed to execute this command")
                                 return None
 
                             sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
                             self.Protocol.send2socket(f":{dnickname} SAMODE {sentchannel} -o {dnickname}")
-                            self.Protocol.sendChanPart(uidornickname=dnickname, channel=sentchannel)
+                            self.Protocol.send_part_chan(uidornickname=dnickname, channel=sentchannel)
 
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == sentchannel:
@@ -358,8 +358,8 @@ class Votekick():
                             self.Logs.debug(f"The Channel {sentchannel} has been deactivated from the vote system")
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f" /msg {dnickname} {command} {option} #channel")
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f" Exemple /msg {dnickname} {command} {option} #welcome")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" /msg {dnickname} {command} {option} #channel")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" Exemple /msg {dnickname} {command} {option} #welcome")
 
                     case '+':
                         try:
@@ -368,21 +368,21 @@ class Votekick():
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == channel:
                                     if fromuser in chan.voter_users:
-                                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="You already submitted a vote",
                                                       channel=channel
                                                       )
                                     else:
                                         chan.vote_for += 1
                                         chan.voter_users.append(fromuser)
-                                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="Vote recorded, thank you",
                                                       channel=channel
                                                       )
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
 
                     case '-':
                         try:
@@ -391,65 +391,65 @@ class Votekick():
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == channel:
                                     if fromuser in chan.voter_users:
-                                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="You already submitted a vote",
                                                       channel=channel
                                                       )
                                     else:
                                         chan.vote_against += 1
                                         chan.voter_users.append(fromuser)
-                                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="Vote recorded, thank you",
                                                       channel=channel
                                                       )
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
 
                     case 'cancel':
                         try:
                             # vote cancel
                             if self.Admin.get_Admin(fromuser) is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
                                 return None
 
                             if channel is None:
                                 self.Logs.error(f"The channel is not known, defender can't cancel the vote")
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' You need to specify the channel => /msg {dnickname} vote_cancel #channel')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' You need to specify the channel => /msg {dnickname} vote_cancel #channel')
 
                             for vote in self.VOTE_CHANNEL_DB:
                                 if vote.channel_name == channel:
                                     self.init_vote_system(channel)
-                                    self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                    self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="Vote system re-initiated",
                                                       channel=channel
                                                       )
 
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
 
                     case 'status':
                         try:
                             # vote status
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == channel:
-                                    self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                    self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"Channel: {chan.channel_name} | Target: {self.User.get_nickname(chan.target_user)} | For: {chan.vote_for} | Against: {chan.vote_against} | Number of voters: {str(len(chan.voter_users))}",
                                                       channel=channel
                                                       )
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
 
                     case 'submit':
                         try:
                             # vote submit nickname
                             if self.Admin.get_Admin(fromuser) is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
                                 return None
 
                             nickname_submitted = cmd[2]
@@ -462,7 +462,7 @@ class Votekick():
                                     if vote.channel_name == channel:
                                         ongoing_user = self.User.get_nickname(vote.target_user)
 
-                                self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"There is an ongoing vote on {ongoing_user}",
                                                       channel=channel
                                                       )
@@ -470,7 +470,7 @@ class Votekick():
 
                             # check if the user exist
                             if user_submitted is None:
-                                self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"This nickname <{nickname_submitted}> do not exist",
                                                       channel=channel
                                                       )
@@ -479,7 +479,7 @@ class Votekick():
                             uid_cleaned = self.Base.clean_uid(uid_submitted)
                             ChannelInfo = self.Channel.get_Channel(channel)
                             if ChannelInfo is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' This channel [{channel}] do not exist in the Channel Object')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' This channel [{channel}] do not exist in the Channel Object')
                                 return False
 
                             clean_uids_in_channel: list = []
@@ -487,7 +487,7 @@ class Votekick():
                                 clean_uids_in_channel.append(self.Base.clean_uid(uid))
 
                             if not uid_cleaned in clean_uids_in_channel:
-                                self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"This nickname <{nickname_submitted}> is not available in this channel",
                                                       channel=channel
                                                       )
@@ -497,7 +497,7 @@ class Votekick():
                             pattern = fr'[o|B|S]'
                             operator_user = re.findall(pattern, user_submitted.umodes)
                             if operator_user:
-                                self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="You cant vote for this user ! he/she is protected",
                                                       channel=channel
                                                       )
@@ -507,40 +507,40 @@ class Votekick():
                                 if chan.channel_name == channel:
                                     chan.target_user = self.User.get_uid(nickname_submitted)
 
-                            self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                            self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"{nickname_submitted} has been targeted for a vote",
                                                       channel=channel
                                                       )
 
                             self.Base.create_timer(60, self.timer_vote_verdict, (channel, ))
-                            self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                            self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="This vote will end after 60 secondes",
                                                       channel=channel
                                                       )
 
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option} nickname')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option} adator')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option} nickname')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option} adator')
 
                     case 'verdict':
                         try:
                             # vote verdict
                             if self.Admin.get_Admin(fromuser) is None:
-                                self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f'Your are not allowed to execute this command')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f'Your are not allowed to execute this command')
                                 return None
 
                             for chan in self.VOTE_CHANNEL_DB:
                                 if chan.channel_name == channel:
                                     target_user = self.User.get_nickname(chan.target_user)
                                     if chan.vote_for > chan.vote_against:
-                                        self.Protocol.sendPrivMsg(nick_from=dnickname, 
+                                        self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg=f"User {self.Config.COLORS.bold}{target_user}{self.Config.COLORS.nogc} has {chan.vote_against} votes against and {chan.vote_for} votes for. For this reason, it\'ll be kicked from the channel",
                                                       channel=channel
                                                       )
                                         self.Protocol.send2socket(f":{dnickname} KICK {channel} {target_user} Following the vote, you are not welcome in {channel}")
                                     elif chan.vote_for <= chan.vote_against:
-                                        self.Protocol.sendPrivMsg(
+                                        self.Protocol.send_priv_msg(
                                             nick_from=dnickname, 
                                             msg=f"User {self.Config.COLORS.bold}{target_user}{self.Config.COLORS.nogc} has {chan.vote_against} votes against and {chan.vote_for} votes for. For this reason, it\'ll remain in the channel",
                                             channel=channel
@@ -548,22 +548,22 @@ class Votekick():
 
                                     # Init the system
                                     if self.init_vote_system(channel):
-                                        self.Protocol.sendPrivMsg(
+                                        self.Protocol.send_priv_msg(
                                             nick_from=dnickname, 
                                             msg="System vote re initiated",
                                             channel=channel
                                             )
                         except Exception as err:
                             self.Logs.error(f'{err}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
-                            self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} {command} {option}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Exemple /msg {dnickname} {command} {option}')
 
                     case _:
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote activate #channel')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote deactivate #channel')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote +')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote -')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote cancel')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote status')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote submit nickname')
-                        self.Protocol.sendNotice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote verdict')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote activate #channel')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote deactivate #channel')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote +')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote -')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote cancel')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote status')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote submit nickname')
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' /msg {dnickname} vote verdict')

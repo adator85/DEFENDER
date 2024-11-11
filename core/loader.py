@@ -1,4 +1,5 @@
 from core.classes import user, admin, channel, clone, reputation, settings
+import utils
 import core.definition as df
 import core.base as baseModule
 import core.classes.config as confModule
@@ -13,6 +14,8 @@ class Loader:
         self.ConfModule: confModule             = confModule
 
         self.BaseModule: baseModule             = baseModule
+
+        self.Utils: utils
 
         # Load Classes
         self.Settings: settings                 = settings.Settings()
