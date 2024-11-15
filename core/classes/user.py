@@ -92,7 +92,7 @@ class User:
             return False
 
         liste_umodes = list(umodes)
-        final_umodes_liste = [x for x in self.Base.Settings.USER_MODES if x in liste_umodes]
+        final_umodes_liste = [x for x in self.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
         final_umodes = ''.join(final_umodes_liste)
 
         userObj.umodes = f"+{final_umodes}"

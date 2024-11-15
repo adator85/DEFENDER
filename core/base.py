@@ -222,8 +222,8 @@ class Base:
         filter: list[str] = ['PING', f":{self.Config.SERVICE_PREFIX}auth"]
 
         # record.msg = record.getMessage().replace("PING", "[REDACTED]")
-        # if self.Settings.CONSOLE:
-            # print(record.getMessage())
+        if self.Settings.CONSOLE:
+            print(record.getMessage())
 
         for f in filter:
             if f in record.getMessage():

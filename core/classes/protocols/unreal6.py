@@ -1,8 +1,10 @@
 from re import match, findall
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 from ssl import SSLEOFError, SSLError
 from dataclasses import dataclass
+
+from websockets import serve
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -16,6 +18,12 @@ class Unrealircd6:
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
         self.__Settings = ircInstance.Base.Settings
+
+        self.known_protocol = ['SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
+                               'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
+                               'VERSION', 'REPUTATION', 'SVS2MODE', 
+                               'SLOG', 'NICK', 'PART', 'PONG'
+                               ]
 
         self.__Base.logs.info(f"** Loading protocol [{__name__}]")
 
@@ -103,6 +111,40 @@ class Unrealircd6:
 
         except Exception as err:
             self.__Base.logs.error(f"General Error: {err}")
+
+    def parse_server_msg(self, server_msg: list[str]) -> Union[str, None]:
+        """Parse the server message and return the command
+
+        Args:
+            server_msg (list[str]): The Original server message >>
+
+        Returns:
+            Union[str, None]: Return the command protocol name
+        """
+        protocol_exception = ['PING', 'SERVER', 'PROTOCTL']
+        increment = 0
+        server_msg_copy = server_msg.copy()
+        first_index = 0
+        second_index = 0
+        for index, element in enumerate(server_msg_copy):
+            # Handle the protocol exceptions ex. ping, server ....
+            if element in protocol_exception and index == 0:
+                return element
+
+            if element.startswith(':'):
+                increment += 1
+                first_index = index + 1 if increment == 1 else first_index
+                second_index = index if increment == 2 else second_index
+
+        second_index = len(server_msg_copy) if second_index == 0 else second_index
+
+        parsed_msg = server_msg_copy[first_index:second_index]
+
+        for cmd in parsed_msg:
+            if cmd in self.known_protocol:
+                return cmd
+
+        return None
 
     def link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
@@ -408,6 +450,32 @@ class Unrealircd6:
         self.__Irc.Channel.delete_user_from_channel(channel, userObj.uid)
         return None
 
+    def on_svs2mode(self, serverMsg: list[str]) -> None:
+        """Handle svs2mode coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # >> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
+
+            uid_user_to_edit = serverMsg[2]
+            umode = serverMsg[3]
+
+            userObj = self.__Irc.User.get_User(uid_user_to_edit)
+
+            if userObj is None:
+                return None
+
+            if self.__Irc.User.update_mode(userObj.uid, umode):
+                return None
+
+            return None
+        except IndexError as ie:
+            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+        except Exception as err:
+            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
     def on_umode2(self, serverMsg: list[str]) -> None:
         """Handle umode2 coming from a server
 
@@ -490,12 +558,32 @@ class Unrealircd6:
             serverMsg (list[str]): Original server message
         """
         # ['PROTOCTL', 'CHANMODES=beI,fkL,lFH,cdimnprstzCDGKMNOPQRSTVZ', 'USERMODES=diopqrstwxzBDGHIRSTWZ', 'BOOTED=1728815798', 'PREFIX=(qaohv)~&@%+', 'SID=001', 'MLOCK', 'TS=1730662755', 'EXTSWHOIS']
-        if len(serverMsg) > 5:
-            if '=' in serverMsg[5]:
-                serveur_hosting_id = str(serverMsg[5]).split('=')
-                self.__Config.HSID = serveur_hosting_id[1]
-            if 'USERMODES=' in serverMsg[2]:
-                self.__Settings.USER_MODES = list(serverMsg[2].split('=')[1])
+        user_modes: str = None
+        prefix: str = None
+        host_server_id: str = None
+
+        for msg in serverMsg:
+            pattern = None
+            if msg.startswith('PREFIX='):
+                pattern = r'^PREFIX=\((.*)\).*$'
+                find_match = match(pattern, msg)
+                prefix = find_match.group(1) if find_match else None
+                if find_match:
+                    prefix = find_match.group(1)
+
+            elif msg.startswith('USERMODES='):
+                pattern = r'^USERMODES=(.*)$'
+                find_match = match(pattern, msg)
+                user_modes = find_match.group(1) if find_match else None
+            elif msg.startswith('SID='):
+                host_server_id = msg.split('=')[1]
+
+        if user_modes is None or prefix is None or host_server_id is None:
+            return None
+
+        self.__Config.HSID = host_server_id
+        self.__Settings.PROTOCTL_USER_MODES = list(user_modes)
+        self.__Settings.PROTOCTL_PREFIX = list(prefix)
 
         return None
 
@@ -630,7 +718,7 @@ class Unrealircd6:
             else:
                 geoip = None
 
-            score_connexion = 0
+            score_connexion = self.__Irc.first_score
 
             self.__Irc.User.insert(
                 self.__Irc.Loader.Definition.MUser(
@@ -662,7 +750,7 @@ class Unrealircd6:
             serverMsg (list[str]): List of str coming from the server
         """
         try:
-
+            # 
             pong = str(serverMsg[1]).replace(':','')
             self.send2socket(f"PONG :{pong}", print_log=False)
 
@@ -754,7 +842,7 @@ class Unrealircd6:
 
     def on_version_msg(self, serverMsg: list[str]) -> None:
         """Handle version coming from the server
-
+        \n ex. /version Defender
         Args:
             serverMsg (list[str]): Original message from the server
         """
@@ -776,7 +864,7 @@ class Unrealircd6:
             response_005 = ' | '.join(modules)
             self.send2socket(f':{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server')
 
-            response_005 = ''.join(self.__Settings.USER_MODES)
+            response_005 = ''.join(self.__Settings.PROTOCTL_USER_MODES)
             self.send2socket(f":{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server")
 
             return None

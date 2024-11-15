@@ -11,4 +11,5 @@ class Settings:
 
     CONSOLE: bool                   = False
 
-    USER_MODES: list[str]           = []
+    PROTOCTL_USER_MODES: list[str]   = []
+    PROTOCTL_PREFIX: list[str]       = []

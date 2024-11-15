@@ -18,7 +18,7 @@ import core.definition as df
 #           4 . Créer vos tables, en utilisant toujours le nom des votre classe en minuscule ==> defender_votre-table
 #       3. Methode suivantes:
 #           cmd(self, data:list)
-#           _hcmds(self, user:str, cmd: list)
+#           hcmds(self, user:str, cmd: list)
 #           unload(self)
 
 if TYPE_CHECKING:
@@ -990,7 +990,7 @@ class Defender():
             match cmd[1]:
 
                 case 'REPUTATION':
-                    # :001 REPUTATION 91.168.141.239 118
+                    # :001 REPUTATION 8.8.8.8 118
                     try:
                         self.reputation_first_connexion['ip'] = cmd[2]
                         self.reputation_first_connexion['score'] = cmd[3]
@@ -1183,7 +1183,7 @@ class Defender():
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         command = str(cmd[0]).lower()
         fromuser = user
@@ -1213,12 +1213,12 @@ class Defender():
             case 'show_reputation':
 
                 if not self.Reputation.UID_REPUTATION_DB:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" No one is suspected")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
 
                 for suspect in self.Reputation.UID_REPUTATION_DB:
                     self.Protocol.send_notice(nick_from=dnickname, 
                                              nick_to=fromuser, 
-                                             msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score_connexion} | Secret code: {suspect.secret_code} | Connected on: {suspect.connected_datetime}")
+                                             msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score_connexion} | Secret code: {suspect.secret_code} | Connected on: {suspect.connexion_datetime}")
 
             case 'code':
                 try:
