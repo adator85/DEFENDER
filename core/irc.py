@@ -1,3 +1,5 @@
+from ast import parse
+from http import server
 import sys
 import socket
 import threading
@@ -73,10 +75,13 @@ class Irc:
         self.autolimit_started: bool = False
         """This variable is to make sure the thread is not running"""
 
-        self.first_score: int = 100
+        # define first reputation score to 0
+        self.first_score: int = 0
 
+        # Define the dict that will contain all loaded modules
         self.loaded_classes:dict[str, 'Irc'] = {}           # Definir la variable qui contiendra la liste modules chargés
 
+        # Define the IrcSocket object
         self.IrcSocket:Union[socket.socket, SSLSocket] = None
 
         # Liste des commandes internes du bot
@@ -731,109 +736,28 @@ class Irc:
         """
         try:
             original_response: list[str] = data.copy()
-
             interm_response: list[str] = data.copy()
             """This the original without first value"""
-
             interm_response.pop(0)
 
             if len(original_response) == 0 or len(original_response) == 1:
                 self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
                 return False
 
-            if len(original_response) == 7:
-                if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
-                    data_copy = original_response.copy()
-                    data_copy[6] = '**********'
-                    self.Logs.debug(f">> {data_copy}")
-                else:
-                    self.Logs.debug(f">> {original_response}")
-            else:
-                self.Logs.debug(f">> {original_response}")
+            parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
 
-            match original_response[0]:
+            match parsed_protocol:
 
                 case 'PING':
-                    # Sending PONG response to the serveur
-                    self.Protocol.on_server_ping(original_response)
+                    self.Protocol.on_server_ping(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
                     return None
 
-                case 'PROTOCTL':
-                    #['PROTOCTL', 'CHANMODES=beI,fkL,lFH,cdimnprstzCDGKMNOPQRSTVZ', 'USERMODES=diopqrstwxzBDGHIRSTWZ', 'BOOTED=1702138935', 
-                    # 'PREFIX=(qaohv)~&@%+', 'SID=001', 'MLOCK', 'TS=1703793941', 'EXTSWHOIS']
+                case 'SJOIN':
+                    self.Protocol.on_sjoin(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
 
-                    # GET SERVER ID HOST
-                    self.Protocol.on_protoctl(serverMsg=original_response)
-
-                    return None
-
-                case _:
-                    pass
-
-            if len(original_response) < 2:
-                return False
-
-            match original_response[1]:
-                
-                case 'PING':
-                    # Sending PONG response to the serveur
-                    self.Protocol.on_server_ping(original_response)
-                    return None
-                
-                case 'SLOG':
-                    # self.Base.scan_ports(cmd[7])
-                    # if self.Config.ABUSEIPDB == 1:
-                    #     self.Base.create_thread(self.abuseipdb_scan, (cmd[7], ))
-                    pass
-
-                case 'VERSION':
-                    self.Protocol.on_version_msg(original_response)
-
-                case 'UMODE2':
-                    # [':adator_', 'UMODE2', '-i']
-                    self.Protocol.on_umode2(serverMsg=original_response)
-
-                case 'SQUIT':
-
-                    self.Protocol.on_squit(serverMsg=original_response)
-
-                case 'REPUTATION':
-                    # :001 REPUTATION 127.0.0.1 118
-                    try:
-                        self.first_connexion_ip = original_response[2]
-
-                        self.first_score = 0
-                        if str(original_response[3]).find('*') != -1:
-                            # If * available, it means that an ircop changed the repurtation score
-                            # means also that the user exist will try to update all users with same IP
-                            self.first_score = int(str(original_response[3]).replace('*',''))
-                            for user in self.User.UID_DB:
-                                if user.remote_ip == self.first_connexion_ip:
-                                    user.score_connexion = self.first_score
-                        else:
-                            self.first_score = int(original_response[3])
-
-                        # Possibilité de déclancher les bans a ce niveau.
-                    except IndexError as ie:
-                        self.Logs.error(f'{ie}')
-                    except ValueError as ve:
-                        self.first_score = 0
-                        self.Logs.error(f'Impossible to convert first_score: {ve}')
-
-                case '320':
-                    #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
-                    pass
-
-                case '318':
-                    #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
-                    pass
-
-                case 'MD':
-                    # [':001', 'MD', 'client', '001CG0TG7', 'webirc', ':2']
-                    pass
-
-                case 'EOS':
-
+                case 'EOS': # TODO
                     hsid = str(original_response[0]).replace(':','')
                     if hsid == self.Config.HSID:
                         if self.Config.DEFENDER_INIT == 1:
@@ -886,44 +810,8 @@ class Irc:
                             classe_object.cmd(original_response)
 
                         # Stop here When EOS
+                        # print(f"** handle {parsed_protocol}")
                         return None
-
-                case _:
-                    pass
-
-            if len(original_response) < 3:
-                return False
-
-            match original_response[2]:
-
-                case 'VERSION':
-                    self.Protocol.on_version_msg(original_response)
-
-                case 'QUIT':
-
-                    self.Protocol.on_quit(serverMsg=original_response)
-
-                case 'PONG':
-                    # ['@msgid=aTNJhp17kcPboF5diQqkUL;time=2023-12-28T20:35:58.411Z', ':irc.deb.biz.st', 'PONG', 'irc.deb.biz.st', ':Dev-PyDefender']
-                    self.Base.execute_periodic_action()
-
-                case 'NICK':
-
-                    self.Protocol.on_nick(original_response)
-
-                case 'MODE':
-                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6+Z4494xWUg;time=2024-08-09T12:45:36.651Z', 
-                    # ':001', 'MODE', '#a', '+nt', '1723207536']
-                    # [':adator_', 'UMODE2', '-i']
-                    pass
-
-                case 'SJOIN':
-
-                    self.Protocol.on_sjoin(serverMsg=original_response)
-
-                case 'PART':
-
-                    self.Protocol.on_part(serverMsg=original_response)
 
                 case 'UID':
                     try:
@@ -932,10 +820,76 @@ class Irc:
                         for classe_name, classe_object in self.loaded_classes.items():
                             classe_object.cmd(original_response)
 
+                        # print(f"** handle {parsed_protocol}")
+
                     except Exception as err:
                         self.Logs.error(f'General Error: {err}')
 
-                case 'PRIVMSG':
+                case 'QUIT':
+                    self.Protocol.on_quit(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'PROTOCTL':
+                    self.Protocol.on_protoctl(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'SVS2MODE':
+                    # >> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
+                    self.Protocol.on_svs2mode(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'SQUIT':
+                    self.Protocol.on_squit(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'PART':
+                    self.Protocol.on_part(serverMsg=parsed_protocol)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'VERSION':
+                    self.Protocol.on_version_msg(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'UMODE2':
+                    # [':adator_', 'UMODE2', '-i']
+                    self.Protocol.on_umode2(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'NICK':
+                    self.Protocol.on_nick(serverMsg=original_response)
+                    # print(f"** handle {parsed_protocol}")
+
+                case 'REPUTATION': # TODO
+                    # :001 REPUTATION 127.0.0.1 118
+                    try:
+                        self.first_connexion_ip = original_response[2]
+                        self.first_score = 0
+
+                        if str(original_response[3]).find('*') != -1:
+                            # If * available, it means that an ircop changed the repurtation score
+                            # means also that the user exist will try to update all users with same IP
+                            self.first_score = int(str(original_response[3]).replace('*',''))
+                            for user in self.User.UID_DB:
+                                if user.remote_ip == self.first_connexion_ip:
+                                    user.score_connexion = self.first_score
+                        else:
+                            self.first_score = int(original_response[3])
+
+                        # print(f"** handle {parsed_protocol}")
+                        # Possibilité de déclancher les bans a ce niveau.
+                    except IndexError as ie:
+                        self.Logs.error(f'{ie}')
+                    except ValueError as ve:
+                        self.first_score = 0
+                        self.Logs.error(f'Impossible to convert first_score: {ve}')
+
+                case 'SLOG': # TODO
+                    print(f"** handle {parsed_protocol}")
+
+                case 'MD': # TODO
+                    print(f"** handle {parsed_protocol}")
+
+                case 'PRIVMSG': # TODO
                     try:
                         # Supprimer la premiere valeur
                         cmd = interm_response.copy()
@@ -975,7 +929,7 @@ class Irc:
                             self.Base.log_cmd(user_trigger, cmd_to_send)
 
                             fromchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(cmd[2]) else None
-                            self._hcmds(user_trigger, fromchannel, arg, cmd)
+                            self.hcmds(user_trigger, fromchannel, arg, cmd)
 
                         if cmd[2] == self.Config.SERVICE_ID:
                             pattern = fr'^:.*?:(.*)$'
@@ -1013,13 +967,41 @@ class Irc:
                                 if len(arg) >= 2:
                                     fromchannel = str(arg[1]).lower() if self.Channel.Is_Channel(arg[1]) else None
 
-                                self._hcmds(user_trigger, fromchannel, arg, cmd)
+                                self.hcmds(user_trigger, fromchannel, arg, cmd)
+                        # print(f"** handle {parsed_protocol}")
 
                     except IndexError as io:
                         self.Logs.error(f'{io}')
 
-                case _:
-                    pass
+                case 'PONG': # TODO
+                    print(f"** handle {parsed_protocol}")
+
+                case 'MODE': # TODO
+                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6+Z4494xWUg;time=2024-08-09T12:45:36.651Z', 
+                    # ':001', 'MODE', '#a', '+nt', '1723207536']
+                    # [':adator_', 'UMODE2', '-i']
+                    print(f"** handle {parsed_protocol}")
+
+                case '320': # TODO
+                    #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
+                    print(f"** handle {parsed_protocol}")
+
+                case '318': # TODO
+                    #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
+                    print(f"** handle {parsed_protocol}")
+
+                case None:
+                    print(f"** TO BE HANDLE {original_response}")
+
+            if len(original_response) == 7:
+                if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
+                    data_copy = original_response.copy()
+                    data_copy[6] = '**********'
+                    self.Logs.debug(f">> {data_copy}")
+                else:
+                    self.Logs.debug(f">> {original_response}")
+            else:
+                self.Logs.debug(f">> {original_response}")
 
             if original_response[2] != 'UID':
                 # Envoyer la commande aux classes dynamiquement chargées
@@ -1032,8 +1014,8 @@ class Irc:
             self.Logs.error(f"General Error: {err}")
             self.Logs.error(f"General Error: {traceback.format_exc()}")
 
-    def _hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
-        """_summary_
+    def hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
+        """Create
 
         Args:
             user (str): The user who sent the query
@@ -1064,7 +1046,7 @@ class Irc:
         # Envoyer la commande aux classes dynamiquement chargées
         if command != 'notallowed':
             for classe_name, classe_object in self.loaded_classes.items():
-                classe_object._hcmds(user, channel, cmd, fullcmd)
+                classe_object.hcmds(user, channel, cmd, fullcmd)
 
         match command:
 

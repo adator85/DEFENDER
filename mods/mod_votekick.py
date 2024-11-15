@@ -274,7 +274,7 @@ class Votekick():
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
         # cmd is the command starting from the user command
         # full cmd is sending the entire server response
 

@@ -306,7 +306,7 @@ class Clone():
         except Exception as err:
             self.Logs.error(f'General Error: {err}')
 
-    def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         try:
             command = str(cmd[0]).lower()
