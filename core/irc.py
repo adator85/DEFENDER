@@ -750,12 +750,12 @@ class Irc:
 
                 case 'PING':
                     self.Protocol.on_server_ping(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
                     return None
 
                 case 'SJOIN':
                     self.Protocol.on_sjoin(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'EOS': # TODO
                     hsid = str(original_response[0]).replace(':','')
@@ -810,7 +810,7 @@ class Irc:
                             classe_object.cmd(original_response)
 
                         # Stop here When EOS
-                        # print(f"** handle {parsed_protocol}")
+                        self.Logs.debug(f"** handle {parsed_protocol}")
                         return None
 
                 case 'UID':
@@ -820,44 +820,44 @@ class Irc:
                         for classe_name, classe_object in self.loaded_classes.items():
                             classe_object.cmd(original_response)
 
-                        # print(f"** handle {parsed_protocol}")
+                        self.Logs.debug(f"** handle {parsed_protocol}")
 
                     except Exception as err:
                         self.Logs.error(f'General Error: {err}')
 
                 case 'QUIT':
                     self.Protocol.on_quit(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'PROTOCTL':
                     self.Protocol.on_protoctl(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'SVS2MODE':
                     # >> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
                     self.Protocol.on_svs2mode(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'SQUIT':
                     self.Protocol.on_squit(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'PART':
                     self.Protocol.on_part(serverMsg=parsed_protocol)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'VERSION':
                     self.Protocol.on_version_msg(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'UMODE2':
                     # [':adator_', 'UMODE2', '-i']
                     self.Protocol.on_umode2(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'NICK':
                     self.Protocol.on_nick(serverMsg=original_response)
-                    # print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'REPUTATION': # TODO
                     # :001 REPUTATION 127.0.0.1 118
@@ -875,7 +875,7 @@ class Irc:
                         else:
                             self.first_score = int(original_response[3])
 
-                        # print(f"** handle {parsed_protocol}")
+                        self.Logs.debug(f"** handle {parsed_protocol}")
                         # Possibilité de déclancher les bans a ce niveau.
                     except IndexError as ie:
                         self.Logs.error(f'{ie}')
@@ -884,10 +884,10 @@ class Irc:
                         self.Logs.error(f'Impossible to convert first_score: {ve}')
 
                 case 'SLOG': # TODO
-                    print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'MD': # TODO
-                    print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'PRIVMSG': # TODO
                     try:
@@ -974,24 +974,23 @@ class Irc:
                         self.Logs.error(f'{io}')
 
                 case 'PONG': # TODO
-                    print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'MODE': # TODO
-                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6+Z4494xWUg;time=2024-08-09T12:45:36.651Z', 
-                    # ':001', 'MODE', '#a', '+nt', '1723207536']
-                    # [':adator_', 'UMODE2', '-i']
-                    print(f"** handle {parsed_protocol}")
+                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6...', ':001', 'MODE', '#a', '+nt', '1723207536']
+                    #['@unrealircd.org/userhost=adator@localhost;...', ':001LQ0L0C', 'MODE', '#services', '-l']
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case '320': # TODO
                     #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
-                    print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case '318': # TODO
                     #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
-                    print(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case None:
-                    print(f"** TO BE HANDLE {original_response}")
+                    self.Logs.debug(f"** TO BE HANDLE {original_response}")
 
             if len(original_response) == 7:
                 if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
@@ -1003,10 +1002,11 @@ class Irc:
             else:
                 self.Logs.debug(f">> {original_response}")
 
-            if original_response[2] != 'UID':
-                # Envoyer la commande aux classes dynamiquement chargées
-                for classe_name, classe_object in self.loaded_classes.items():
-                    classe_object.cmd(original_response)
+            if len(original_response) > 2:
+                if original_response[2] != 'UID':
+                    # Envoyer la commande aux classes dynamiquement chargées
+                    for classe_name, classe_object in self.loaded_classes.items():
+                        classe_object.cmd(original_response)
 
         except IndexError as ie:
             self.Logs.error(f"{ie} / {original_response} / length {str(len(original_response))}")
