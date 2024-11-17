@@ -2,6 +2,8 @@ from re import findall
 from typing import Union, Literal, TYPE_CHECKING
 from dataclasses import asdict
 
+from core.classes import user
+
 if TYPE_CHECKING:
     from core.definition import MChannel
     from core.base import Base
@@ -30,6 +32,10 @@ class Channel:
         """
         result = False
         exist = False
+
+        if not self.Is_Channel(newChan.name):
+            self.Logs.error(f"The channel {newChan.name} is not valid, channel must start with #")
+            return False
 
         for record in self.UID_CHANNEL_DB:
             if record.name.lower() == newChan.name.lower():
@@ -128,6 +134,29 @@ class Channel:
             return True
         except Exception as err:
             self.Logs.error(f'{err}')
+
+    def is_user_present_in_channel(self, channel_name: str, uid: str) -> bool:
+        """Check if a user is present in the channel
+
+        Args:
+            channel_name (str): The channel to check
+            uid (str): The UID
+
+        Returns:
+            bool: True if the user is present in the channel
+        """
+        user_found = False
+        chan = self.get_Channel(channel_name=channel_name)
+        if chan is None:
+            return user_found
+
+        clean_uid = self.Base.clean_uid(uid=uid)
+        for chan_uid in chan.uids:
+            if self.Base.clean_uid(chan_uid) == clean_uid:
+                user_found = True
+                break
+
+        return user_found
 
     def clean_channel(self) -> None:
         """Remove Channels if empty

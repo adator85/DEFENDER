@@ -476,6 +476,17 @@ class Unrealircd6:
         except Exception as err:
             self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
+    def on_mode(self, serverMsg: list[str]) -> None:
+        """Handle mode coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6...', ':001', 'MODE', '#a', '+nt', '1723207536']
+        #['@unrealircd.org/userhost=adator@localhost;...', ':001LQ0L0C', 'MODE', '#services', '-l']
+
+        return None
+
     def on_umode2(self, serverMsg: list[str]) -> None:
         """Handle umode2 coming from a server
 
@@ -622,8 +633,11 @@ class Unrealircd6:
             # ':001T6VU3F', '001JGWB2K', '@11ZAAAAAB', 
             # '001F16WGR', '001X9YMGQ', '*+001DYPFGP', '@00BAAAAAJ', '001AAGOG9', '001FMFVG8', '001DAEEG7', 
             # '&~G:unknown-users', '"~G:websocket-users', '"~G:known-users', '"~G:webirc-users']
+            # [':00B', 'SJOIN', '1731872579', '#services', '+', ':00BAAAAAB']
             serverMsg_copy = serverMsg.copy()
-            serverMsg_copy.pop(0)
+            if serverMsg_copy[0].startswith('@'):
+                serverMsg_copy.pop(0)
+
             channel = str(serverMsg_copy[3]).lower()
             len_cmd = len(serverMsg_copy)
             list_users:list = []

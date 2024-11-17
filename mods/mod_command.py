@@ -252,7 +252,7 @@ class Command:
                         if userObj is None:
                             return None
 
-                        if 'r' not in userObj.umodes:
+                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
                             return None
 
                         db_data: dict[str, str] = {"nickname": userObj.nickname, "channel": channel_name}
@@ -285,12 +285,13 @@ class Command:
                     option: str = str(cmd[1]).lower()
                     match option:
                         case 'set':
+                            allowed_modes: list[str] = self.Base.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
+
                             if len(cmd) < 5:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} [nickname] [+/-mode] [#channel]")
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"AutoModes available: {' / '.join(allowed_modes)}")
                                 return None
 
-                            allowed_modes: list[str] = self.Base.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
                             # userObj: MUser = self.User.get_User(str(cmd[2]))
                             nickname = str(cmd[2])
                             mode = str(cmd[3])
@@ -342,7 +343,8 @@ class Command:
 
                                 if db_query.rowcount > 0:
                                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Automode {mode} applied to {nickname} in {chan}")
-                                    self.Protocol.send2socket(f":{service_id} MODE {chan} {mode} {nickname}")
+                                    if self.Channel.is_user_present_in_channel(chan, self.User.get_uid(nickname)):
+                                        self.Protocol.send2socket(f":{service_id} MODE {chan} {mode} {nickname}")
                             else:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"AUTOMODE {mode} cannot be added to {nickname} in {chan} because it doesn't exist")
 
