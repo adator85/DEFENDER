@@ -1281,6 +1281,10 @@ class Defender():
                 try:
                     # autolimit on
                     # autolimit set [amount] [interval]
+                    if len(cmd) < 2:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]")
+                        return None
 
                     arg = str(cmd[1]).lower()
 
@@ -1314,12 +1318,12 @@ class Defender():
                                 )
 
                         case _:
-                            self.Protocol.send_notice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON", nickname=fromuser)
-                            self.Protocol.send_notice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]", nickname=fromuser)
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]")
 
                 except Exception as err:
-                    self.Protocol.send_notice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON", nickname=fromuser)
-                    self.Protocol.send_notice(nick_from=dnickname, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]", nickname=fromuser)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} ON")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {self.Config.SERVICE_NICKNAME} {command.upper()} SET [AMOUNT] [INTERVAL]")
                     self.Logs.error(f"Value Error -> {err}")
 
             case 'reputation':

@@ -11,6 +11,8 @@ import traceback
 from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import Union
+
+from websockets import serve
 from core.loader import Loader
 from core.classes.protocol import Protocol
 
@@ -744,6 +746,16 @@ class Irc:
                 self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
                 return False
 
+            if len(original_response) == 7:
+                if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
+                    data_copy = original_response.copy()
+                    data_copy[6] = '**********'
+                    self.Logs.debug(f">> {data_copy}")
+                else:
+                    self.Logs.debug(f">> {original_response}")
+            else:
+                self.Logs.debug(f">> {original_response}")
+
             parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
 
             match parsed_protocol:
@@ -757,61 +769,9 @@ class Irc:
                     self.Protocol.on_sjoin(serverMsg=original_response)
                     self.Logs.debug(f"** handle {parsed_protocol}")
 
-                case 'EOS': # TODO
-                    hsid = str(original_response[0]).replace(':','')
-                    if hsid == self.Config.HSID:
-                        if self.Config.DEFENDER_INIT == 1:
-                            current_version = self.Config.CURRENT_VERSION
-                            latest_version = self.Config.LATEST_VERSION
-                            if self.Base.check_for_new_version(False):
-                                version = f'{current_version} >>> {latest_version}'
-                            else:
-                                version = f'{current_version}'
-
-                            print(f"################### DEFENDER ###################")
-                            print(f"#               SERVICE CONNECTE                ")
-                            print(f"# SERVEUR  :    {self.Config.SERVEUR_IP}        ")
-                            print(f"# PORT     :    {self.Config.SERVEUR_PORT}      ")
-                            print(f"# SSL      :    {self.Config.SERVEUR_SSL}       ")
-                            print(f"# SSL VER  :    {self.Config.SSL_VERSION}       ")
-                            print(f"# NICKNAME :    {self.Config.SERVICE_NICKNAME}  ")
-                            print(f"# CHANNEL  :    {self.Config.SERVICE_CHANLOG}   ")
-                            print(f"# VERSION  :    {version}                       ")
-                            print(f"################################################")
-
-                            self.Logs.info(f"################### DEFENDER ###################")
-                            self.Logs.info(f"#               SERVICE CONNECTE                ")
-                            self.Logs.info(f"# SERVEUR  :    {self.Config.SERVEUR_IP}        ")
-                            self.Logs.info(f"# PORT     :    {self.Config.SERVEUR_PORT}      ")
-                            self.Logs.info(f"# SSL      :    {self.Config.SERVEUR_SSL}       ")
-                            self.Logs.info(f"# SSL VER  :    {self.Config.SSL_VERSION}       ")
-                            self.Logs.info(f"# NICKNAME :    {self.Config.SERVICE_NICKNAME}  ")
-                            self.Logs.info(f"# CHANNEL  :    {self.Config.SERVICE_CHANLOG}   ")
-                            self.Logs.info(f"# VERSION  :    {version}                       ")
-                            self.Logs.info(f"################################################")
-
-                            if self.Base.check_for_new_version(False):
-                                self.Protocol.send_priv_msg(
-                                    nick_from=self.Config.SERVICE_NICKNAME,
-                                    msg=f" New Version available {version}",
-                                    channel=self.Config.SERVICE_CHANLOG
-                                )
-
-                        # Initialisation terminé aprés le premier PING
-                        self.Protocol.send_priv_msg(
-                            nick_from=self.Config.SERVICE_NICKNAME,
-                            msg=f"[{self.Config.COLORS.green}INFORMATION{self.Config.COLORS.nogc}] >> Defender is ready",
-                            channel=self.Config.SERVICE_CHANLOG
-                        )
-                        self.Config.DEFENDER_INIT = 0
-
-                        # Send EOF to other modules
-                        for classe_name, classe_object in self.loaded_classes.items():
-                            classe_object.cmd(original_response)
-
-                        # Stop here When EOS
-                        self.Logs.debug(f"** handle {parsed_protocol}")
-                        return None
+                case 'EOS':
+                    self.Protocol.on_eos(serverMsg=original_response)
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'UID':
                     try:
@@ -859,29 +819,9 @@ class Irc:
                     self.Protocol.on_nick(serverMsg=original_response)
                     self.Logs.debug(f"** handle {parsed_protocol}")
 
-                case 'REPUTATION': # TODO
-                    # :001 REPUTATION 127.0.0.1 118
-                    try:
-                        self.first_connexion_ip = original_response[2]
-                        self.first_score = 0
-
-                        if str(original_response[3]).find('*') != -1:
-                            # If * available, it means that an ircop changed the repurtation score
-                            # means also that the user exist will try to update all users with same IP
-                            self.first_score = int(str(original_response[3]).replace('*',''))
-                            for user in self.User.UID_DB:
-                                if user.remote_ip == self.first_connexion_ip:
-                                    user.score_connexion = self.first_score
-                        else:
-                            self.first_score = int(original_response[3])
-
-                        self.Logs.debug(f"** handle {parsed_protocol}")
-                        # Possibilité de déclancher les bans a ce niveau.
-                    except IndexError as ie:
-                        self.Logs.error(f'{ie}')
-                    except ValueError as ve:
-                        self.first_score = 0
-                        self.Logs.error(f'Impossible to convert first_score: {ve}')
+                case 'REPUTATION':
+                    self.Protocol.on_reputation(serverMsg=original_response)
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'SLOG': # TODO
                     self.Logs.debug(f"** handle {parsed_protocol}")
@@ -889,89 +829,9 @@ class Irc:
                 case 'MD': # TODO
                     self.Logs.debug(f"** handle {parsed_protocol}")
 
-                case 'PRIVMSG': # TODO
-                    try:
-                        # Supprimer la premiere valeur
-                        cmd = interm_response.copy()
-
-                        get_uid_or_nickname = str(cmd[0].replace(':',''))
-                        user_trigger = self.User.get_nickname(get_uid_or_nickname)
-                        dnickname = self.Config.SERVICE_NICKNAME
-
-                        if len(cmd) == 6:
-                            if cmd[1] == 'PRIVMSG' and str(cmd[3]).replace(self.Config.SERVICE_PREFIX,'') == ':auth':
-                                cmd_copy = cmd.copy()
-                                cmd_copy[5] = '**********'
-                                self.Logs.info(f'>> {cmd_copy}')
-                            else:
-                                self.Logs.info(f'>> {cmd}')
-                        else:
-                            self.Logs.info(f'>> {cmd}')
-
-                        pattern = fr'(:\{self.Config.SERVICE_PREFIX})(.*)$'
-                        hcmds = re.search(pattern, ' '.join(cmd)) # va matcher avec tout les caractéres aprés le .
-
-                        if hcmds: # Commande qui commencent par le point
-                            liste_des_commandes = list(hcmds.groups())
-                            convert_to_string = ' '.join(liste_des_commandes)
-                            arg = convert_to_string.split()
-                            arg.remove(f':{self.Config.SERVICE_PREFIX}')
-                            if not arg[0].lower() in self.commands:
-                                self.Logs.debug(f"This command {arg[0]} is not available")
-                                self.Protocol.send_notice(
-                                    nick_from=self.Config.SERVICE_NICKNAME,
-                                    nick_to=user_trigger,
-                                    msg=f"This command [{self.Config.COLORS.bold}{arg[0]}{self.Config.COLORS.bold}] is not available"
-                                )
-                                return None
-
-                            cmd_to_send = convert_to_string.replace(':','')
-                            self.Base.log_cmd(user_trigger, cmd_to_send)
-
-                            fromchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(cmd[2]) else None
-                            self.hcmds(user_trigger, fromchannel, arg, cmd)
-
-                        if cmd[2] == self.Config.SERVICE_ID:
-                            pattern = fr'^:.*?:(.*)$'
-
-                            hcmds = re.search(pattern, ' '.join(cmd))
-
-                            if hcmds: # par /msg defender [commande]
-                                liste_des_commandes = list(hcmds.groups())
-                                convert_to_string = ' '.join(liste_des_commandes)
-                                arg = convert_to_string.split()
-
-                                # Réponse a un CTCP VERSION
-                                if arg[0] == '\x01VERSION\x01':
-                                    self.Protocol.on_version(original_response)
-                                    return False
-
-                                # Réponse a un TIME
-                                if arg[0] == '\x01TIME\x01':
-                                    self.Protocol.on_time(original_response)
-                                    return False
-
-                                # Réponse a un PING
-                                if arg[0] == '\x01PING':
-                                    self.Protocol.on_ping(original_response)
-                                    return False
-
-                                if not arg[0].lower() in self.commands:
-                                    self.Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
-                                    return False
-
-                                cmd_to_send = convert_to_string.replace(':','')
-                                self.Base.log_cmd(user_trigger, cmd_to_send)
-
-                                fromchannel = None
-                                if len(arg) >= 2:
-                                    fromchannel = str(arg[1]).lower() if self.Channel.Is_Channel(arg[1]) else None
-
-                                self.hcmds(user_trigger, fromchannel, arg, cmd)
-                        # print(f"** handle {parsed_protocol}")
-
-                    except IndexError as io:
-                        self.Logs.error(f'{io}')
+                case 'PRIVMSG':
+                    self.Protocol.on_privmsg(serverMsg=original_response)
+                    self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'PONG': # TODO
                     self.Logs.debug(f"** handle {parsed_protocol}")
@@ -991,16 +851,6 @@ class Irc:
 
                 case None:
                     self.Logs.debug(f"** TO BE HANDLE {original_response}")
-
-            if len(original_response) == 7:
-                if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
-                    data_copy = original_response.copy()
-                    data_copy[6] = '**********'
-                    self.Logs.debug(f">> {data_copy}")
-                else:
-                    self.Logs.debug(f">> {original_response}")
-            else:
-                self.Logs.debug(f">> {original_response}")
 
             if len(original_response) > 2:
                 if original_response[2] != 'UID':
@@ -1606,7 +1456,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f'{key} > {value}'
+                        msg=f'{key} = {value}'
                         )
 
             case 'uptime':
