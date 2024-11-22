@@ -2,9 +2,6 @@ from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Union
 from ssl import SSLEOFError, SSLError
-from dataclasses import dataclass
-
-from websockets import serve
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -865,11 +862,10 @@ class Unrealircd6:
         try:
             srv_msg = serverMsg.copy()
 
-            # Supprimer la premiere valeur
-            if srv_msg[0].startswith('@'):
-                srv_msg.pop(0)
-
-            cmd = srv_msg
+            cmd = serverMsg.copy()
+            # Supprimer la premiere valeur si MTAGS activé
+            if cmd[0].startswith('@'):
+                cmd.pop(0)
 
             # Hide auth logs
             if len(cmd) == 7:
