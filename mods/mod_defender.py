@@ -81,11 +81,16 @@ class Defender():
         self.Reputation = ircInstance.Reputation
 
         # Create module commands (Mandatory)
-        self.commands_level = {
-            0: ['code'],
-            1: ['info', 'autolimit'],
-            3: ['reputation','proxy_scan', 'flood', 'status', 'timer','show_reputation', 'sentinel']
-        }
+        self.Irc.build_command(0, self.module_name, 'code', 'Display the code or key for access')
+        self.Irc.build_command(1, self.module_name, 'info', 'Provide information about the channel or server')
+        self.Irc.build_command(1, self.module_name, 'autolimit', 'Automatically set channel user limits')
+        self.Irc.build_command(3, self.module_name, 'reputation', 'Check or manage user reputation')
+        self.Irc.build_command(3, self.module_name, 'proxy_scan', 'Scan users for proxy connections')
+        self.Irc.build_command(3, self.module_name, 'flood', 'Handle flood detection and mitigation')
+        self.Irc.build_command(3, self.module_name, 'status', 'Check the status of the server or bot')
+        self.Irc.build_command(3, self.module_name, 'timer', 'Set or manage timers')
+        self.Irc.build_command(3, self.module_name, 'show_reputation', 'Display reputation information')
+        self.Irc.build_command(3, self.module_name, 'sentinel', 'Monitor and guard the channel or server')
 
         # Init the module (Mandatory)
         self.__init_module()
@@ -94,9 +99,6 @@ class Defender():
         self.Logs.debug(f'-- Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
-
-        # Insert module commands into the core one (Mandatory)
-        self.__set_commands(self.commands_level)
 
         # Create you own tables if needed (Mandatory)
         self.__create_tables()
@@ -147,20 +149,6 @@ class Defender():
         if self.ModConfig.reputation == 1:
             self.Protocol.sjoin(self.Config.SALON_JAIL)
             self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.SALON_JAIL} +o {self.Config.SERVICE_NICKNAME}")
-
-        return None
-
-    def __set_commands(self, commands: dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if c not in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 

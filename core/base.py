@@ -661,10 +661,25 @@ class Base:
             )
         '''
 
+        table_core_client = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_CLIENT} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            createdOn TEXT,
+            account TEXT,
+            nickname TEXT,
+            hostname TEXT,
+            vhost TEXT,
+            realname TEXT,
+            email TEXT,
+            password TEXT,
+            level INTEGER
+            )
+        '''
+
         self.db_execute_query(table_core_log)
         self.db_execute_query(table_core_log_command)
         self.db_execute_query(table_core_module)
         self.db_execute_query(table_core_admin)
+        self.db_execute_query(table_core_client)
         self.db_execute_query(table_core_channel)
         self.db_execute_query(table_core_config)
 
@@ -806,6 +821,27 @@ class Base:
 
         # Vider le dictionnaire de fonction
         self.periodic_func.clear()
+
+    def execute_dynamic_method(self, obj: object, method_name: str, params: list) -> None:
+        """#### Ajouter les méthodes a éxecuter dans un dictionnaire
+        Les methodes seront exécuter par heartbeat.
+
+        Args:
+            obj (object): Une instance de la classe qui va etre executer
+            method_name (str): Le nom de la méthode a executer
+            params (list): les parametres a faire passer
+
+        Returns:
+            None: aucun retour attendu
+        """
+        self.periodic_func[len(self.periodic_func) + 1] = {
+            'object': obj,
+            'method_name': method_name,
+            'param': params
+            }
+
+        self.logs.debug(f'Method to execute : {str(self.periodic_func)}')
+        return None
 
     def clean_uid(self, uid:str) -> Union[str, None]:
         """Clean UID by removing @ / % / + / ~ / * / :

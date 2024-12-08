@@ -420,6 +420,18 @@ class Unrealircd6:
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
+
+        # Set the automode to the user
+        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
+            return None
+
+        db_data: dict[str, str] = {"nickname": userObj.nickname, "channel": channel}
+        db_query = self.__Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
+        db_result = db_query.fetchone()
+        if db_result is not None:
+            id, mode = db_result
+            self.send2socket(f":{self.__Config.SERVICE_ID} MODE {channel} {mode} {userObj.nickname}")
+
         return None
 
     def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
@@ -446,6 +458,16 @@ class Unrealircd6:
         # Add defender to the channel uids list
         self.__Irc.Channel.delete_user_from_channel(channel, userObj.uid)
         return None
+
+    def send_raw(self, raw_command: str) -> None:
+
+        self.send2socket(f":{self.__Config.SERVICE_NICKNAME} {raw_command}")
+
+        return None
+
+    #####################
+    #   HANDLE EVENTS   #
+    #####################
 
     def on_svs2mode(self, serverMsg: list[str]) -> None:
         """Handle svs2mode coming from a server
@@ -527,6 +549,7 @@ class Unrealircd6:
 
             self.__Irc.Channel.delete_user_from_all_channel(uid_who_quit)
             self.__Irc.User.delete(uid_who_quit)
+            self.__Irc.Client.delete(uid_who_quit)
             self.__Irc.Reputation.delete(uid_who_quit)
             self.__Irc.Clone.delete(uid_who_quit)
 
@@ -609,6 +632,7 @@ class Unrealircd6:
             uid = str(serverMsg[1]).lstrip(':')
             newnickname = serverMsg[3]
             self.__Irc.User.update(uid, newnickname)
+            self.__Irc.Client.update(uid, newnickname)
 
             return None
 
@@ -777,7 +801,7 @@ class Unrealircd6:
                 self.__Irc.first_score = int(str(server_msg_copy[3]).replace('*',''))
                 for user in self.__Irc.User.UID_DB:
                     if user.remote_ip == self.__Irc.first_connexion_ip:
-                        user.score_connexion = self.first_score
+                        user.score_connexion = self.__Irc.first_score
             else:
                 self.__Irc.first_score = int(server_msg_copy[3])
 
@@ -890,7 +914,7 @@ class Unrealircd6:
                 convert_to_string = ' '.join(liste_des_commandes)
                 arg = convert_to_string.split()
                 arg.remove(f':{self.__Config.SERVICE_PREFIX}')
-                if not arg[0].lower() in self.__Irc.commands:
+                if not arg[0].lower() in self.__Irc.module_commands_list:
                     self.__Base.logs.debug(f"This command {arg[0]} is not available")
                     self.send_notice(
                         nick_from=self.__Config.SERVICE_NICKNAME,
@@ -929,7 +953,7 @@ class Unrealircd6:
                         self.on_ping(srv_msg)
                         return False
 
-                    if not arg[0].lower() in self.__Irc.commands:
+                    if not arg[0].lower() in self.__Irc.module_commands_list:
                         self.__Base.logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
                         return False
 
@@ -945,8 +969,10 @@ class Unrealircd6:
 
         except KeyError as ke:
             self.__Base.logs.error(f"Key Error: {ke}")
+        except AttributeError as ae:
+            self.__Base.logs.error(f"Attribute Error: {ae}")
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err}")
+            self.__Base.logs.error(f"General Error: {err} - {srv_msg}")
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server

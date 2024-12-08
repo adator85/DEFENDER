@@ -1,7 +1,5 @@
-from dataclasses import dataclass, fields, field
-import copy
+from dataclasses import dataclass
 import random, faker, time, logging
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -45,9 +43,7 @@ class Clone():
         self.Definition = ircInstance.Loader.Definition
 
         # Créer les nouvelles commandes du module
-        self.commands_level = {
-            1: ['clone']
-        }
+        self.Irc.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
 
         # Init the module (Mandatory)
         self.__init_module()
@@ -56,9 +52,6 @@ class Clone():
         self.Logs.debug(f'Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
-
-        # Enrigstrer les nouvelles commandes dans le code
-        self.__set_commands(self.commands_level)
 
         # Créer les tables necessaire a votre module (ce n'es pas obligatoire)
         self.__create_tables()
@@ -78,20 +71,6 @@ class Clone():
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.CLONE_CHANNEL} +o {self.Config.SERVICE_NICKNAME}")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +nts")
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +k {self.Config.CLONE_CHANNEL_PASSWORD}")
-
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if not c in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
-
-        return None
 
     def __create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -155,7 +134,7 @@ class Clone():
         vhost = ''.join(rand_1) + '.' + ''.join(rand_2) + '.' + ''.join(rand_3) + '.IP'
         return vhost
 
-    def generate_clones(self, group: str = 'Default') -> None:
+    def generate_clones(self, group: str = 'Default', auto_remote_ip: bool = False) -> None:
         try:
 
             fakeEN = self.fakeEN
@@ -188,7 +167,7 @@ class Clone():
             department = fakeFR.department_name()
             realname = f'{age} {gender} {department}'
 
-            decoded_ip = fakeEN.ipv4_private()
+            decoded_ip = fakeEN.ipv4_private() if auto_remote_ip else '127.0.0.1'
             hostname = fakeEN.hostname()
 
             vhost = self.generate_vhost()
@@ -231,10 +210,10 @@ class Clone():
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def thread_connect_clones(self, number_of_clones:int , group: str, interval: float = 0.2) -> None:
+    def thread_connect_clones(self, number_of_clones:int , group: str = 'Default', auto_remote_ip: bool = False, interval: float = 0.2) -> None:
 
         for i in range(0, number_of_clones):
-            self.generate_clones(group=group)
+            self.generate_clones(group=group, auto_remote_ip=auto_remote_ip)
 
         for clone in self.Clone.UID_CLONE_DB:
 
@@ -331,15 +310,15 @@ class Clone():
 
                         case 'connect':
                             try:
-                                # clone connect 5 Group 3
+                                # clone connect 5 GroupName 3
                                 self.stop = False
                                 number_of_clones = int(cmd[2])
                                 group = str(cmd[3]).lower()
-                                connection_interval = int(cmd[4]) if len(cmd) == 5 else 0.5
+                                connection_interval = int(cmd[4]) if len(cmd) == 5 else 0.2
 
                                 self.Base.create_thread(
                                     func=self.thread_connect_clones,
-                                    func_args=(number_of_clones, group, connection_interval)
+                                    func_args=(number_of_clones, group, False, connection_interval)
                                 )
 
                             except Exception as err:

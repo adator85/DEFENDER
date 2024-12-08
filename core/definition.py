@@ -4,6 +4,24 @@ from typing import Literal
 from os import sep
 
 @dataclass
+class MClient:
+    """Model Client for registred nickname"""
+    uid: str = None
+    account: str = None
+    nickname: str = None
+    username: str = None
+    realname: str = None
+    hostname: str = None
+    umodes: str = None
+    vhost: str = None
+    isWebirc: bool = False
+    isWebsocket: bool = False
+    remote_ip: str = None
+    score_connexion: int = 0
+    geoip: str = None
+    connexion_datetime: datetime = field(default=datetime.now())
+
+@dataclass
 class MUser:
     """Model User"""
 
@@ -83,6 +101,7 @@ class ColorModel:
     yellow: str = "\x0306"
     bold: str   = "\x02"
     nogc: str   = "\x03"
+    underline: str = "\x1F"
 
 @dataclass
 class MConfig:
@@ -214,8 +233,11 @@ class MConfig:
     LOGGING_NAME: str = "defender"
     """The name of the Logging instance"""
 
+    TABLE_CLIENT: str = "core_client"
+    """Core Client table"""
+
     TABLE_ADMIN: str = "core_admin"
-    """Admin table"""
+    """Core Admin table"""
 
     TABLE_COMMAND: str = "core_command"
     """Core command table"""

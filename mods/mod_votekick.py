@@ -56,9 +56,7 @@ class Votekick():
         self.Channel = ircInstance.Channel
 
         # Créer les nouvelles commandes du module
-        self.commands_level = {
-            0: ['vote']
-        }
+        self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
 
         # Init the module
         self.__init_module()
@@ -70,24 +68,8 @@ class Votekick():
 
         # Add admin object to retrieve admin users
         self.Admin = self.Irc.Admin
-
-        self.__set_commands(self.commands_level)
         self.__create_tables()
         self.join_saved_channels()
-
-        return None
-
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if not c in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 

@@ -46,12 +46,11 @@ class Test():
         self.Reputation = ircInstance.Reputation
 
         # Create module commands (Mandatory)
-        self.commands_level = {
-            0: ['test-command'],
-            1: ['test_level_1'],
-            2: ['test_level_2'],
-            3: ['test_level_3']
-        }
+        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
+
 
         # Init the module
         self.__init_module()
@@ -61,29 +60,12 @@ class Test():
 
     def __init_module(self) -> None:
 
-        # Insert module commands into the core one (Mandatory)
-        self.__set_commands(self.commands_level)
-
         # Create you own tables (Mandatory)
         self.__create_tables()
 
         # Load module configuration and sync with core one (Mandatory)
         self.__load_module_configuration()
         # End of mandatory methods you can start your customization #
-
-        return None
-
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if not c in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 

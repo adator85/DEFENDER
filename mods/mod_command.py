@@ -40,21 +40,62 @@ class Command:
         # Add User object to the module (Mandatory)
         self.User = ircInstance.User
 
+        # Add Client object to the module (Mandatory)
+        self.Client = ircInstance.Client
+
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
 
-        # Create module commands (Mandatory)
-        self.commands_level = {
-            1: ['join', 'part','owner', 'deowner', 'protect', 'deprotect', 'op',
-                'deop', 'halfop', 'dehalfop', 'voice','devoice', 'topic'],
-            2: ['opall', 'deopall', 'devoiceall', 'voiceall', 'ban', 'automode',
-                'unban', 'kick', 'kickban', 'umode', 
-                'mode', 'get_mode', 'svsjoin', 'svspart', 'svsnick',
-                'wallops', 'globops','gnotice','whois', 'names', 'invite', 'inviteme',
-                'sajoin', 'sapart', 'kill', 'gline', 'ungline', 'kline', 
-                'unkline', 'shun', 'unshun', 'glinelist', 'shunlist', 'klinelist'],
-            3: ['map']
-        }
+        self.Irc.build_command(1, self.module_name, 'join', 'Join a channel')
+        self.Irc.build_command(1, self.module_name, 'assign', 'Assign a user to a role or task')
+        self.Irc.build_command(1, self.module_name, 'part', 'Leave a channel')
+        self.Irc.build_command(1, self.module_name, 'unassign', 'Remove a user from a role or task')
+        self.Irc.build_command(1, self.module_name, 'owner', 'Give channel ownership to a user')
+        self.Irc.build_command(1, self.module_name, 'deowner', 'Remove channel ownership from a user')
+        self.Irc.build_command(1, self.module_name, 'protect', 'Protect a user from being kicked')
+        self.Irc.build_command(1, self.module_name, 'deprotect', 'Remove protection from a user')
+        self.Irc.build_command(1, self.module_name, 'op', 'Grant operator privileges to a user')
+        self.Irc.build_command(1, self.module_name, 'deop', 'Remove operator privileges from a user')
+        self.Irc.build_command(1, self.module_name, 'halfop', 'Grant half-operator privileges to a user')
+        self.Irc.build_command(1, self.module_name, 'dehalfop', 'Remove half-operator privileges from a user')
+        self.Irc.build_command(1, self.module_name, 'voice', 'Grant voice privileges to a user')
+        self.Irc.build_command(1, self.module_name, 'devoice', 'Remove voice privileges from a user')
+        self.Irc.build_command(1, self.module_name, 'topic', 'Change the topic of a channel')
+        self.Irc.build_command(2, self.module_name, 'opall', 'Grant operator privileges to all users')
+        self.Irc.build_command(2, self.module_name, 'deopall', 'Remove operator privileges from all users')
+        self.Irc.build_command(2, self.module_name, 'devoiceall', 'Remove voice privileges from all users')
+        self.Irc.build_command(2, self.module_name, 'voiceall', 'Grant voice privileges to all users')
+        self.Irc.build_command(2, self.module_name, 'ban', 'Ban a user from a channel')
+        self.Irc.build_command(2, self.module_name, 'automode', 'Automatically set user modes upon join')
+        self.Irc.build_command(2, self.module_name, 'unban', 'Remove a ban from a user')
+        self.Irc.build_command(2, self.module_name, 'kick', 'Kick a user from a channel')
+        self.Irc.build_command(2, self.module_name, 'kickban', 'Kick and ban a user from a channel')
+        self.Irc.build_command(2, self.module_name, 'umode', 'Set user mode')
+        self.Irc.build_command(2, self.module_name, 'mode', 'Set channel mode')
+        self.Irc.build_command(2, self.module_name, 'get_mode', 'Retrieve current channel mode')
+        self.Irc.build_command(2, self.module_name, 'svsjoin', 'Force a user to join a channel')
+        self.Irc.build_command(2, self.module_name, 'svspart', 'Force a user to leave a channel')
+        self.Irc.build_command(2, self.module_name, 'svsnick', 'Force a user to change their nickname')
+        self.Irc.build_command(2, self.module_name, 'wallops', 'Send a message to all operators')
+        self.Irc.build_command(2, self.module_name, 'globops', 'Send a global operator message')
+        self.Irc.build_command(2, self.module_name, 'gnotice', 'Send a global notice')
+        self.Irc.build_command(2, self.module_name, 'whois', 'Get information about a user')
+        self.Irc.build_command(2, self.module_name, 'names', 'List users in a channel')
+        self.Irc.build_command(2, self.module_name, 'invite', 'Invite a user to a channel')
+        self.Irc.build_command(2, self.module_name, 'inviteme', 'Invite yourself to a channel')
+        self.Irc.build_command(2, self.module_name, 'sajoin', 'Force yourself into a channel')
+        self.Irc.build_command(2, self.module_name, 'sapart', 'Force yourself to leave a channel')
+        self.Irc.build_command(2, self.module_name, 'kill', 'Disconnect a user from the server')
+        self.Irc.build_command(2, self.module_name, 'gline', 'Ban a user from the entire server')
+        self.Irc.build_command(2, self.module_name, 'ungline', 'Remove a global server ban')
+        self.Irc.build_command(2, self.module_name, 'kline', 'Ban a user based on their hostname')
+        self.Irc.build_command(2, self.module_name, 'unkline', 'Remove a K-line ban')
+        self.Irc.build_command(2, self.module_name, 'shun', 'Prevent a user from sending messages')
+        self.Irc.build_command(2, self.module_name, 'unshun', 'Remove a shun from a user')
+        self.Irc.build_command(2, self.module_name, 'glinelist', 'List all global bans')
+        self.Irc.build_command(2, self.module_name, 'shunlist', 'List all shunned users')
+        self.Irc.build_command(2, self.module_name, 'klinelist', 'List all K-line bans')
+        self.Irc.build_command(3, self.module_name, 'map', 'Show the server network map')
 
         # Init the module
         self.__init_module()
@@ -63,9 +104,6 @@ class Command:
         self.Logs.debug(f'-- Module {self.module_name} loaded ...')
 
     def __init_module(self) -> None:
-
-        # Insert module commands into the core one (Mandatory)
-        self.__set_commands(self.commands_level)
 
         # Create you own tables (Mandatory)
         self.__create_tables()
@@ -76,20 +114,6 @@ class Command:
 
         self.user_to_notice: str = ''
         self.show_219: bool = True
-
-        return None
-
-    def __set_commands(self, commands: dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if c not in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 
@@ -248,14 +272,19 @@ class Command:
                         user_uid = self.User.clean_uid(cmd[5])
                         userObj: MUser = self.User.get_User(user_uid)
                         channel_name = cmd[4] if self.Channel.Is_Channel(cmd[4]) else None
+                        client_obj = self.Client.get_Client(user_uid)
+                        nickname = userObj.nickname if userObj is not None else None
+
+                        if client_obj is not None:
+                            nickname = client_obj.account
 
                         if userObj is None:
                             return None
 
-                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
+                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes and not self.Client.is_exist(userObj.uid):
                             return None
 
-                        db_data: dict[str, str] = {"nickname": userObj.nickname, "channel": channel_name}
+                        db_data: dict[str, str] = {"nickname": nickname, "channel": channel_name}
                         db_query = self.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
                         db_result = db_query.fetchone()
                         if db_result is not None:
@@ -782,7 +811,7 @@ class Command:
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
-            case 'join':
+            case 'join' | 'assign':
 
                 try:
                     sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
@@ -800,7 +829,7 @@ class Command:
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
-            case 'part':
+            case 'part' | 'unassign':
 
                 try:
                     sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
