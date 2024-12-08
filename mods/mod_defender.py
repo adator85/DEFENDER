@@ -1000,10 +1000,17 @@ class Defender():
 
                 case 'MODE':
                     # ['...', ':001XSCU0Q', 'MODE', '#jail', '+b', '~security-group:unknown-users']
+                    # ['@unrealircd.org/...', ':001C0MF01', 'MODE', '#services', '+l', '1']
+
                     channel = str(cmd[3])
                     mode = str(cmd[4])
                     group_to_check = str(cmd[5:])
                     group_to_unban = '~security-group:unknown-users'
+
+                    if self.ModConfig.autolimit == 1:
+                        if mode == '+l' or mode == '-l':
+                            chan = self.Channel.get_Channel(channel)
+                            self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + self.ModConfig.autolimit_amount}")
 
                     if self.Config.SALON_JAIL == channel:
                         if mode == '+b' and group_to_unban in group_to_check:
@@ -1709,6 +1716,9 @@ class Defender():
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.abuseipdb_scan == 1 else color_red}abuseipdb_scan{nogc}             ==> {self.ModConfig.abuseipdb_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.freeipapi_scan == 1 else color_red}freeipapi_scan{nogc}             ==> {self.ModConfig.freeipapi_scan}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.cloudfilt_scan == 1 else color_red}cloudfilt_scan{nogc}             ==> {self.ModConfig.cloudfilt_scan}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.autolimit == 1 else color_red}Autolimit{nogc}]                            ==> {self.ModConfig.autolimit}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.autolimit == 1 else color_red}Autolimit Amount{nogc}           ==> {self.ModConfig.autolimit_amount}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.ModConfig.autolimit == 1 else color_red}Autolimit Interval{nogc}         ==> {self.ModConfig.autolimit_interval}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.flood == 1 else color_red}Flood{nogc}]                                ==> {self.ModConfig.flood}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg='      flood_action                      ==> Coming soon')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {self.ModConfig.flood_message}')

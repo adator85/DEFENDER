@@ -401,7 +401,9 @@ class Inspircd:
 
             uid = str(serverMsg[1]).lstrip(':')
             newnickname = serverMsg[3]
-            self.__Irc.User.update(uid, newnickname)
+            self.__Irc.User.update_nickname(uid, newnickname)
+            self.__Irc.Client.update_nickname(uid, newnickname)
+            self.__Irc.Admin.update_nickname(uid, newnickname)
 
             return None
 
