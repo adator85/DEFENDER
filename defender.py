@@ -1,21 +1,12 @@
 from core import installation
 
 #############################################
-#       @Version : 1                        #
+#       @Version : 6                        #
 #       Requierements :                     #
 #           Python3.10 or higher            #
 #           SQLAlchemy, requests, psutil    #
 #           UnrealIRCD 6.2.2 or higher      #
 #############################################
-
-#########################
-# LANCEMENT DE DEFENDER #
-#########################
-
-#   1. Chargement de la configuration
-#   2. Chargement de l'ensemble des classes
-#   3. 
-#
 
 try:
 
@@ -23,8 +14,8 @@ try:
 
     from core.loader import Loader
     from core.irc import Irc
-    loader = Loader()
-    ircInstance = Irc(loader)
+    # loader = Loader()
+    ircInstance = Irc(Loader())
     ircInstance.init_irc(ircInstance)
 
 except AssertionError as ae:

@@ -42,9 +42,8 @@ class Jsonrpc():
         self.Channel = ircInstance.Channel
 
         # Create module commands (Mandatory)
-        self.commands_level = {
-            1: ['jsonrpc', 'jruser']
-        }
+        self.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
+        self.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
 
         # Init the module
         self.__init_module()
@@ -54,8 +53,6 @@ class Jsonrpc():
 
     def __init_module(self) -> None:
 
-        # Insert module commands into the core one (Mandatory)
-        self.__set_commands(self.commands_level)
         logging.getLogger('websockets').setLevel(logging.WARNING)
         logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
 
@@ -100,20 +97,6 @@ class Jsonrpc():
 
         if self.ModConfig.jsonrpc == 1:
             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
-
-        return None
-
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if not c in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 
