@@ -1127,18 +1127,19 @@ class Command:
             case 'sapart':
                 try:
                     # .sapart nickname #channel
-                    nickname = str(cmd[1])
-                    channel = str(cmd[2])
                     if len(cmd) < 3:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                         return None
+
+                    nickname = str(cmd[1])
+                    channel = str(cmd[2])
 
                     self.Protocol.send_sapart(nick_to_sapart=nickname, channel_name=channel)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
-                    self.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'svsnick':
                 try:

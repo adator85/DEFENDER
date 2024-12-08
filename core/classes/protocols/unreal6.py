@@ -198,7 +198,7 @@ class Unrealircd6:
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} NICK {newnickname}")
 
         userObj = self.__Irc.User.get_User(self.__Config.SERVICE_NICKNAME)
-        self.__Irc.User.update(userObj.uid, newnickname)
+        self.__Irc.User.update_nickname(userObj.uid, newnickname)
         return None
 
     def squit(self, server_id: str, server_link: str, reason: str) -> None:
@@ -459,6 +459,16 @@ class Unrealircd6:
         self.__Irc.Channel.delete_user_from_channel(channel, userObj.uid)
         return None
 
+    def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
+
+        channel = self.__Irc.Channel.Is_Channel(channelToCheck=channel_name)
+        if not channel:
+            self.__Base.logs.error(f'The channel [{channel_name}] is not correct')
+            return None
+
+        self.send2socket(f":{self.__Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
+        return None
+
     def send_raw(self, raw_command: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} {raw_command}")
@@ -631,8 +641,9 @@ class Unrealircd6:
 
             uid = str(serverMsg[1]).lstrip(':')
             newnickname = serverMsg[3]
-            self.__Irc.User.update(uid, newnickname)
-            self.__Irc.Client.update(uid, newnickname)
+            self.__Irc.User.update_nickname(uid, newnickname)
+            self.__Irc.Client.update_nickname(uid, newnickname)
+            self.__Irc.Admin.update_nickname(uid, newnickname)
 
             return None
 

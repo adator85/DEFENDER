@@ -37,7 +37,7 @@ class User:
 
         return True
 
-    def update(self, uid: str, newNickname: str) -> bool:
+    def update_nickname(self, uid: str, newNickname: str) -> bool:
         """Update the nickname starting from the UID
 
         Args:

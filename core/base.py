@@ -758,7 +758,7 @@ class Base:
         except TypeError:
             return None
 
-    def is_valid_ip(self, ip_to_control:str) -> bool:
+    def is_valid_ip(self, ip_to_control: str) -> bool:
 
         try:
             if ip_to_control in self.Config.WHITELISTED_IP:
@@ -767,6 +767,26 @@ class Base:
             ipaddress.ip_address(ip_to_control)
             return True
         except ValueError:
+            return False
+
+    def is_valid_email(self, email_to_control: str) -> bool:
+        """Check if the email is valid
+
+        Args:
+            email_to_control (str): email to control
+
+        Returns:
+            bool: True is the email is correct
+        """
+        try:
+            pattern = '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+            if re.match(pattern, email_to_control):
+                return True
+            else:
+                return False
+
+        except Exception as err:
+            self.logs.error(f'General Error: {err}')
             return False
 
     def decode_ip(self, ip_b64encoded: str) -> Union[str, None]:
