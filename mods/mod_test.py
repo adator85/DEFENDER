@@ -1,5 +1,8 @@
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, fields
-from core.irc import Irc
+
+if TYPE_CHECKING:
+    from core.irc import Irc
 
 class Test():
 
@@ -10,13 +13,19 @@ class Test():
         param_exemple1: str
         param_exemple2: int
 
-    def __init__(self, ircInstance:Irc) -> None:
+    def __init__(self, ircInstance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
         self.Irc = ircInstance
+
+        # Add Loader Object to the module (Mandatory)
+        self.Loader = ircInstance.Loader
+
+        # Add server protocol Object to the module (Mandatory)
+        self.Protocol = ircInstance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
         self.Config = ircInstance.Config
@@ -33,13 +42,15 @@ class Test():
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
 
+        # Add Reputation object to the module (Optional)
+        self.Reputation = ircInstance.Reputation
+
         # Create module commands (Mandatory)
-        self.commands_level = {
-            0: ['test-command'],
-            1: ['test_level_1'],
-            2: ['test_level_2'],
-            3: ['test_level_3']
-        }
+        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
+
 
         # Init the module
         self.__init_module()
@@ -49,29 +60,12 @@ class Test():
 
     def __init_module(self) -> None:
 
-        # Insert module commands into the core one (Mandatory)
-        self.__set_commands(self.commands_level)
-
         # Create you own tables (Mandatory)
         self.__create_tables()
 
         # Load module configuration and sync with core one (Mandatory)
         self.__load_module_configuration()
         # End of mandatory methods you can start your customization #
-
-        return None
-
-    def __set_commands(self, commands:dict[int, list[str]]) -> None:
-        """### Rajoute les commandes du module au programme principal
-
-        Args:
-            commands (list): Liste des commandes du module
-        """
-        for level, com in commands.items():
-            for c in commands[level]:
-                if not c in self.Irc.commands:
-                    self.Irc.commands_level[level].append(c)
-                    self.Irc.commands.append(c)
 
         return None
 
@@ -124,10 +118,18 @@ class Test():
         return None
 
     def cmd(self, data:list) -> None:
+        try:
+            cmd = list(data).copy()
 
-        return None
+            return None
+        except KeyError as ke:
+            self.Logs.error(f"Key Error: {ke}")
+        except IndexError as ie:
+            self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
+        except Exception as err:
+            self.Logs.error(f"General Error: {err}")
 
-    def _hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
@@ -139,11 +141,11 @@ class Test():
             case 'test-command':
                 try:
 
-                    self.Irc.send2socket(f":{dnickname} NOTICE {fromuser} : This is a notice to the sender ...")
-                    self.Irc.send2socket(f":{dnickname} PRIVMSG {fromuser} : This is private message to the sender ...")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
+                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
 
                     if not fromchannel is None:
-                        self.Irc.send2socket(f":{dnickname} PRIVMSG {fromchannel} : This is channel message to the sender ...")
+                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
 
                     # How to update your module configuration
                     self.__update_configuration('param_exemple2', 7)

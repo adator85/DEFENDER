@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-from subprocess import check_call, run, CalledProcessError, PIPE
-from platform import python_version, python_version_tuple
-from sys import exit
 import os
+import json
+from sys import exit, prefix
+from dataclasses import dataclass
+from subprocess import check_call, run, CalledProcessError, PIPE, check_output
+from platform import python_version, python_version_tuple
 
 class Install:
 
@@ -24,12 +25,23 @@ class Install:
         venv_pip_executable: str
         venv_python_executable: str
 
+    @dataclass
+    class Package:
+        name: str = None
+        version: str = None
+
+    DB_PACKAGES: list[Package] = []
+
     def __init__(self) -> None:
 
         self.set_configuration()
 
         if self.skip_install:
+            self.install_dependencies()
+            self.check_packages_version()
             return None
+
+        self.check_packages_version()
 
         # Sinon tester les dependances python et les installer avec pip
         if self.do_install():
@@ -49,7 +61,7 @@ class Install:
         venv_folder = '.pyenv'
         unix_user_home_directory = os.path.expanduser("~")
         unix_systemd_folder = os.path.join(unix_user_home_directory, '.config', 'systemd', 'user')
-        defender_main_executable = os.path.join(defender_install_folder, 'main.py')
+        defender_main_executable = os.path.join(defender_install_folder, 'defender.py')
 
         self.config = self.CoreConfig(
                 install_log_file='install.log',
@@ -73,13 +85,15 @@ class Install:
             # If the Python version is not good then Exit
             exit("/!\\ Python version error /!\\")
 
-        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'core', 'configuration.json')):
+        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'config', 'configuration.json')):
             # If configuration file do not exist
-            exit("/!\\ Configuration file (configuration.json) doesn't exist /!\\")
+            exit("/!\\ Configuration file (core/configuration.json) doesn't exist! please create it /!\\")
 
         # Exclude Windows OS from the installation
         if os.name == 'nt':
-            #print('/!\\ Skip installation /!\\')
+            # If windows, modify pip and python virtual environment executable
+            self.config.venv_pip_executable = f'{os.path.join(defender_install_folder, venv_folder, "Scripts")}{os.sep}pip.exe'
+            self.config.venv_python_executable = f'{os.path.join(defender_install_folder, venv_folder, "Scripts")}{os.sep}python.exe'
             self.skip_install = True
             return False
 
@@ -91,7 +105,7 @@ class Install:
     def is_root(self) -> bool:
 
         if os.geteuid() != 0:
-            print('User without privileges ==> PASS')
+            print('> User without privileges ==> OK')
             return False
         elif os.geteuid() == 0:
             print('/!\\ Do not use root to install Defender /!\\')
@@ -122,6 +136,75 @@ class Install:
             print(f"The command failed with the return code: {e.returncode}")
             print(f"Try to install dependencies ...")
             exit(5)
+
+    def get_packages_version_from_json(self) -> None:
+        """This will create Package model with package names and required version
+        """
+        try:
+            
+            version_filename = f'.{os.sep}version.json'
+            with open(version_filename, 'r') as version_data:
+                package_info:dict[str, str] = json.load(version_data)
+
+            for name, version in package_info.items():
+                if name == 'version':
+                    continue
+
+                self.DB_PACKAGES.append(
+                    self.Package(name=name, version=version)
+                    )
+
+            return None
+        except FileNotFoundError as fe:
+            print(f"File not found: {fe}")
+        except Exception as err:
+            print(f"General Error: {err}")
+
+    def check_packages_version(self) -> bool:
+
+        try:
+            newVersion = False
+            self.get_packages_version_from_json()
+            
+            if not self.config.venv_folder in prefix:
+                print(f"You are probably running a new installation or you are not using your virtual env {self.config.venv_folder}")
+                return newVersion
+
+            print(f"> Checking for dependencies versions ==> WAIT")
+            for package in self.DB_PACKAGES:
+                newVersion = False
+                required_version = package.version
+                installed_version = None
+
+                output = check_output([self.config.venv_pip_executable, 'show', package.name])
+                for line in output.decode().splitlines():
+                    if line.startswith('Version:'):
+                        installed_version = line.split(':')[1].strip()
+                        break
+
+                required_major, required_minor, required_patch = required_version.split('.')
+                installed_major, installed_minor, installed_patch = installed_version.split('.')
+
+                if required_major > installed_major:
+                    print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
+                    newVersion = True
+                elif required_major == installed_major and required_minor > installed_minor:
+                    print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
+                    newVersion = True
+                elif required_major == installed_major and required_minor == installed_minor and required_patch > installed_patch:
+                    print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
+                    newVersion = True
+
+                if newVersion:
+                    self.run_subprocess([self.config.venv_pip_executable, 'install', '--upgrade', package.name])
+
+            print(f"> Dependencies versions ==> OK")
+            return newVersion
+
+        except CalledProcessError:
+            print(f"/!\\ Package {package.name} not installed /!\\")
+        except Exception as err:
+            print(f"General Error: {err}")
 
     def check_python_version(self) -> bool:
         """Test si la version de python est autorisée ou non

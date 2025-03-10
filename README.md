@@ -32,30 +32,34 @@ Il permet aux opérateurs de gérer efficacement un canal, tout en offrant aux u
         - Système d'exploitation Linux (Windows non supporté)
         - Un server UnrealIRCD corréctement configuré
         - Python version 3.10 ou supérieure
-
-    Bash:
+```bash
+        # Bash
         $ git clone https://github.com/adator85/IRC_DEFENDER_MODULES.git
-        - Renommer le fichier exemple_configuration.json en configuration.json
-        - Configurer le fichier configuration.json
+        # Renommer le fichier exemple_configuration.json en configuration.json
+        # Configurer le fichier configuration.json
         $ python3 main.py
-
+```
 Si votre configuration est bonne, votre service est censé etre connecté a votre réseau IRC
 Pour Les prochains lancement de defender vous devez utiliser la commande suivante:
 
-    Bash:
-        $ systemctl --user [start | stop | restart | status] defender
-
+```bash
+    # Bash
+    $ systemctl --user [start | stop | restart | status] defender
+```
 # Installation manuelle:
-    Bash:
-        $ git clone https://github.com/adator85/IRC_DEFENDER_MODULES.git
-        $ cd IRC_DEFENDER_MODULES
-        $ python3 -m venv .pyenv
-        $ source .pyenv/bin/activate
-        (pyenv)$ pip install sqlalchemy, psutil, requests, faker
-        - Créer un service nommé "defender.service" pour votre service et placer le dans "/PATH/TO/USER/.config/systemd/user/"
-        - Si le dossier n'existe pas il faut les créer
-        $ sudo systemctl --user start defender
+```bash
+    # Bash
+    $ git clone https://github.com/adator85/IRC_DEFENDER_MODULES.git
+    $ cd IRC_DEFENDER_MODULES
+    $ python3 -m venv .pyenv
+    $ source .pyenv/bin/activate
+    (pyenv)$ pip install sqlalchemy, psutil, requests, faker, unrealircd_rpc_py
 
+    # Créer un service nommé "defender.service" 
+    # pour votre service et placer le dans "/PATH/TO/USER/.config/systemd/user/"
+    # Si le dossier n'existe pas il faut les créer
+    $ sudo systemctl --user start defender
+```
 # Configuration
 ```
     SERVEUR (Serveur)
