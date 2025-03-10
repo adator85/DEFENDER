@@ -385,7 +385,7 @@ class Clone():
 
                     if len(cmd) == 1:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone manual-connect nickname department gender age group auto-ip")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
@@ -415,17 +415,19 @@ class Clone():
 
                         case 'manual-connect':
                             try:
-                                # clone manual-connect nickname department gender age group [auto-ip = 1 / 0]
+                                # clone manual-connect nickname age gender department group [auto-ip = 1 / 0]
                                 if len(cmd) < 8:
                                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
-                                                              msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
+                                                              msg=f"/msg {dnickname} clone manual-connect nickname age gender department group auto-ip")
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                                              msg=f"AUTO-IP: 1 to generate random ip / 0 to keep localhost")
                                     return None
 
                                 self.stop = False
                                 nickname = str(cmd[2])
-                                department = str(cmd[3])
+                                age = int(cmd[3])
                                 gender = str(cmd[4])
-                                age = int(cmd[5])
+                                department = str(cmd[5])
                                 group = str(cmd[6]).lower()
                                 autoip = int(cmd[7])
 
@@ -437,7 +439,10 @@ class Clone():
                             except Exception as err:
                                 self.Logs.error(f'{err}')
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
-                                                          msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
+                                                          msg=f"/msg {dnickname} clone manual-connect nickname age gender department group [auto-ip = 1 / 0]")
+
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                                              msg=f"AUTO-IP: 1 to generate random ip / 0 to keep localhost")
 
                         case 'kill':
                             try:
