@@ -90,6 +90,7 @@ class Channel:
                 if self.Base.clean_uid(userid) == self.Base.clean_uid(uid):
                     chanObj.uids.remove(userid)
                     result = True
+                    self.Logs.debug(f"The UID: {userid} has been removed from the {channel_name}")
 
             self.clean_channel()
 

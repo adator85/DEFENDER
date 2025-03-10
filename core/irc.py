@@ -97,7 +97,7 @@ class Irc:
         self.build_command(0, 'core', 'uptime', 'Give you since when the service is connected')
         self.build_command(0, 'core', 'firstauth', 'First authentication of the Service')
         self.build_command(0, 'core', 'register', f'Register your nickname /msg {self.Config.SERVICE_NICKNAME} REGISTER <password> <email>')
-        self.build_command(0, 'core', 'identify', f'Identify yourself with your password /msg {self.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>')
+        # self.build_command(0, 'core', 'identify', f'Identify yourself with your password /msg {self.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>')
         self.build_command(0, 'core', 'logout', 'Reverse the effect of the identify command')
         self.build_command(1, 'core', 'load', 'Load an existing module')
         self.build_command(1, 'core', 'unload', 'Unload a module')
@@ -321,7 +321,7 @@ class Irc:
         except AssertionError as ae:
             self.Logs.error(f"Assertion error : {ae}")
 
-    def unload(self) -> None:
+    def unload(self, reloading: bool = False) -> None:
         # This is only to reference the method
         return None
 
@@ -616,7 +616,7 @@ class Irc:
 
             if 'mods.' + module_name in sys.modules:
                 self.Logs.info('Unload the module ...')
-                self.loaded_classes[class_name].unload()
+                self.loaded_classes[class_name].unload(reloading=True)
                 self.Logs.info('Module Already Loaded ... reloading the module ...')
                 the_module = sys.modules['mods.' + module_name]
                 importlib.reload(the_module)
@@ -854,7 +854,7 @@ class Irc:
                     self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'PART':
-                    self.Protocol.on_part(serverMsg=parsed_protocol)
+                    self.Protocol.on_part(serverMsg=original_response)
                     self.Logs.debug(f"** handle {parsed_protocol}")
 
                 case 'VERSION':
@@ -1232,154 +1232,6 @@ class Irc:
                     else:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
                         self.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
-
-            case 'register':
-                # Register PASSWORD EMAIL
-                try:
-
-                    if len(cmd) < 3:
-                        self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.Config.SERVICE_NICKNAME} {command.upper()} <PASSWORD> <EMAIL>'
-                        )
-                        return None
-
-                    password = cmd[1]
-                    email = cmd[2]
-
-                    if not self.Base.is_valid_email(email_to_control=email):
-                        self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg='The email is not valid. You must provide a valid email address (first.name@email.extension)'
-                        )
-                        return None
-
-                    user_obj = self.User.get_User(fromuser)
-
-                    if user_obj is None:
-                        self.Logs.error(f"Nickname ({fromuser}) doesn't exist, it is impossible to register this nickname")
-                        return None
-
-                    # If the account already exist.
-                    if self.Client.db_is_account_exist(fromuser):
-                        self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f"Your account already exist, please try to login instead /msg {self.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>"
-                        )
-                        return None
-
-                    # If the account doesn't exist then insert into database
-                    data_to_record = {
-                        'createdOn': self.Base.get_datetime(), 'account': fromuser,
-                        'nickname': user_obj.nickname, 'hostname': user_obj.hostname, 'vhost': user_obj.vhost, 'realname': user_obj.realname, 'email': email,
-                        'password': self.Base.crypt_password(password=password), 'level': 0
-                    }
-
-                    insert_to_db = self.Base.db_execute_query(f"""
-                                                            INSERT INTO {self.Config.TABLE_CLIENT} 
-                                                            (createdOn, account, nickname, hostname, vhost, realname, email, password, level)
-                                                            VALUES
-                                                            (:createdOn, :account, :nickname, :hostname, :vhost, :realname, :email, :password, :level)
-                                                            """, data_to_record)
-
-                    if insert_to_db.rowcount > 0:
-                        self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f"You have register your nickname successfully"
-                        )
-
-                    return None
-
-                except ValueError as ve:
-                    self.Logs.error(f"Value Error : {ve}")
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.Config.SERVICE_PREFIX}{command.upper()} <PASSWORD> <EMAIL>")
-
-            case 'identify':
-                # Identify ACCOUNT PASSWORD
-                try:
-                    if len(cmd) < 3:
-                        self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.Config.SERVICE_NICKNAME} {command.upper()} <ACCOUNT> <PASSWORD>'
-                        )
-                        return None
-
-                    account = str(cmd[1]) # account
-                    encrypted_password = self.Base.crypt_password(cmd[2])
-                    user_obj = self.User.get_User(fromuser)
-                    client_obj = self.Client.get_Client(user_obj.uid)
-
-                    if client_obj is not None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are already logged in")
-                        return None
-
-                    db_query = f"SELECT account FROM {self.Config.TABLE_CLIENT} WHERE account = :account AND password = :password"
-                    db_param = {'account': account, 'password': encrypted_password}
-                    exec_query = self.Base.db_execute_query(
-                        db_query,
-                        db_param
-                    )
-                    result_query = exec_query.fetchone()
-                    if result_query:
-                        account = result_query[0]
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are now logged in")
-                        client = self.Loader.Definition.MClient(
-                            uid=user_obj.uid, account=account, nickname=fromuser,
-                            username=user_obj.username, realname=user_obj.realname, hostname=user_obj.hostname, umodes=user_obj.umodes, vhost=user_obj.vhost,
-                            isWebirc=user_obj.isWebirc, isWebsocket=user_obj.isWebsocket, remote_ip=user_obj.remote_ip, score_connexion=user_obj.score_connexion,
-                            geoip=user_obj.geoip, connexion_datetime=user_obj.connexion_datetime
-                        )
-                        self.Client.insert(client)
-                        self.Protocol.send_svs_mode(nickname=fromuser, user_mode='+r')
-                    else:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Wrong password or account")
-
-                    return None
-
-                except ValueError as ve:
-                    self.Logs.error(f"Value Error: {ve}")
-                    self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.Config.SERVICE_NICKNAME} {command.upper()} <ACCOUNT> <PASSWORD>'
-                        )
-
-                except Exception as err:
-                    self.Logs.error(f"General Error: {err}")
-
-            case 'logout':
-                try:
-                    # LOGOUT <account>
-                    if len(cmd) < 2:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
-                        return None
-
-                    user_obj = self.User.get_User(fromuser)
-                    if user_obj is None:
-                        self.Logs.error(f"The User [{fromuser}] is not available in the database")
-                        return None
-
-                    client_obj = self.Client.get_Client(user_obj.uid)
-
-                    if client_obj is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Nothing to logout. please login first")
-                        return None
-
-                    self.Protocol.send_svs_mode(nickname=fromuser, user_mode='-r')
-                    self.Client.delete(user_obj.uid)
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You have been logged out successfully")
-
-                except ValueError as ve:
-                    self.Logs.error(f"Value Error: {ve}")
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
-                except Exception as err:
-                    self.Logs.error(f"General Error: {err}")
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
 
             case 'help':
 

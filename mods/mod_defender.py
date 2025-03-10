@@ -200,7 +200,7 @@ class Defender():
 
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
-    def unload(self) -> None:
+    def unload(self, reloading: bool = False) -> None:
         """Cette methode sera executée a chaque désactivation ou 
         rechargement de module
         """

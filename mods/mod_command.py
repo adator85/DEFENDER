@@ -164,15 +164,14 @@ class Command:
         """
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
-    def unload(self) -> None:
+    def unload(self, reloading: bool = False) -> None:
 
         return None
 
     def cmd(self, data: list[str]) -> None:
         try:
-            # service_id = self.Config.SERVICE_ID
+
             dnickname = self.Config.SERVICE_NICKNAME
-            # dchanlog = self.Config.SERVICE_CHANLOG
             red = self.Config.COLORS.red
             green = self.Config.COLORS.green
             bold = self.Config.COLORS.bold
@@ -303,7 +302,7 @@ class Command:
         service_id = self.Config.SERVICE_ID
         dchanlog = self.Config.SERVICE_CHANLOG
         self.user_to_notice = uidornickname
-        fromuser = uidornickname
+        fromuser = self.User.get_nickname(uidornickname)
         fromchannel = channel_name
 
         match command:
@@ -853,9 +852,9 @@ class Command:
 
             case 'topic':
                 try:
-                    if len(cmd) == 1:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
+                    # TOPIC <#CHANNEL> <THE TOPIC DESCRIPTION>
+                    if len(cmd) < 2:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <#channel> THE_TOPIC_MESSAGE")
                         return None
 
                     chan = str(cmd[1])
@@ -864,10 +863,10 @@ class Command:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
                         return None
 
-                    topic_msg = ' '.join(cmd[2:]).strip()
+                    topic_msg: str = ' '.join(cmd[2:]).strip()
 
                     if topic_msg:
-                        self.Protocol.send2socket(f':{dnickname} TOPIC {chan} :{topic_msg}')
+                        self.Protocol.send_topic_chan(channel_name=chan, topic_msg=topic_msg)
                     else:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the topic")
 

@@ -37,6 +37,9 @@ class Admin:
 
         result = False
 
+        if not self.is_exist(uid):
+            return result
+
         for record in self.UID_ADMIN_DB:
             if record.uid == uid:
                 # If the admin exist, update and do not go further
@@ -46,7 +49,7 @@ class Admin:
                 return result
 
         if not result:
-            self.Logs.critical(f'The new nickname {newNickname} was not updated, uid = {uid}')
+            self.Logs.critical(f'Admin: The new nickname {newNickname} was not updated, uid = {uid}')
 
         return result
 
@@ -125,3 +128,17 @@ class Admin:
                 nickname = record.nickname
         self.Logs.debug(f'The value {uidornickname} -- {nickname}')
         return nickname
+
+    def is_exist(self, uidornickname: str) -> bool:
+        """Check if this uid or nickname is logged in as an admin
+
+        Args:
+            uidornickname (str): The UID or the Nickname
+
+        Returns:
+            bool: True if the Nickname or UID is an admin
+        """
+        if self.get_Admin(uidornickname) is None:
+            return False
+        else:
+            return True

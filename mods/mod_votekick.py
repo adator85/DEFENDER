@@ -101,7 +101,7 @@ class Votekick():
         self.Base.db_execute_query(table_vote)
         return None
 
-    def unload(self) -> None:
+    def unload(self, reloading: bool = False) -> None:
         try:
             for chan in self.VOTE_CHANNEL_DB:
                 self.Protocol.send_part_chan(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)

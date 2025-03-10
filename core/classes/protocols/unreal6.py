@@ -245,6 +245,33 @@ class Unrealircd6:
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
         return None
 
+    def send_svs_nick(self, oldnickname: str, newnickname: str) -> None:
+
+        unixtime = self.__Base.get_unixtime()
+        self.send2socket(f':{self.__Config.SERVEUR_ID} SVSNICK {oldnickname} {newnickname} {unixtime}')
+
+        user_obj = self.__Irc.User.get_User(oldnickname)
+        self.__Irc.User.update_nickname(user_obj.uid, newnickname)
+
+        return None
+
+    def send_sjoin(self, uid_to_join: str, channel: str) -> None:
+        """UID will join a channel with pre defined umodes
+
+        Args:
+            channel (str): Channel to join
+        """
+        if not self.__Irc.Channel.Is_Channel(channel):
+            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+            return None
+
+        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} {self.__Config.SERVICE_UMODES} :{uid_to_join}")
+        self.send2socket(f":{self.__Config.SERVICE_ID} MODE {channel} {self.__Config.SERVICE_UMODES} {uid_to_join}")
+
+        # Add defender to the channel uids list
+        self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[uid_to_join]))
+        return None
+
     def send_sapart(self, nick_to_sapart: str, channel_name: str) -> None:
         """_summary_
 
@@ -326,7 +353,26 @@ class Unrealircd6:
         except Exception as err:
                 self.__Base.logs.error(f"{__name__} - General Error: {err}")
 
-    def send_quit(self, uid: str, reason: str, print_log: True) -> None:
+    def send_svs2mode(self, service_uid: str, nickname: str, user_mode: str) -> None:
+        try:
+
+            user_obj = self.__Irc.User.get_User(uidornickname=nickname)
+            service_uid = service_uid
+
+            if user_obj is None:
+                # User not exist: leave
+                return None
+
+            self.send2socket(f':{service_uid} SVS2MODE {nickname} {user_mode}')
+
+            # Update new mode
+            self.__Irc.User.update_mode(user_obj.uid, user_mode)
+
+            return None
+        except Exception as err:
+                self.__Base.logs.error(f"{__name__} - General Error: {err}")
+
+    def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
         """Send quit message
         - Delete uid from User object
         - Delete uid from Clone object
@@ -467,6 +513,22 @@ class Unrealircd6:
             return None
 
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
+        return None
+
+    def send_topic_chan(self, channel_name: str, topic_msg: str) -> None:
+        """Set a channel topic
+
+        Args:
+            channel_name (str): Channel name starting with #
+            topic_msg (str): The message of the topic
+        """
+
+        if self.__Irc.Channel.Is_Channel(channel_name) is None:
+            self.__Base.logs.error(f"The channel {channel_name} is not valid")
+            return None
+
+        self.send2socket(f":{self.__Config.SERVICE_NICKNAME} TOPIC {channel_name} :{topic_msg}")
+
         return None
 
     def send_raw(self, raw_command: str) -> None:
@@ -715,7 +777,7 @@ class Unrealircd6:
             # ['@unrealircd.org/geoip=FR;unrealircd.org/userhost=50d6492c@80.214.73.44;unrealircd.org/userip=50d6492c@80.214.73.44;msgid=YSIPB9q4PcRu0EVfC9ci7y-/mZT0+Gj5FLiDSZshH5NCw;time=2024-08-15T15:35:53.772Z', 
             # ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
 
-            uid = str(serverMsg[1]).lstrip(':')
+            uid = str(serverMsg[1]).replace(':', '')
             channel = str(serverMsg[3]).lower()
             self.__Irc.Channel.delete_user_from_channel(channel, uid)
 
@@ -839,29 +901,23 @@ class Unrealircd6:
             isWebirc = True if 'webirc' in serverMsg[0] else False
             isWebsocket = True if 'websocket' in serverMsg[0] else False
 
-            uid = str(serverMsg[8])
             nickname = str(serverMsg[3])
+            hopcount = str(serverMsg[4])
+            timestamp = str(serverMsg[5])
             username = str(serverMsg[6])
             hostname = str(serverMsg[7])
+            uid = str(serverMsg[8])
+            servicestamp = str(serverMsg[9])
             umodes = str(serverMsg[10])
             vhost = str(serverMsg[11])
-
-            if not 'S' in umodes:
-                remote_ip = self.__Base.decode_ip(str(serverMsg[13]))
-            else:
-                remote_ip = '127.0.0.1'
-
-            # extract realname
+            cloacked_host = str(serverMsg[12])
+            remote_ip = self.__Base.decode_ip(str(serverMsg[13])) if 'S' in umodes else '127.0.0.1'
             realname = ' '.join(serverMsg[14:]).lstrip(':')
 
             # Extract Geoip information
             pattern = r'^.*geoip=cc=(\S{2}).*$'
             geoip_match = match(pattern, serverMsg[0])
-
-            if geoip_match:
-                geoip = geoip_match.group(1)
-            else:
-                geoip = None
+            geoip = geoip_match.group(1) if geoip_match else None
 
             score_connexion = self.__Irc.first_score
 
@@ -874,6 +930,10 @@ class Unrealircd6:
                     hostname=hostname,
                     umodes=umodes,
                     vhost=vhost,
+                    hopcount=hopcount,
+                    timestamp=timestamp,
+                    servicestamp=servicestamp,
+                    cloacked_host=cloacked_host,
                     isWebirc=isWebirc,
                     isWebsocket=isWebsocket,
                     remote_ip=remote_ip,
@@ -940,7 +1000,7 @@ class Unrealircd6:
                 fromchannel = str(cmd[2]).lower() if self.__Irc.Channel.Is_Channel(cmd[2]) else None
                 self.__Irc.hcmds(user_trigger, fromchannel, arg, cmd)
 
-            if cmd[2] == self.__Config.SERVICE_ID:
+            if cmd[2] == self.__Config.SERVICE_ID or cmd[2] == self.__Settings.NICKSERV_UID:
                 pattern = fr'^:.*?:(.*)$'
                 hcmds = search(pattern, ' '.join(cmd))
 

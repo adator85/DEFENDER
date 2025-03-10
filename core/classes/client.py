@@ -219,7 +219,7 @@ class Client:
 
         account_to_check_result = account_to_check_query.fetchone()
         if account_to_check_result:
-            self.Logs.error(f"Account ({account}) already exist")
+            self.Logs.debug(f"Account ({account}) already exist")
             return True
 
         return False

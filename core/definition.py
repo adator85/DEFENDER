@@ -6,14 +6,18 @@ from os import sep
 @dataclass
 class MClient:
     """Model Client for registred nickname"""
-    uid: str = None
     account: str = None
+    uid: str = None
     nickname: str = None
     username: str = None
     realname: str = None
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    hopcount: str = None
+    timestamp: str = None
+    servicestamp: str = None
+    cloacked_host: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -32,6 +36,10 @@ class MUser:
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    hopcount: str = None
+    timestamp: str = None
+    servicestamp: str = None
+    cloacked_host: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -50,6 +58,10 @@ class MAdmin:
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    hopcount: str = None
+    timestamp: str = None
+    servicestamp: str = None
+    cloacked_host: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None

@@ -13,3 +13,5 @@ class Settings:
 
     PROTOCTL_USER_MODES: list[str]      = []
     PROTOCTL_PREFIX: list[str]          = []
+
+    NICKSERV_UID: str                   = None
