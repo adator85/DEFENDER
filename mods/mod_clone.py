@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from enum import Enum
 import random, faker, time, logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.irc import Irc
+    from core.definition import MClone
 
 class Clone():
 
@@ -133,6 +135,90 @@ class Clone():
 
         vhost = ''.join(rand_1) + '.' + ''.join(rand_2) + '.' + ''.join(rand_3) + '.IP'
         return vhost
+
+    def generate_manual_clone(self, pNickname: str, pDepartment: str, pGender: str, pAge: int, *, group: str = 'Default', auto_remote_ip: bool = False) -> 'MClone':
+        try:
+
+            fakeEN = self.fakeEN
+            unixtime = self.Base.get_unixtime()
+
+            chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            generate_uid = fakeEN.random_sample(chaine, 6)
+            uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
+
+            umodes = self.Config.CLONE_UMODES
+
+            # Generate Username
+            chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+            new_username = fakeEN.random_sample(chaine, 9)
+            username = ''.join(new_username)
+
+            # Create realname XX F|M Department
+            gender = pGender
+            nickname = pNickname
+            department = pDepartment
+            age = pAge
+            realname = f'{age} {gender} {department}'
+
+            decoded_ip = fakeEN.ipv4_private() if auto_remote_ip else '127.0.0.1'
+            hostname = fakeEN.hostname()
+            vhost = self.generate_vhost()
+
+            checkNickname = self.Clone.exists(nickname=nickname)
+            checkUid = self.Clone.uid_exists(uid=uid)
+
+            while checkNickname:
+                caracteres = '0123456789'
+                randomize = ''.join(random.choice(caracteres) for _ in range(2))
+                nickname = nickname + str(randomize)
+                checkNickname = self.Clone.exists(nickname=nickname)
+
+            while checkUid:
+                chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                generate_uid = fakeEN.random_sample(chaine, 6)
+                uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
+                checkUid = self.Clone.uid_exists(uid=uid)
+
+            clone = self.Definition.MClone(
+                        connected=False,
+                        nickname=nickname,
+                        username=username,
+                        realname=realname,
+                        hostname=hostname,
+                        umodes=umodes,
+                        uid=uid,
+                        remote_ip=decoded_ip,
+                        vhost=vhost,
+                        group=group,
+                        channels=[]
+                        )
+
+            self.Clone.insert(clone)
+
+            return clone
+
+        except AttributeError as ae:
+            self.Logs.error(f'Attribute Error : {ae}')
+        except Exception as err:
+            self.Logs.error(f"General Error: {err}")
+
+    def thread_connect_manual_clones(self, pNickname: str, pDepartment: str, pGender: str, pAge: int, group: str, auto_remote_ip: bool = False) -> None:
+
+        clone = self.generate_manual_clone(
+            pNickname=pNickname, pDepartment=pDepartment, pGender=pGender, pAge=pAge,
+            group=group, auto_remote_ip=auto_remote_ip
+            )
+
+        if self.stop:
+            print(f"Stop creating clones ...")
+            self.stop = False
+            return None
+
+        if not clone.connected:
+            self.Protocol.send_uid(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, print_log=False)
+            self.Protocol.send_join_chan(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
+
+        clone.connected = True
 
     def generate_clones(self, group: str = 'Default', auto_remote_ip: bool = False) -> None:
         try:
@@ -299,6 +385,7 @@ class Clone():
 
                     if len(cmd) == 1:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
@@ -326,6 +413,32 @@ class Clone():
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group]")
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Exemple /msg {dnickname} clone connect 6 Ambiance")
 
+                        case 'manual-connect':
+                            try:
+                                # clone manual-connect nickname department gender age group [auto-ip = 1 / 0]
+                                if len(cmd) < 8:
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                                              msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
+                                    return None
+
+                                self.stop = False
+                                nickname = str(cmd[2])
+                                department = str(cmd[3])
+                                gender = str(cmd[4])
+                                age = int(cmd[5])
+                                group = str(cmd[6]).lower()
+                                autoip = int(cmd[7])
+
+                                self.Base.create_thread(
+                                    func=self.thread_connect_manual_clones,
+                                    func_args=(nickname, department, gender, age, group, autoip)
+                                )
+
+                            except Exception as err:
+                                self.Logs.error(f'{err}')
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                                          msg=f"/msg {dnickname} clone manual-connect nickname department gender age group [auto-ip = 1 / 0]")
+
                         case 'kill':
                             try:
                                 # clone kill [all | nickname]
@@ -348,7 +461,8 @@ class Clone():
 
                         case 'join':
                             try:
-                                # clone join [all | nickname] #channel
+                                # clone join [all | group group_name | nickname] #channel
+                                # clone join group group_name #channel
                                 clone_name = str(cmd[2])
                                 clone_channel_to_join = str(cmd[3])
 
@@ -356,6 +470,19 @@ class Clone():
 
                                     for clone in self.Clone.UID_CLONE_DB:
                                         self.Protocol.send_join_chan(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
+
+                                if clone_name.lower() == 'group':
+                                    if len(cmd) < 5:
+                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                            msg=f"/msg {dnickname} clone join <group> <GROUP NAME> <#channel>")
+                                        return None
+
+                                    group_name = str(cmd[3]) if len(cmd) == 5 else None
+                                    clone_channel_to_join = str(cmd[4]) if len(cmd) == 5 else None
+
+                                    for clone in self.Clone.UID_CLONE_DB:
+                                        if clone.group == group_name:
+                                            self.Protocol.send_join_chan(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
@@ -366,10 +493,12 @@ class Clone():
                                 self.Logs.error(f'{err}')
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join all #channel")
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join clone_nickname #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join group <group name> #channel")
 
                         case 'part':
                             try:
-                                # clone part [all | nickname] #channel
+                                # clone part [all | group group_name | nickname] #channel
+                                # clone part group group_name #channel
                                 clone_name = str(cmd[2])
                                 clone_channel_to_part = str(cmd[3])
 
@@ -377,6 +506,19 @@ class Clone():
 
                                     for clone in self.Clone.UID_CLONE_DB:
                                         self.Protocol.send_part_chan(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
+
+                                if clone_name.lower() == 'group':
+                                    if len(cmd) < 5:
+                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                            msg=f"/msg {dnickname} clone part <group> <GROUP NAME> <#channel>")
+                                        return None
+
+                                    group_name = str(cmd[3]) if len(cmd) == 5 else None
+                                    clone_channel_to_join = str(cmd[4]) if len(cmd) == 5 else None
+
+                                    for clone in self.Clone.UID_CLONE_DB:
+                                        if clone.group == group_name:
+                                            self.Protocol.send_part_chan(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
 
                                 else:
                                     if self.Clone.exists(clone_name):
@@ -387,6 +529,7 @@ class Clone():
                             except Exception as err:
                                 self.Logs.error(f'{err}')
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part all #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part group <GROUP NAME> #channel")
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part clone_nickname #channel")
 
                         case 'list':

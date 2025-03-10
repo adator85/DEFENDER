@@ -1,9 +1,12 @@
+from importlib.util import find_spec
 import os
 import json
+from shutil import which
 from sys import exit, prefix
 from dataclasses import dataclass
 from subprocess import check_call, run, CalledProcessError, PIPE, check_output
 from platform import python_version, python_version_tuple
+import sys
 
 class Install:
 
@@ -159,6 +162,31 @@ class Install:
             print(f"File not found: {fe}")
         except Exception as err:
             print(f"General Error: {err}")
+
+    def check_python_requirements(self) -> bool:
+        try:
+            pip_installed = find_spec('pip') is not None if os.name == "nt" else which('pip3') is not None
+            venv_installed = find_spec('venv') is not None if os.name == "nt" else which('python3-venv') is not None
+
+            error_msg = ""
+            is_error = False
+
+            if not pip_installed:
+                error_msg = "pip3 is not installed, please install it \n" if os.name == "nt" else "pip3 is not installed please run: sudo apt install python3-pip \n"
+                is_error = True
+
+            if not venv_installed:
+                error_msg += "Python3 venv is not installed, please install it \n" if os.name == "nt" else "Python3 venv is not installed run: sudo apt install python3-venv"
+                is_error = True
+
+            if is_error:
+                raise Exception(error_msg)
+            else:
+                return True
+
+        except Exception as err:
+            print(f'General Error: {err}')
+            sys.exit(err)
 
     def check_packages_version(self) -> bool:
 

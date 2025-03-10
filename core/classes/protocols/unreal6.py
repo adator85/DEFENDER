@@ -845,11 +845,7 @@ class Unrealircd6:
             hostname = str(serverMsg[7])
             umodes = str(serverMsg[10])
             vhost = str(serverMsg[11])
-
-            if not 'S' in umodes:
-                remote_ip = self.__Base.decode_ip(str(serverMsg[13]))
-            else:
-                remote_ip = '127.0.0.1'
+            remote_ip = self.__Base.decode_ip(str(serverMsg[13])) if self.__Base.decode_ip(str(serverMsg[13])) is not None else '127.0.0.1'
 
             # extract realname
             realname = ' '.join(serverMsg[14:]).lstrip(':')

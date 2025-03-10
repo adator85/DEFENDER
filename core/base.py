@@ -797,7 +797,7 @@ class Base:
 
             return decoded_ip.exploded
         except ValueError as ve:
-            self.logs.critical(f'This remote ip is not valid : {ve}')
+            self.logs.debug(f'This remote ip is not valid : {ve}')
             return None
 
     def encode_ip(self, remote_ip_address: str) -> Union[str, None]:
