@@ -1096,14 +1096,14 @@ class Unrealircd6:
                 return None
 
             response_351 = f"{self.__Config.SERVICE_NAME.capitalize()}-{self.__Config.CURRENT_VERSION} {self.__Config.SERVICE_HOST} {self.name}"
-            self.send2socket(f':{self.__Config.SERVICE_HOST} 351 {getUser.nickname} {response_351}')
+            self.send2socket(f':{self.__Config.SERVEUR_LINK} 351 {getUser.nickname} {response_351}')
 
             modules = self.__Base.get_all_modules()
             response_005 = ' | '.join(modules)
-            self.send2socket(f':{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server')
+            self.send2socket(f':{self.__Config.SERVEUR_LINK} 005 {getUser.nickname} {response_005} are supported by this server')
 
             response_005 = ''.join(self.__Settings.PROTOCTL_USER_MODES)
-            self.send2socket(f":{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server")
+            self.send2socket(f":{self.__Config.SERVEUR_LINK} 005 {getUser.nickname} {response_005} are supported by this server")
 
             return None
 
