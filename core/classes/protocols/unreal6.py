@@ -10,6 +10,7 @@ class Unrealircd6:
 
     def  __init__(self, ircInstance: 'Irc'):
         self.name = 'UnrealIRCD-6'
+        self.protocol_version = 6100
 
         self.__Irc = ircInstance
         self.__Config = ircInstance.Config
@@ -158,6 +159,7 @@ class Unrealircd6:
         umodes = self.__Config.SERVICE_UMODES
         host = self.__Config.SERVICE_HOST
         service_name = self.__Config.SERVICE_NAME
+        protocolversion = self.protocol_version
 
         password = self.__Config.SERVEUR_PASSWORD
         link = self.__Config.SERVEUR_LINK
@@ -169,16 +171,15 @@ class Unrealircd6:
 
         self.send2socket(f":{server_id} PASS :{password}", print_log=False)
         self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
-        # self.__Irc.send2socket(f":{sid} PROTOCTL NICKv2 VHP UMODE2 NICKIP SJOIN SJOIN2 SJ3 NOQUIT TKLEXT MLOCK SID MTAGS")
-        self.send2socket(f":{server_id} PROTOCTL EAUTH={link},,,{service_name}-v{version}")
+        self.send2socket(f":{server_id} PROTOCTL EAUTH={link},{protocolversion},,{service_name}-v{version}")
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
+        self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
         self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
         self.send2socket(f":{server_id} {nickname} :Reserved for services")
         self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
         self.sjoin(chan)
         self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
         self.send2socket(f":{service_id} MODE {chan} {cmodes}")
-        # self.send2socket(f":{service_id} MODE {chan} {umodes} {service_id}")
 
         self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
 
