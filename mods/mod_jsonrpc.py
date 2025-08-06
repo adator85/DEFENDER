@@ -71,6 +71,15 @@ class Jsonrpc():
                     callback_object_instance=self,
                     callback_method_name='callback_sent_to_irc'
                     )
+        
+        if self.UnrealIrcdRpcLive.get_error.code != 0:
+            self.Logs.error(self.UnrealIrcdRpcLive.get_error.code, self.UnrealIrcdRpcLive.get_error.message)
+            self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
+            return
 
         self.Rpc: Loader = Loader(
             req_method=self.Config.JSONRPC_METHOD,
@@ -79,21 +88,15 @@ class Jsonrpc():
             password=self.Config.JSONRPC_PASSWORD
         )
 
-        self.subscribed = False
-
-        if self.Rpc.Error.code != 0:
+        if self.Rpc.get_error.code != 0:
+            self.Logs.error(self.Rpc.get_error.code, self.Rpc.get_error.message)
             self.Protocol.send_priv_msg(
                 nick_from=self.Config.SERVICE_NICKNAME,
-                msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.Error.message}", 
+                msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.get_error.message}",
                 channel=self.Config.SERVICE_CHANLOG
                 )
 
-        if self.UnrealIrcdRpcLive.Error.code != 0:
-            self.Protocol.send_priv_msg(
-                    nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
-                    channel=self.Config.SERVICE_CHANLOG
-                )
+        self.subscribed = False
 
         if self.ModConfig.jsonrpc == 1:
             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
@@ -120,7 +123,7 @@ class Jsonrpc():
         self.Base.db_execute_query(table_logs)
         return None
 
-    def callback_sent_to_irc(self, json_response: str):
+    def callback_sent_to_irc(self, response):
 
         dnickname = self.Config.SERVICE_NICKNAME
         dchanlog = self.Config.SERVICE_CHANLOG
@@ -129,18 +132,19 @@ class Jsonrpc():
         bold = self.Config.COLORS.bold
         red = self.Config.COLORS.red
 
-        if json_response.result == True:
-            self.Protocol.send_priv_msg(
-                nick_from=self.Config.SERVICE_NICKNAME,
-                msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
-                channel=dchanlog)
-            return None
+        if hasattr(response, 'result'):
+            if response.result == True:
+                self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
+                    channel=dchanlog)
+                return None
 
-        level = json_response.result.level
-        subsystem = json_response.result.subsystem
-        event_id = json_response.result.event_id
-        log_source = json_response.result.log_source
-        msg = json_response.result.msg
+        level = response.result.level if hasattr(response.result, 'level') else ''
+        subsystem = response.result.subsystem if hasattr(response.result, 'subsystem') else ''
+        event_id = response.result.event_id if hasattr(response.result, 'event_id') else ''
+        log_source = response.result.log_source if hasattr(response.result, 'log_source') else ''
+        msg = response.result.msg if hasattr(response.result, 'msg') else ''
 
         build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
 
@@ -148,13 +152,13 @@ class Jsonrpc():
 
     def thread_start_jsonrpc(self):
 
-        if self.UnrealIrcdRpcLive.Error.code == 0:
+        if self.UnrealIrcdRpcLive.get_error.code == 0:
             self.UnrealIrcdRpcLive.subscribe(["all"])
             self.subscribed = True
         else:
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.Error.message}", 
+                    msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
                 )
 
@@ -218,17 +222,17 @@ class Jsonrpc():
                             #         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{logger_name} - {logger.level}")
 
                             for thread in self.Base.running_threads:
-                                if thread.getName() == 'thread_start_jsonrpc':
+                                if thread.name == 'thread_start_jsonrpc':
                                     if thread.is_alive():
                                         self.Protocol.send_priv_msg(
                                             nick_from=self.Config.SERVICE_NICKNAME,
-                                            msg=f"Thread {thread.getName()} is running",
+                                            msg=f"Thread {thread.name} is running",
                                             channel=dchannel
                                             )
                                     else:
                                         self.Protocol.send_priv_msg(
                                             nick_from=self.Config.SERVICE_NICKNAME,
-                                            msg=f"Thread {thread.getName()} is not running, wait untill the process will be cleaned up",
+                                            msg=f"Thread {thread.name} is not running, wait untill the process will be cleaned up",
                                             channel=dchannel
                                             )
 
@@ -260,8 +264,8 @@ class Jsonrpc():
                             rpc = self.Rpc
 
                             UserInfo = rpc.User.get(uid_to_get)
-                            if rpc.Error.code != 0:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.Error.message}')
+                            if rpc.get_error.code != 0:
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.get_error.message}')
                                 return None
 
                             chan_list = []
