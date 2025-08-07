@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
-from unrealircd_rpc_py.Live import Live
+from unrealircd_rpc_py.Live import LiveWebsocket
 from unrealircd_rpc_py.Loader import Loader
 
 if TYPE_CHECKING:
@@ -63,13 +63,12 @@ class Jsonrpc():
         self.__load_module_configuration()
         # End of mandatory methods you can start your customization #
 
-        self.UnrealIrcdRpcLive: Live = Live(
-                    req_method='websocket',
+        self.UnrealIrcdRpcLive: LiveWebsocket = LiveWebsocket(
                     url=self.Config.JSONRPC_URL,
                     username=self.Config.JSONRPC_USER,
                     password=self.Config.JSONRPC_PASSWORD,
                     callback_object_instance=self,
-                    callback_method_name='callback_sent_to_irc'
+                    callback_method_or_function_name='callback_sent_to_irc'
                     )
         
         if self.UnrealIrcdRpcLive.get_error.code != 0:
@@ -133,7 +132,7 @@ class Jsonrpc():
         red = self.Config.COLORS.red
 
         if hasattr(response, 'result'):
-            if response.result == True:
+            if isinstance(response.result, bool) and response.result:
                 self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
@@ -147,6 +146,10 @@ class Jsonrpc():
         msg = response.result.msg if hasattr(response.result, 'msg') else ''
 
         build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
+
+        # Check if there is an error
+        if self.UnrealIrcdRpcLive.get_error.code != 0:
+            self.Logs.error(f"RpcLiveError: {self.UnrealIrcdRpcLive.get_error.message}")
 
         self.Protocol.send_priv_msg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
 
