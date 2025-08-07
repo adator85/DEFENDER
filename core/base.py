@@ -465,7 +465,7 @@ class Base:
 
         try:
             t = threading.Timer(interval=time_to_wait, function=func, args=func_args)
-            t.setName(func.__name__)
+            t.name = func.__name__
             t.start()
 
             self.running_timers.append(t)
@@ -488,14 +488,14 @@ class Base:
 
             if run_once:
                 for thread in self.running_threads:
-                    if thread.getName() == func_name:
+                    if thread.name == func_name:
                         return None
 
             th = threading.Thread(target=func, args=func_args, name=str(func_name), daemon=daemon)
             th.start()
 
             self.running_threads.append(th)
-            self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.getName()} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.name} | Running Threads : {len(threading.enumerate())}")
 
         except AssertionError as ae:
             self.logs.error(f'{ae}')
@@ -514,7 +514,7 @@ class Base:
             count = 0
 
             for thr in self.running_threads:
-                if thread_name == thr.getName():
+                if thread_name == thr.name:
                     count += 1
 
             return count
@@ -540,11 +540,10 @@ class Base:
         """
         try:
             for thread in self.running_threads:
-                if thread.getName() != 'heartbeat':
-                    # print(thread.getName(), thread.is_alive(), sep=' / ')
+                if thread.name != 'heartbeat':
                     if not thread.is_alive():
                         self.running_threads.remove(thread)
-                        self.logs.info(f"-- Thread {str(thread.getName())} {str(thread.native_id)} removed")
+                        self.logs.info(f"-- Thread {str(thread.name)} {str(thread.native_id)} removed")
 
             # print(threading.enumerate())
         except AssertionError as ae:
@@ -568,19 +567,19 @@ class Base:
         self.logs.debug(f"=======> Checking for Timers to stop")
         for timer in self.running_timers:
             while timer.is_alive():
-                self.logs.debug(f"> waiting for {timer.getName()} to close")
+                self.logs.debug(f"> waiting for {timer.name} to close")
                 timer.cancel()
                 time.sleep(0.2)
             self.running_timers.remove(timer)
-            self.logs.debug(f"> Cancelling {timer.getName()} {timer.native_id}")
+            self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
 
         self.logs.debug(f"=======> Checking for Threads to stop")
         for thread in self.running_threads:
-            if thread.getName() == 'heartbeat' and thread.is_alive():
+            if thread.name == 'heartbeat' and thread.is_alive():
                 self.execute_periodic_action()
                 self.logs.debug(f"> Running the last periodic action")
             self.running_threads.remove(thread)
-            self.logs.debug(f"> Cancelling {thread.getName()} {thread.native_id}")
+            self.logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
 
         self.logs.debug(f"=======> Checking for Sockets to stop")
         for soc in self.running_sockets:
