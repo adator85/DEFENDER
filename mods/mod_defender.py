@@ -1400,6 +1400,13 @@ class Defender():
                                 jailed_salon = self.Config.SALON_JAIL
                                 welcome_salon = self.Config.SALON_LIBERER
                                 client_obj = self.User.get_User(str(cmd[2]))
+
+                                if client_obj is None:
+                                    p.send_notice(nick_from=dnickname,
+                                                  nick_to=fromuser,
+                                                  msg=f"This nickname ({str(cmd[2])}) is not connected to the network!")
+                                    return None
+
                                 client_to_release = self.Reputation.get_Reputation(client_obj.uid)
 
                                 if client_to_release is None:
