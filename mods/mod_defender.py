@@ -1404,7 +1404,7 @@ class Defender():
 
                                 if client_to_release is None:
                                     p.send_notice(nick_from=dnickname,
-                                                  nick_to=fromuser, msg=f"This nickname ({str(cmd[1])}) doesn't exist in the reputation databalse!")
+                                                  nick_to=fromuser, msg=f"This nickname ({str(cmd[2])}) doesn't exist in the reputation databalse!")
                                     return None
 
                                 if self.Reputation.delete(client_to_release.uid):
