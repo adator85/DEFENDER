@@ -46,7 +46,7 @@ class Admin:
                 return result
 
         if not result:
-            self.Logs.critical(f'The new nickname {newNickname} was not updated, uid = {uid}')
+            self.Logs.debug(f'The new nickname {newNickname} was not updated, uid = {uid} - The Client is not an admin')
 
         return result
 
@@ -63,7 +63,7 @@ class Admin:
                 return result
 
         if not result:
-            self.Logs.critical(f'The new level {newLevel} was not updated, nickname = {nickname}')
+            self.Logs.debug(f'The new level {newLevel} was not updated, nickname = {nickname} - The Client is not an admin')
 
         return result
 
