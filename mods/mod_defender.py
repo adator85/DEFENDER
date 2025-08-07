@@ -2,6 +2,7 @@ import socket
 import json
 import time
 import re
+from webbrowser import get
 import psutil
 import requests
 from dataclasses import dataclass
@@ -1325,9 +1326,13 @@ class Defender():
                 # .reputation [on/off] --> activate or deactivate reputation system
                 # .reputation set banallchan [on/off] --> activate or deactivate ban in all channel
                 # .reputation set limit [xxxx] --> change the reputation threshold
+                # .reputation release [nick]
                 # .reputation [arg1] [arg2] [arg3]
                 try:
                     len_cmd = len(cmd)
+                    if len_cmd < 2:
+                        raise IndexError("Showing help!")
+
                     activation = str(cmd[1]).lower()
 
                     # Nous sommes dans l'activation ON / OFF
@@ -1384,7 +1389,47 @@ class Defender():
 
                             self.Channel.db_query_channel('del', self.module_name, jail_chan)
 
-                    if len_cmd == 4:
+                    if len_cmd == 3:
+                        get_options = str(cmd[1]).lower()
+
+                        match get_options:
+                            case 'release':
+                                # .reputation release [nick]
+                                p = self.Protocol
+                                link = self.Config.SERVEUR_LINK
+                                jailed_salon = self.Config.SALON_JAIL
+                                welcome_salon = self.Config.SALON_LIBERER
+                                client_obj = self.User.get_User(str(cmd[2]))
+                                client_to_release = self.Reputation.get_Reputation(client_obj.uid)
+
+                                if client_to_release is None:
+                                    p.send_notice(nick_from=dnickname,
+                                                  nick_to=fromuser, msg=f"This nickname doesn't exist - {str(cmd[1])}")
+                                    return None
+
+                                if self.Reputation.delete(client_to_release.uid):
+                                    p.send_priv_msg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.green}REPUTATION RELEASE{self.Config.COLORS.black} ] : {client_to_release.nickname} has been released",
+                                                channel=dchanlog)
+                                    p.send_notice(nick_from=dnickname,
+                                                  nick_to=fromuser, msg=f"This nickname has been released from reputation system")
+                                    
+                                    p.send_notice(nick_from=dnickname,
+                                                  nick_to=client_to_release.nickname, msg=f"You have been released from the reputation system by ({fromuser})")
+                                    
+                                    p.send_sapart(nick_to_sapart=client_to_release.nickname, channel_name=jailed_salon)
+                                    p.send_sajoin(nick_to_sajoin=client_to_release.nickname, channel_name=welcome_salon)
+                                    p.send2socket(f":{link} REPUTATION {client_to_release.remote_ip} {self.ModConfig.reputation_score_after_release}")
+                                    return None
+                                else:
+                                    p.send_priv_msg(
+                                                nick_from=dnickname,
+                                                msg=f"[ {self.Config.COLORS.red}REPUTATION RELEASE ERROR{self.Config.COLORS.black} ] : "
+                                                f"{client_to_release.nickname} has not been released! as he is not in the reputation database",
+                                                channel=dchanlog
+                                            )
+                    if len_cmd > 4:
                         get_set = str(cmd[1]).lower()
 
                         if get_set != 'set':
@@ -1393,7 +1438,7 @@ class Defender():
                         get_options = str(cmd[2]).lower()
 
                         match get_options:
-
+                            
                             case 'banallchan':
                                 key = 'reputation_ban_all_chan'
                                 get_value = str(cmd[3]).lower()
