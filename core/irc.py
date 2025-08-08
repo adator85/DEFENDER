@@ -494,7 +494,8 @@ class Irc:
         try:
             # module_name : mod_voice
             module_name = module_name.lower()
-            class_name = module_name.split('_')[1].capitalize()         # ==> Voice
+            module_folder = module_name.split('_')[1].lower() # ==> voice
+            class_name = module_name.split('_')[1].capitalize() # ==> Voice
 
             # print(self.loaded_classes)
 
@@ -511,7 +512,7 @@ class Irc:
                     )
                     return False
 
-                the_module = sys.modules['mods.' + module_name]
+                the_module = sys.modules[f'mods.{module_folder}.{module_name}']
                 importlib.reload(the_module)
                 my_class = getattr(the_module, class_name, None)
                 new_instance = my_class(self.ircObject)
@@ -529,7 +530,7 @@ class Irc:
                 return False
 
             # Charger le module
-            loaded_module = importlib.import_module(f"mods.{module_name}")
+            loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
 
             my_class = getattr(loaded_module, class_name, None)                 # Récuperer le nom de classe
             create_instance_of_the_class = my_class(self.ircObject)             # Créer une nouvelle instance de la classe
@@ -612,13 +613,14 @@ class Irc:
     def reload_module(self, from_user: str, mod_name: str) -> bool:
         try:
             module_name = mod_name.lower()                       # ==> mod_defender
+            module_folder = module_name.split('_')[1].lower()    # ==> defender
             class_name = module_name.split('_')[1].capitalize()  # ==> Defender
 
             if 'mods.' + module_name in sys.modules:
                 self.Logs.info('Unload the module ...')
                 self.loaded_classes[class_name].unload()
                 self.Logs.info('Module Already Loaded ... reloading the module ...')
-                the_module = sys.modules['mods.' + module_name]
+                the_module = sys.modules[f'mods.{module_folder}.{module_name}']
                 importlib.reload(the_module)
 
                 # Supprimer la class déja instancier

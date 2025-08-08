@@ -1,10 +1,26 @@
 from datetime import datetime
-from dataclasses import dataclass, field
-from typing import Literal
+from json import dumps
+from dataclasses import dataclass, field, asdict, fields
+from typing import Literal, Any
 from os import sep
 
 @dataclass
-class MClient:
+class MainModel:
+    """Parent Model contains important methods"""
+    def to_dict(self) -> dict[str, Any]:
+        """Return the fields of a dataclass instance as a new dictionary mapping field names to field values."""
+        return asdict(self)
+    
+    def to_json(self) -> str:
+        """Return the object of a dataclass a json str."""
+        return dumps(self.to_dict())
+
+    def get_attributes(self) -> list[str]:
+        """Return a list of attributes name"""
+        return [f.name for f in fields(self)]
+
+@dataclass
+class MClient(MainModel):
     """Model Client for registred nickname"""
     uid: str = None
     account: str = None
@@ -22,7 +38,7 @@ class MClient:
     connexion_datetime: datetime = field(default=datetime.now())
 
 @dataclass
-class MUser:
+class MUser(MainModel):
     """Model User"""
 
     uid: str = None
@@ -40,7 +56,7 @@ class MUser:
     connexion_datetime: datetime = field(default=datetime.now())
 
 @dataclass
-class MAdmin:
+class MAdmin(MainModel):
     """Model Admin"""
 
     uid: str = None
@@ -59,7 +75,7 @@ class MAdmin:
     level: int = 0
 
 @dataclass
-class MReputation:
+class MReputation(MainModel):
     """Model Reputation"""
     uid: str = None
     nickname: str = None
@@ -77,7 +93,7 @@ class MReputation:
     secret_code: str = None
 
 @dataclass
-class MChannel:
+class MChannel(MainModel):
     """Model Channel"""
 
     name: str = None
@@ -92,7 +108,7 @@ class MChannel:
     """
 
 @dataclass
-class ColorModel:
+class ColorModel(MainModel):
     white: str  = "\x0300"
     black: str  = "\x0301"
     blue: str   = "\x0302"
@@ -104,7 +120,7 @@ class ColorModel:
     underline: str = "\x1F"
 
 @dataclass
-class MConfig:
+class MConfig(MainModel):
     """Model Configuration"""
 
     SERVEUR_IP: str = "127.0.0.1"
@@ -305,7 +321,7 @@ class MConfig:
         """0: utf-8 | 1: iso-8859-1"""
 
 @dataclass
-class MClone:
+class MClone(MainModel):
     """Model Clone"""
     connected: bool = False
     uid: str = None

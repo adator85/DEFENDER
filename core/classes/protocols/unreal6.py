@@ -1,6 +1,6 @@
 from re import match, findall, search
 from datetime import datetime
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 from ssl import SSLEOFError, SSLError
 
 if TYPE_CHECKING:
@@ -17,13 +17,20 @@ class Unrealircd6:
         self.__Base = ircInstance.Base
         self.__Settings = ircInstance.Base.Settings
 
-        self.known_protocol = ['SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
+        self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
-                               'SLOG', 'NICK', 'PART', 'PONG'
-                               ]
+                               'SLOG', 'NICK', 'PART', 'PONG'}
 
         self.__Base.logs.info(f"** Loading protocol [{__name__}]")
+
+    def get_ircd_protocol_poisition(self, cmd: list[str]) -> tuple[int, Optional[str]]:
+
+        for index, token in enumerate(cmd):
+            if token.upper() in self.known_protocol:
+                return index, token.upper()
+        
+        return (-1, None)
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.

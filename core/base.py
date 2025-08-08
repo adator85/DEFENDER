@@ -391,7 +391,7 @@ class Base:
             result = response.fetchall()
 
             for param, value in result:
-                if type(getattr(dataclassObj, param)) == list:
+                if isinstance(getattr(dataclassObj, param), list):
                     value = ast.literal_eval(value)
 
                 setattr(dataclassObj, param, self.int_if_possible(value))
