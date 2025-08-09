@@ -1,6 +1,5 @@
 from re import sub
 from typing import Any, Optional, Union, TYPE_CHECKING
-from dataclasses import asdict
 
 if TYPE_CHECKING:
     from core.base import Base
@@ -10,30 +9,28 @@ class Client:
 
     CLIENT_DB: list['MClient'] = []
 
-    def __init__(self, baseObj: 'Base') -> None:
+    def __init__(self, base: 'Base'):
 
-        self.Logs = baseObj.logs
-        self.Base = baseObj
+        self.Logs = base.logs
+        self.Base = base
 
-        return None
-
-    def insert(self, newUser: 'MClient') -> bool:
+    def insert(self, new_client: 'MClient') -> bool:
         """Insert a new User object
 
         Args:
-            newUser (UserModel): New userModel object
+            new_client (MClient): New Client object
 
         Returns:
             bool: True if inserted
         """
 
-        userObj = self.get_Client(newUser.uid)
+        client_obj = self.get_Client(new_client.uid)
 
-        if not userObj is None:
+        if not client_obj is None:
             # User already created return False
             return False
 
-        self.CLIENT_DB.append(newUser)
+        self.CLIENT_DB.append(new_client)
 
         return True
 
@@ -47,12 +44,12 @@ class Client:
         Returns:
             bool: True if updated
         """
-        userObj = self.get_Client(uidornickname=uid)
+        user_obj = self.get_Client(uidornickname=uid)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
-        userObj.nickname = newNickname
+        user_obj.nickname = newNickname
 
         return True
 
@@ -67,16 +64,16 @@ class Client:
             bool: True if user mode has been updaed
         """
         response = True
-        userObj = self.get_Client(uidornickname=uidornickname)
+        user_obj = self.get_Client(uidornickname=uidornickname)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
         action = modes[0]
         new_modes = modes[1:]
 
-        existing_umodes = userObj.umodes
-        umodes = userObj.umodes
+        existing_umodes = user_obj.umodes
+        umodes = user_obj.umodes
 
         if action == '+':
 
@@ -95,7 +92,7 @@ class Client:
         final_umodes_liste = [x for x in self.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
         final_umodes = ''.join(final_umodes_liste)
 
-        userObj.umodes = f"+{final_umodes}"
+        user_obj.umodes = f"+{final_umodes}"
 
         return response
 
@@ -109,16 +106,16 @@ class Client:
             bool: True if deleted
         """
 
-        userObj = self.get_Client(uidornickname=uid)
+        user_obj = self.get_Client(uidornickname=uid)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
-        self.CLIENT_DB.remove(userObj)
+        self.CLIENT_DB.remove(user_obj)
 
         return True
 
-    def get_Client(self, uidornickname: str) -> Union['MClient', None]:
+    def get_Client(self, uidornickname: str) -> Optional['MClient']:
         """Get The Client Object model
 
         Args:
@@ -127,16 +124,15 @@ class Client:
         Returns:
             UserModel|None: The UserModel Object | None
         """
-        User = None
         for record in self.CLIENT_DB:
             if record.uid == uidornickname:
-                User = record
+                return record
             elif record.nickname == uidornickname:
-                User = record
+                return record
 
-        return User
+        return None
 
-    def get_uid(self, uidornickname:str) -> Union[str, None]:
+    def get_uid(self, uidornickname:str) -> Optional[str]:
         """Get the UID of the user starting from the UID or the Nickname
 
         Args:
@@ -146,12 +142,12 @@ class Client:
             str|None: Return the UID
         """
 
-        userObj = self.get_Client(uidornickname=uidornickname)
+        client_obj = self.get_Client(uidornickname=uidornickname)
 
-        if userObj is None:
+        if client_obj is None:
             return None
 
-        return userObj.uid
+        return client_obj.uid
 
     def get_nickname(self, uidornickname:str) -> Union[str, None]:
         """Get the Nickname starting from UID or the nickname
@@ -162,12 +158,12 @@ class Client:
         Returns:
             str|None: the nickname
         """
-        userObj = self.get_Client(uidornickname=uidornickname)
+        client_obj = self.get_Client(uidornickname=uidornickname)
 
-        if userObj is None:
+        if client_obj is None:
             return None
 
-        return userObj.nickname
+        return client_obj.nickname
 
     def get_client_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
         """Transform User Object to a dictionary
@@ -194,9 +190,9 @@ class Client:
         Returns:
             bool: True if exist
         """
-        userObj = self.get_Client(uidornickname=uidornikname)
+        user_obj = self.get_Client(uidornickname=uidornikname)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
         return True

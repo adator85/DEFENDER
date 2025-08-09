@@ -1,3 +1,4 @@
+from calendar import c
 import socket
 import psutil
 import requests
@@ -264,7 +265,7 @@ def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
     channel = srvmsg[3]
     User = irc.User.get_User(user_trigger)
 
-    if User is None or not irc.Channel.Is_Channel(channelToCheck=channel):
+    if User is None or not irc.Channel.Is_Channel(channel_to_check=channel):
         return
 
     flood_time = confmodel.flood_time

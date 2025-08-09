@@ -1,6 +1,5 @@
 from re import sub
-from typing import Any, Optional, Union, TYPE_CHECKING
-from dataclasses import asdict
+from typing import Any, Optional, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
@@ -11,12 +10,10 @@ class User:
 
     UID_DB: list['MUser'] = []
 
-    def __init__(self, baseObj: 'Base') -> None:
+    def __init__(self, base: 'Base'):
 
-        self.Logs = baseObj.logs
-        self.Base = baseObj
-
-        return None
+        self.Logs = base.logs
+        self.Base = base
 
     def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object

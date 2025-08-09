@@ -22,7 +22,7 @@ class ModConfModel(MainModel):
     autolimit_interval: int = 3
 
 @dataclass
-class FloodUser:
+class FloodUser(MainModel):
     uid: str = None
     nbr_msg: int = 0
     first_msg_time: int = 0

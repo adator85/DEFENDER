@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 from core.base import Base
 import core.definition as df
 

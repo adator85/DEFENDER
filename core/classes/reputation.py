@@ -6,12 +6,10 @@ class Reputation:
 
     UID_REPUTATION_DB: list[MReputation] = []
 
-    def __init__(self, baseObj: Base) -> None:
+    def __init__(self, base: Base):
 
-        self.Logs = baseObj.logs
+        self.Logs = base.logs
         self.MReputation: MReputation = MReputation
-
-        return None
 
     def insert(self, new_reputation_user: MReputation) -> bool:
         """Insert a new Reputation User object

@@ -1,6 +1,5 @@
 from re import findall
 from typing import Any, Optional, Literal, TYPE_CHECKING
-from core.classes import user
 
 if TYPE_CHECKING:
     from core.definition import MChannel
@@ -12,14 +11,14 @@ class Channel:
     """List that contains all the Channels objects (ChannelModel)
     """
 
-    def __init__(self, baseObj: 'Base') -> None:
+    def __init__(self, base: 'Base') -> None:
 
-        self.Logs = baseObj.logs
-        self.Base = baseObj
+        self.Logs = base.logs
+        self.Base = base
 
         return None
 
-    def insert(self, newChan: 'MChannel') -> bool:
+    def insert(self, new_channel: 'MChannel') -> bool:
         """This method will insert a new channel and if the channel exist it will update the user list (uids)
 
         Args:
@@ -31,17 +30,17 @@ class Channel:
         result = False
         exist = False
 
-        if not self.Is_Channel(newChan.name):
-            self.Logs.error(f"The channel {newChan.name} is not valid, channel must start with #")
+        if not self.Is_Channel(new_channel.name):
+            self.Logs.error(f"The channel {new_channel.name} is not valid, channel must start with #")
             return False
 
         for record in self.UID_CHANNEL_DB:
-            if record.name.lower() == newChan.name.lower():
+            if record.name.lower() == new_channel.name.lower():
                 # If the channel exist, update the user list and do not go further
                 exist = True
                 # self.Logs.debug(f'{record.name} already exist')
 
-                for user in newChan.uids:
+                for user in new_channel.uids:
                     record.uids.append(user)
 
                 # Supprimer les doublons
@@ -52,13 +51,13 @@ class Channel:
 
         if not exist:
             # If the channel don't exist, then create it
-            newChan.name = newChan.name.lower()
-            self.UID_CHANNEL_DB.append(newChan)
+            new_channel.name = new_channel.name.lower()
+            self.UID_CHANNEL_DB.append(new_channel)
             result = True
-            # self.Logs.debug(f'New Channel Created: ({newChan})')
+            # self.Logs.debug(f'New Channel Created: ({new_channel})')
 
         if not result:
-            self.Logs.critical(f'The Channel Object was not inserted {newChan}')
+            self.Logs.critical(f'The Channel Object was not inserted {new_channel}')
 
         self.clean_channel()
 
@@ -66,12 +65,12 @@ class Channel:
 
     def delete(self, channel_name: str) -> bool:
 
-        chanObj = self.get_Channel(channel_name)
+        chan_obj = self.get_Channel(channel_name)
 
-        if chanObj is None:
+        if chan_obj is None:
             return False
 
-        self.UID_CHANNEL_DB.remove(chanObj)
+        self.UID_CHANNEL_DB.remove(chan_obj)
 
         return True
 
@@ -79,14 +78,14 @@ class Channel:
         try:
             result = False
 
-            chanObj = self.get_Channel(channel_name.lower())
+            chan_obj = self.get_Channel(channel_name.lower())
 
-            if chanObj is None:
+            if chan_obj is None:
                 return result
 
-            for userid in chanObj.uids:
+            for userid in chan_obj.uids:
                 if self.Base.clean_uid(userid) == self.Base.clean_uid(uid):
-                    chanObj.uids.remove(userid)
+                    chan_obj.uids.remove(userid)
                     result = True
 
             self.clean_channel()
@@ -103,7 +102,6 @@ class Channel:
                 for user_id in record.uids:
                     if self.Base.clean_uid(user_id) == self.Base.clean_uid(uid):
                         record.uids.remove(user_id)
-                        # self.Logs.debug(f'The UID {uid} has been removed, here is the new object: {record}')
                         result = True
 
             self.clean_channel()
@@ -115,19 +113,16 @@ class Channel:
     def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
         try:
             result = False
-            chanObj = self.get_Channel(channel_name)
+            chan_obj = self.get_Channel(channel_name)
             self.Logs.debug(f"** {__name__}")
 
-            if chanObj is None:
+            if chan_obj is None:
                 result = self.insert(MChannel(channel_name, uids=[uid]))
-                # self.Logs.debug(f"** {__name__} - result: {result}")
-                # self.Logs.debug(f'New Channel Created: ({chanObj})')
                 return result
 
-            chanObj.uids.append(uid)
-            del_duplicates = list(set(chanObj.uids))
-            chanObj.uids = del_duplicates
-            # self.Logs.debug(f'New Channel Created: ({chanObj})')
+            chan_obj.uids.append(uid)
+            del_duplicates = list(set(chan_obj.uids))
+            chan_obj.uids = del_duplicates
 
             return True
         except Exception as err:
@@ -143,18 +138,16 @@ class Channel:
         Returns:
             bool: True if the user is present in the channel
         """
-        user_found = False
         chan = self.get_Channel(channel_name=channel_name)
         if chan is None:
-            return user_found
+            return False
 
         clean_uid = self.Base.clean_uid(uid=uid)
         for chan_uid in chan.uids:
             if self.Base.clean_uid(chan_uid) == clean_uid:
-                user_found = True
-                break
+                return True
 
-        return user_found
+        return False
 
     def clean_channel(self) -> None:
         """Remove Channels if empty
@@ -163,7 +156,7 @@ class Channel:
             for record in self.UID_CHANNEL_DB:
                 if not record.uids:
                     self.UID_CHANNEL_DB.remove(record)
-                    # self.Logs.debug(f'The Channel {record.name} has been removed, here is the new object: {record}')
+
             return None
         except Exception as err:
             self.Logs.error(f'{err}')
@@ -178,7 +171,7 @@ class Channel:
 
     def get_channel_asdict(self, chan_name: str) -> Optional[dict[str, Any]]:
 
-        channel_obj: Optional['MChannel'] = self.get_Channel(chan_name=chan_name)
+        channel_obj: Optional['MChannel'] = self.get_Channel(chan_name)
 
         if channel_obj is None:
             return None
@@ -235,9 +228,9 @@ class Channel:
                 case 'add':
                     mes_donnees = {'module_name': module_name, 'channel_name': channel_name}
                     response = self.Base.db_execute_query(f"SELECT id FROM {core_table} WHERE module_name = :module_name AND channel_name = :channel_name", mes_donnees)
-                    isChannelExist = response.fetchone()
+                    is_channel_exist = response.fetchone()
 
-                    if isChannelExist is None:
+                    if is_channel_exist is None:
                         mes_donnees = {'datetime': self.Base.get_datetime(), 'channel_name': channel_name, 'module_name': module_name}
                         insert = self.Base.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
                         if insert.rowcount:
@@ -261,4 +254,3 @@ class Channel:
 
         except Exception as err:
             self.Logs.error(err)
-

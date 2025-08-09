@@ -269,15 +269,15 @@ class Clone():
 
                     if not senderObj is None:
                         senderMsg = ' '.join(cmd[4:])
-                        getClone = self.Clone.get_Clone(cmd[3])
+                        clone_obj = self.Clone.get_clone(cmd[3])
 
-                        if getClone is None:
+                        if clone_obj is None:
                             return None
 
-                        if getClone.uid != self.Config.SERVICE_ID:
+                        if clone_obj.uid != self.Config.SERVICE_ID:
                             final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
                             self.Protocol.send_priv_msg(
-                                nick_from=getClone.uid,
+                                nick_from=clone_obj.uid,
                                 msg=final_message,
                                 channel=self.Config.CLONE_CHANNEL
                             )
@@ -337,9 +337,9 @@ class Clone():
                                     self.Base.create_thread(func=self.thread_kill_clones, func_args=(fromuser, ))
 
                                 else:
-                                    cloneObj = self.Clone.get_Clone(clone_name)
-                                    if not cloneObj is None:
-                                        self.Protocol.send_quit(cloneObj.uid, 'Goood bye', print_log=False)
+                                    clone_obj = self.Clone.get_clone(clone_name)
+                                    if not clone_obj is None:
+                                        self.Protocol.send_quit(clone_obj.uid, 'Goood bye', print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')

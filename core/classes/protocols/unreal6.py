@@ -344,16 +344,16 @@ class Unrealircd6:
             uidornickname (str): The UID or the Nickname
             reason (str): The reason for the quit
         """
-        userObj = self.__Irc.User.get_User(uidornickname=uid)
-        cloneObj = self.__Irc.Clone.get_Clone(uidornickname=uid)
+        user_obj = self.__Irc.User.get_User(uidornickname=uid)
+        clone_obj = self.__Irc.Clone.get_clone(uidornickname=uid)
         reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
 
-        if not userObj is None:
-            self.send2socket(f":{userObj.uid} QUIT :{reason}", print_log=print_log)
-            self.__Irc.User.delete(userObj.uid)
+        if not user_obj is None:
+            self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
+            self.__Irc.User.delete(user_obj.uid)
 
-        if not cloneObj is None:
-            self.__Irc.Clone.delete(cloneObj.uid)
+        if not clone_obj is None:
+            self.__Irc.Clone.delete(clone_obj.uid)
 
         if not reputationObj is None:
             self.__Irc.Reputation.delete(reputationObj.uid)
@@ -469,7 +469,7 @@ class Unrealircd6:
 
     def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
 
-        channel = self.__Irc.Channel.Is_Channel(channelToCheck=channel_name)
+        channel = self.__Irc.Channel.Is_Channel(channel_name)
         if not channel:
             self.__Base.logs.error(f'The channel [{channel_name}] is not correct')
             return None

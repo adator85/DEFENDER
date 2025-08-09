@@ -6,13 +6,11 @@ class Clone:
 
     UID_CLONE_DB: list[MClone] = []
 
-    def __init__(self, baseObj: Base) -> None:
+    def __init__(self, base: Base):
 
-        self.Logs = baseObj.logs
+        self.Logs = base.logs
 
-        return None
-
-    def insert(self, newCloneObject: MClone) -> bool:
+    def insert(self, new_clone_object: MClone) -> bool:
         """Create new Clone object
 
         Args:
@@ -25,23 +23,22 @@ class Clone:
         exist = False
 
         for record in self.UID_CLONE_DB:
-            if record.nickname == newCloneObject.nickname:
+            if record.nickname == new_clone_object.nickname:
                 # If the user exist then return False and do not go further
                 exist = True
                 self.Logs.warning(f'Nickname {record.nickname} already exist')
                 return result
-            if record.uid == newCloneObject.uid:
+            if record.uid == new_clone_object.uid:
                 exist = True
                 self.Logs.warning(f'UID: {record.uid} already exist')
                 return result
 
         if not exist:
-            self.UID_CLONE_DB.append(newCloneObject)
+            self.UID_CLONE_DB.append(new_clone_object)
             result = True
-            # self.Logs.debug(f'New Clone Object Created: ({newCloneObject})')
 
         if not result:
-            self.Logs.critical(f'The Clone Object was not inserted {newCloneObject}')
+            self.Logs.critical(f'The Clone Object was not inserted {new_clone_object}')
 
         return result
 
@@ -55,12 +52,12 @@ class Clone:
             bool: True if deleted
         """
 
-        cloneObj = self.get_Clone(uidornickname=uidornickname)
+        clone_obj = self.get_clone(uidornickname=uidornickname)
 
-        if cloneObj is None:
+        if clone_obj is None:
             return False
 
-        self.UID_CLONE_DB.remove(cloneObj)
+        self.UID_CLONE_DB.remove(clone_obj)
 
         return True
 
@@ -73,7 +70,7 @@ class Clone:
         Returns:
             bool: True if the nickname exist
         """
-        clone = self.get_Clone(nickname)
+        clone = self.get_clone(nickname)
         if isinstance(clone, MClone):
             return True
         
@@ -88,13 +85,13 @@ class Clone:
         Returns:
             bool: True if the nickname exist
         """
-        clone = self.get_Clone(uid)
+        clone = self.get_clone(uid)
         if isinstance(clone, MClone):
             return True
         
         return False
 
-    def get_Clone(self, uidornickname: str) -> Optional[MClone]:
+    def get_clone(self, uidornickname: str) -> Optional[MClone]:
         """Get MClone object or None
 
         Args:
@@ -128,9 +125,9 @@ class Clone:
 
         return None
 
-    def get_Clone_AsDict(self, uidornickname: str) -> Optional[dict[str, Any]]:
+    def get_clone_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
 
-        clone_obj = self.get_Clone(uidornickname=uidornickname)
+        clone_obj = self.get_clone(uidornickname=uidornickname)
 
         if clone_obj is None:
             return None
@@ -141,9 +138,9 @@ class Clone:
 
         response = False
 
-        for cloneObject in self.UID_CLONE_DB:
-            if cloneObject.nickname == nickname:
-                cloneObject.alive = False # Kill the clone
+        for clone in self.UID_CLONE_DB:
+            if clone.nickname == nickname:
+                clone.alive = False # Kill the clone
                 response = True
 
         return response
