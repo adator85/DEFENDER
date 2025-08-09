@@ -1,5 +1,5 @@
 from re import sub
-from typing import Union, TYPE_CHECKING
+from typing import Any, Optional, Union, TYPE_CHECKING
 from dataclasses import asdict
 
 if TYPE_CHECKING:
@@ -169,7 +169,7 @@ class Client:
 
         return userObj.nickname
 
-    def get_Client_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
+    def get_client_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
         """Transform User Object to a dictionary
 
         Args:
@@ -178,12 +178,12 @@ class Client:
         Returns:
             Union[dict[str, any], None]: User Object as a dictionary or None
         """
-        userObj = self.get_Client(uidornickname=uidornickname)
+        client_obj = self.get_Client(uidornickname=uidornickname)
 
-        if userObj is None:
+        if client_obj is None:
             return None
 
-        return asdict(userObj)
+        return client_obj.to_dict()
 
     def is_exist(self, uidornikname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB

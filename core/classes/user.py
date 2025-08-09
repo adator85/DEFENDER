@@ -1,6 +1,7 @@
 from re import sub
-from typing import Union, TYPE_CHECKING
+from typing import Any, Optional, Union, TYPE_CHECKING
 from dataclasses import asdict
+from datetime import datetime
 
 if TYPE_CHECKING:
     from core.base import Base
@@ -169,7 +170,7 @@ class User:
 
         return userObj.nickname
 
-    def get_User_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
+    def get_user_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
         """Transform User Object to a dictionary
 
         Args:
@@ -183,7 +184,7 @@ class User:
         if userObj is None:
             return None
 
-        return asdict(userObj)
+        return userObj.to_dict()
 
     def is_exist(self, uidornikname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB
@@ -218,3 +219,34 @@ class User:
             return None
 
         return parsed_UID
+
+    def get_user_uptime_in_minutes(self, uidornickname: str) -> float:
+        """Retourne depuis quand l'utilisateur est connecté (in minutes).
+
+        Args:
+            uid (str): The uid or le nickname
+
+        Returns:
+            int: How long in minutes has the user been connected?
+        """
+
+        get_user = self.get_User(uidornickname)
+        if get_user is None:
+            return 0
+
+        # Convertir la date enregistrée dans UID_DB en un objet {datetime}
+        connected_time_string = get_user.connexion_datetime
+
+        if isinstance(connected_time_string, datetime):
+            connected_time = connected_time_string
+        else:
+            connected_time = datetime.strptime(connected_time_string, "%Y-%m-%d %H:%M:%S.%f")
+
+        # What time is it ?
+        current_datetime = datetime.now()
+
+        uptime = current_datetime - connected_time
+        convert_to_minutes = uptime.seconds / 60
+        uptime_minutes = round(number=convert_to_minutes, ndigits=2)
+
+        return uptime_minutes

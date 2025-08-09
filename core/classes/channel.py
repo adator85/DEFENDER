@@ -1,7 +1,5 @@
 from re import findall
-from typing import Union, Literal, TYPE_CHECKING
-from dataclasses import asdict
-
+from typing import Any, Optional, Literal, TYPE_CHECKING
 from core.classes import user
 
 if TYPE_CHECKING:
@@ -170,25 +168,22 @@ class Channel:
         except Exception as err:
             self.Logs.error(f'{err}')
 
-    def get_Channel(self, channel_name: str) -> Union['MChannel', None]:
-
-        Channel = None
+    def get_Channel(self, channel_name: str) -> Optional['MChannel']:
 
         for record in self.UID_CHANNEL_DB:
             if record.name == channel_name:
-                Channel = record
+                return record
 
-        return Channel
+        return None
 
-    def get_Channel_AsDict(self, chan_name: str) -> Union[dict[str, any], None]:
+    def get_channel_asdict(self, chan_name: str) -> Optional[dict[str, Any]]:
 
-        chanObj = self.get_Channel(chan_name=chan_name)
+        channel_obj: Optional['MChannel'] = self.get_Channel(chan_name=chan_name)
 
-        if not chanObj is None:
-            chan_as_dict = asdict(chanObj)
-            return chan_as_dict
-        else:
+        if channel_obj is None:
             return None
+        
+        return channel_obj.to_dict()
 
     def Is_Channel(self, channelToCheck: str) -> bool:
         """Check if the string has the # caractere and return True if this is a channel

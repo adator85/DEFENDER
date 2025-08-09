@@ -1,6 +1,8 @@
+import importlib
 import os
 import re
 import json
+import sys
 import time
 import random
 import socket
@@ -8,12 +10,12 @@ import hashlib
 import logging
 import threading
 import ipaddress
-
 import ast
+from pathlib import Path
+from types import ModuleType
 import requests
-
 from dataclasses import fields
-from typing import Union, Literal, TYPE_CHECKING
+from typing import Union, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
@@ -155,15 +157,41 @@ class Base:
         currentdate = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
         return currentdate
 
-    def get_all_modules(self) -> list:
+    def get_all_modules(self) -> list[str]:
+        """Get list of all main modules
+        using this pattern mod_*.py
 
-        all_files = os.listdir('mods/')
-        all_modules: list = []
-        for module in all_files:
-            if module.endswith('.py') and not module == '__init__.py':
-                all_modules.append(module.replace('.py', '').lower())
+        Returns:
+            list[str]: List of module names.
+        """
+        base_path = Path('mods')
+        return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
 
-        return all_modules
+    def reload_modules_with_dependencies(self, prefix: str = 'mods'):
+        """
+        Reload all modules in sys.modules that start with the given prefix.
+        Useful for reloading a full package during development.
+        """
+        modules_to_reload = []
+
+        # Collect target modules
+        for name, module in sys.modules.items():
+            if (
+                isinstance(module, ModuleType)
+                and module is not None
+                and name.startswith(prefix)
+            ):
+                modules_to_reload.append((name, module))
+
+        # Sort to reload submodules before parent modules
+        for name, module in sorted(modules_to_reload, key=lambda x: x[0], reverse=True):
+            try:
+                if 'mod_' not in name:
+                    importlib.reload(module)
+                    self.logs.debug(f'[LOAD_MODULE] Module {module} success')
+
+            except Exception:
+                self.logs.error(f'[LOAD_MODULE] Module {module} failed [!]')
 
     def create_log(self, log_message: str) -> None:
         """Enregiste les logs

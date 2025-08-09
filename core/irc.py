@@ -616,10 +616,13 @@ class Irc:
             module_folder = module_name.split('_')[1].lower()    # ==> defender
             class_name = module_name.split('_')[1].capitalize()  # ==> Defender
 
-            if 'mods.' + module_name in sys.modules:
+            if f'mods.{module_folder}.{module_name}' in sys.modules:
                 self.Logs.info('Unload the module ...')
                 self.loaded_classes[class_name].unload()
                 self.Logs.info('Module Already Loaded ... reloading the module ...')
+
+                # Load dependencies
+                self.Base.reload_modules_with_dependencies(f'mods.{module_folder}')
                 the_module = sys.modules[f'mods.{module_folder}.{module_name}']
                 importlib.reload(the_module)
 
@@ -683,7 +686,7 @@ class Irc:
         if self.User.get_User(uid) is None:
             return None
 
-        getUser = self.User.get_User_AsDict(uid)
+        getUser = self.User.get_user_asdict(uid)
 
         level = int(level)
 

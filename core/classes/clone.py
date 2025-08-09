@@ -1,6 +1,5 @@
-from dataclasses import asdict
 from core.definition import MClone
-from typing import Union
+from typing import Any, Optional
 from core.base import Base
 
 class Clone:
@@ -74,13 +73,11 @@ class Clone:
         Returns:
             bool: True if the nickname exist
         """
-        response = False
-
-        for cloneObject in self.UID_CLONE_DB:
-            if cloneObject.nickname == nickname:
-                response = True
-
-        return response
+        clone = self.get_Clone(nickname)
+        if isinstance(clone, MClone):
+            return True
+        
+        return False
 
     def uid_exists(self, uid: str) -> bool:
         """Check if the nickname exist
@@ -91,15 +88,13 @@ class Clone:
         Returns:
             bool: True if the nickname exist
         """
-        response = False
+        clone = self.get_Clone(uid)
+        if isinstance(clone, MClone):
+            return True
+        
+        return False
 
-        for cloneObject in self.UID_CLONE_DB:
-            if cloneObject.uid == uid:
-                response = True
-
-        return response
-
-    def get_Clone(self, uidornickname: str) -> Union[MClone, None]:
+    def get_Clone(self, uidornickname: str) -> Optional[MClone]:
         """Get MClone object or None
 
         Args:
@@ -108,17 +103,15 @@ class Clone:
         Returns:
             Union[MClone, None]: Return MClone object or None
         """
-        cloneObj = None
-
         for clone in self.UID_CLONE_DB:
             if clone.uid == uidornickname:
-                cloneObj = clone
+                return clone
             if clone.nickname == uidornickname:
-                cloneObj = clone
+                return clone
 
-        return cloneObj
+        return None
 
-    def get_uid(self, uidornickname: str) -> Union[str, None]:
+    def get_uid(self, uidornickname: str) -> Optional[str]:
         """Get the UID of the clone starting from the UID or the Nickname
 
         Args:
@@ -127,27 +120,22 @@ class Clone:
         Returns:
             str|None: Return the UID
         """
-        uid = None
         for record in self.UID_CLONE_DB:
             if record.uid == uidornickname:
-                uid = record.uid
+                return record.uid
             if record.nickname == uidornickname:
-                uid = record.uid
+                return record.uid
 
-        # if not uid is None:
-        #     self.Logs.debug(f'The UID that you are looking for {uidornickname} has been found {uid}')
+        return None
 
-        return uid
+    def get_Clone_AsDict(self, uidornickname: str) -> Optional[dict[str, Any]]:
 
-    def get_Clone_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
+        clone_obj = self.get_Clone(uidornickname=uidornickname)
 
-        cloneObj = self.get_Clone(uidornickname=uidornickname)
-
-        if not cloneObj is None:
-            cloneObj_as_dict = asdict(cloneObj)
-            return cloneObj_as_dict
-        else:
+        if clone_obj is None:
             return None
+        
+        return clone_obj.to_dict()
 
     def kill(self, nickname:str) -> bool:
 

@@ -1,4 +1,4 @@
-from core.definition import MainModel, dataclass
+from core.definition import MainModel, dataclass, MUser
 
 @dataclass
 class ModConfModel(MainModel):
@@ -20,3 +20,16 @@ class ModConfModel(MainModel):
     autolimit: int = 0
     autolimit_amount: int = 3
     autolimit_interval: int = 3
+
+@dataclass
+class FloodUser:
+    uid: str = None
+    nbr_msg: int = 0
+    first_msg_time: int = 0
+
+DB_FLOOD_USERS: list[FloodUser] = []
+DB_ABUSEIPDB_USERS: list[MUser] = []
+DB_FREEIPAPI_USERS: list[MUser] = []
+DB_CLOUDFILT_USERS: list[MUser] = []
+DB_PSUTIL_USERS: list[MUser]    = []
+DB_LOCALSCAN_USERS: list[MUser] = []
