@@ -185,29 +185,29 @@ class Channel:
         
         return channel_obj.to_dict()
 
-    def Is_Channel(self, channelToCheck: str) -> bool:
+    def Is_Channel(self, channel_to_check: str) -> bool:
         """Check if the string has the # caractere and return True if this is a channel
 
         Args:
-            channelToCheck (str): The string to test if it is a channel or not
+            channel_to_check (str): The string to test if it is a channel or not
 
         Returns:
             bool: True if the string is a channel / False if this is not a channel
         """
         try:
             
-            if channelToCheck is None:
+            if channel_to_check is None:
                 return False
 
             pattern = fr'^#'
-            isChannel = findall(pattern, channelToCheck)
+            isChannel = findall(pattern, channel_to_check)
 
             if not isChannel:
                 return False
             else:
                 return True
         except TypeError as te:
-            self.Logs.error(f'TypeError: [{channelToCheck}] - {te}')
+            self.Logs.error(f'TypeError: [{channel_to_check}] - {te}')
         except Exception as err:
             self.Logs.error(f'Error Not defined: {err}')
 
