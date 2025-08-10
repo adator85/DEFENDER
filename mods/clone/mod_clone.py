@@ -1,15 +1,15 @@
-from dataclasses import dataclass
-import random, faker, time, logging
-from typing import TYPE_CHECKING
+import time, logging
+from typing import TYPE_CHECKING, Optional
+from faker import Faker
+import mods.clone.utils as utils
+import mods.clone.threads as thds
+import mods.clone.schemas as schemas
+from mods.clone.clone_manager import CloneManager
 
 if TYPE_CHECKING:
     from core.irc import Irc
 
 class Clone():
-
-    @dataclass
-    class ModConfModel:
-        clone_nicknames: list[str]
 
     def __init__(self, ircInstance: 'Irc') -> None:
 
@@ -36,11 +36,28 @@ class Clone():
 
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
-
-        # Add clone object to the module (Optionnal)
-        self.Clone = ircInstance.Clone
-
+        
+        # Add global definitions
         self.Definition = ircInstance.Loader.Definition
+
+        # The Global Settings
+        self.Settings = ircInstance.Loader.Settings
+
+        self.Schemas = schemas
+
+        self.Utils = utils
+
+        self.Threads = thds
+
+        self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
+
+        self.Clone = CloneManager(self)
+
+        metadata = self.Settings.get_cache('UID_CLONE_DB')
+
+        if metadata is not None:
+            self.Clone.UID_CLONE_DB = metadata
+            self.Logs.debug(f"Cache Size = {self.Settings.get_cache_size()}")
 
         # Créer les nouvelles commandes du module
         self.Irc.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
@@ -57,10 +74,6 @@ class Clone():
         self.__create_tables()
 
         self.stop = False
-        logging.getLogger('faker').setLevel(logging.CRITICAL)
-
-        self.fakeEN = faker.Faker('en_GB')
-        self.fakeFR = faker.Faker('fr_FR')
 
         # Load module configuration (Mandatory)
         self.__load_module_configuration()
@@ -99,9 +112,7 @@ class Clone():
         """
         try:
             # Variable qui va contenir les options de configuration du module Defender
-            self.ModConfig = self.ModConfModel(
-                                    clone_nicknames=[]
-                                )
+            self.ModConfig = self.Schemas.ModConfModel()
 
             # Sync the configuration with core configuration (Mandatory)
             # self.Base.db_sync_core_config(self.module_name, self.ModConfig)
@@ -115,6 +126,8 @@ class Clone():
         """Cette methode sera executée a chaque désactivation ou 
         rechargement de module
         """
+        # Store Clones DB into the global Settings to retrieve it after the reload.
+        self.Settings.set_cache('UID_CLONE_DB', self.Clone.UID_CLONE_DB)
 
         self.Channel.db_query_channel(action='del', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -nts")
@@ -123,175 +136,40 @@ class Clone():
 
         return None
 
-    def generate_vhost(self) -> str:
-
-        fake = self.fakeEN
-
-        rand_1 = fake.random_elements(['A','B','C','D','E','F','0','1','2','3','4','5','6','7','8','9'], unique=True, length=8)
-        rand_2 = fake.random_elements(['A','B','C','D','E','F','0','1','2','3','4','5','6','7','8','9'], unique=True, length=8)
-        rand_3 = fake.random_elements(['A','B','C','D','E','F','0','1','2','3','4','5','6','7','8','9'], unique=True, length=8)
-
-        vhost = ''.join(rand_1) + '.' + ''.join(rand_2) + '.' + ''.join(rand_3) + '.IP'
-        return vhost
-
-    def generate_clones(self, group: str = 'Default', auto_remote_ip: bool = False) -> None:
+    def cmd(self, data:list):
         try:
+            if not data or len(data) < 2:
+                return
 
-            fakeEN = self.fakeEN
-            fakeFR = self.fakeFR
-            unixtime = self.Base.get_unixtime()
+            cmd = data.copy() if isinstance(data, list) else list(data).copy()
+            index, command = self.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+            if index == -1:
+                return
 
-            chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-            generate_uid = fakeEN.random_sample(chaine, 6)
-            uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
+            match command:
 
-            umodes = self.Config.CLONE_UMODES
-
-            # Generate Username
-            chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-            new_username = fakeEN.random_sample(chaine, 9)
-            username = ''.join(new_username)
-
-            # Create realname XX F|M Department
-            gender = fakeEN.random_choices(['F','M'], 1)
-            gender = ''.join(gender)
-
-            if gender == 'F':
-                nickname = fakeEN.first_name_female()
-            elif gender == 'M':
-                nickname = fakeEN.first_name_male()
-            else:
-                nickname = fakeEN.first_name()
-
-            age = random.randint(20, 60)
-            department = fakeFR.department_name()
-            realname = f'{age} {gender} {department}'
-
-            decoded_ip = fakeEN.ipv4_private() if auto_remote_ip else '127.0.0.1'
-            hostname = fakeEN.hostname()
-
-            vhost = self.generate_vhost()
-
-            checkNickname = self.Clone.exists(nickname=nickname)
-            checkUid = self.Clone.uid_exists(uid=uid)
-
-            while checkNickname:
-                caracteres = '0123456789'
-                randomize = ''.join(random.choice(caracteres) for _ in range(2))
-                nickname = nickname + str(randomize)
-                checkNickname = self.Clone.exists(nickname=nickname)
-
-            while checkUid:
-                chaine = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-                generate_uid = fakeEN.random_sample(chaine, 6)
-                uid = self.Config.SERVEUR_ID + ''.join(generate_uid)
-                checkUid = self.Clone.uid_exists(uid=uid)
-
-            clone = self.Definition.MClone(
-                        connected=False,
-                        nickname=nickname,
-                        username=username,
-                        realname=realname,
-                        hostname=hostname,
-                        umodes=umodes,
-                        uid=uid,
-                        remote_ip=decoded_ip,
-                        vhost=vhost,
-                        group=group,
-                        channels=[]
-                        )
-
-            self.Clone.insert(clone)
-
-            return None
-
-        except AttributeError as ae:
-            self.Logs.error(f'Attribute Error : {ae}')
-        except Exception as err:
-            self.Logs.error(f"General Error: {err}")
-
-    def thread_connect_clones(self, number_of_clones:int , group: str = 'Default', auto_remote_ip: bool = False, interval: float = 0.2) -> None:
-
-        for i in range(0, number_of_clones):
-            self.generate_clones(group=group, auto_remote_ip=auto_remote_ip)
-
-        for clone in self.Clone.UID_CLONE_DB:
-
-            if self.stop:
-                print(f"Stop creating clones ...")
-                self.stop = False
-                break
-
-            if not clone.connected:
-                self.Protocol.send_uid(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, print_log=False)
-                self.Protocol.send_join_chan(uidornickname=clone.uid, channel=self.Config.CLONE_CHANNEL, password=self.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
-
-            time.sleep(interval)
-            clone.connected = True
-
-    def thread_kill_clones(self, fromuser: str) -> None:
-
-        clone_to_kill: list[str] = []
-        for clone in self.Clone.UID_CLONE_DB:
-            clone_to_kill.append(clone.uid)
-
-        for clone_uid in clone_to_kill:
-            self.Protocol.send_quit(clone_uid, 'Gooood bye', print_log=False)
-
-        del clone_to_kill
-
-        return None
-
-    def cmd(self, data:list) -> None:
-        try:
-            service_id = self.Config.SERVICE_ID                 # Defender serveur id
-            cmd = list(data).copy()
-
-            if len(cmd) < 2:
-                return None
-
-            match cmd[1]:
-
-                case 'REPUTATION':
-                    pass
-
-            if len(cmd) < 3:
-                return None
-
-            match cmd[2]:
                 case 'PRIVMSG':
-                    # print(cmd)
-                    uid_sender = self.User.clean_uid(cmd[1])
-                    senderObj = self.User.get_User(uid_sender)
+                    return self.Utils.handle_on_privmsg(self, cmd)
 
-                    if senderObj.hostname in self.Config.CLONE_LOG_HOST_EXEMPT:
-                        return None
+                case 'QUIT':
+                    return
 
-                    if not senderObj is None:
-                        senderMsg = ' '.join(cmd[4:])
-                        clone_obj = self.Clone.get_clone(cmd[3])
-
-                        if clone_obj is None:
-                            return None
-
-                        if clone_obj.uid != self.Config.SERVICE_ID:
-                            final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
-                            self.Protocol.send_priv_msg(
-                                nick_from=clone_obj.uid,
-                                msg=final_message,
-                                channel=self.Config.CLONE_CHANNEL
-                            )
+                case _:
+                    return
 
         except Exception as err:
-            self.Logs.error(f'General Error: {err}')
+            self.Logs.error(f'General Error: {err}', exc_info=True)
 
-    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user: str, channel: any, cmd: list, fullcmd: list = []) -> None:
 
         try:
+
+            if len(cmd) < 1:
+                return
+
             command = str(cmd[0]).lower()
             fromuser = user
-
-            dnickname = self.Config.SERVICE_NICKNAME            # Defender nickname
+            dnickname = self.Config.SERVICE_NICKNAME
 
             match command:
 
@@ -303,6 +181,7 @@ class Clone():
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
+                        return None
 
                     option = str(cmd[1]).lower()
 
@@ -317,8 +196,8 @@ class Clone():
                                 connection_interval = int(cmd[4]) if len(cmd) == 5 else 0.2
 
                                 self.Base.create_thread(
-                                    func=self.thread_connect_clones,
-                                    func_args=(number_of_clones, group, False, connection_interval)
+                                    func=self.Threads.thread_connect_clones,
+                                    func_args=(self, number_of_clones, group, False, connection_interval)
                                 )
 
                             except Exception as err:
@@ -328,18 +207,28 @@ class Clone():
 
                         case 'kill':
                             try:
-                                # clone kill [all | nickname]
+                                # clone kill [ALL | group name | nickname]
                                 self.stop = True
-                                clone_name = str(cmd[2])
-                                clone_to_kill: list[str] = []
+                                option = str(cmd[2])
 
-                                if clone_name.lower() == 'all':
-                                    self.Base.create_thread(func=self.thread_kill_clones, func_args=(fromuser, ))
+                                if option.lower() == 'all':
+                                    self.Base.create_thread(func=self.Threads.thread_kill_clones, func_args=(self, ))
+
+                                elif self.Clone.group_exists(option):
+                                    list_of_clones_in_group = self.Clone.get_clones_from_groupname(option)
+
+                                    if len(list_of_clones_in_group) > 0:
+                                        self.Logs.debug(f"[Clone Kill Group] - Killing {len(list_of_clones_in_group)} clones in the group {option}")
+
+                                    for clone in list_of_clones_in_group:
+                                        self.Protocol.send_quit(clone.uid, "Now i am leaving irc but i'll come back soon ...", print_log=False)
+                                        self.Clone.delete(clone.uid)
 
                                 else:
-                                    clone_obj = self.Clone.get_clone(clone_name)
+                                    clone_obj = self.Clone.get_clone(option)
                                     if not clone_obj is None:
                                         self.Protocol.send_quit(clone_obj.uid, 'Goood bye', print_log=False)
+                                        self.Clone.delete(clone_obj.uid)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
@@ -348,19 +237,28 @@ class Clone():
 
                         case 'join':
                             try:
-                                # clone join [all | nickname] #channel
-                                clone_name = str(cmd[2])
+                                # clone join [all | group name | nickname] #channel
+                                option = str(cmd[2])
                                 clone_channel_to_join = str(cmd[3])
 
-                                if clone_name.lower() == 'all':
+                                if option.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
                                         self.Protocol.send_join_chan(uidornickname=clone.uid, channel=clone_channel_to_join, print_log=False)
 
+                                elif self.Clone.group_exists(option):
+                                    list_of_clones_in_group = self.Clone.get_clones_from_groupname(option)
+
+                                    if len(list_of_clones_in_group) > 0:
+                                        self.Logs.debug(f"[Clone Join Group] - Joining {len(list_of_clones_in_group)} clones from group {option} in the channel {clone_channel_to_join}")
+
+                                    for clone in list_of_clones_in_group:
+                                        self.Protocol.send_join_chan(uidornickname=clone.nickname, channel=clone_channel_to_join, print_log=False)
+
                                 else:
-                                    if self.Clone.exists(clone_name):
-                                        if not self.Clone.get_uid(clone_name) is None:
-                                            self.Protocol.send_join_chan(uidornickname=clone_name, channel=clone_channel_to_join, print_log=False)
+                                    if self.Clone.nickname_exists(option):
+                                        clone_uid = self.Clone.get_clone(option).uid
+                                        self.Protocol.send_join_chan(uidornickname=clone_uid, channel=clone_channel_to_join, print_log=False)
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
@@ -369,18 +267,27 @@ class Clone():
 
                         case 'part':
                             try:
-                                # clone part [all | nickname] #channel
-                                clone_name = str(cmd[2])
+                                # clone part [all |  nickname] #channel
+                                option = str(cmd[2])
                                 clone_channel_to_part = str(cmd[3])
 
-                                if clone_name.lower() == 'all':
+                                if option.lower() == 'all':
 
                                     for clone in self.Clone.UID_CLONE_DB:
                                         self.Protocol.send_part_chan(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
 
+                                elif self.Clone.group_exists(option):
+                                    list_of_clones_in_group = self.Clone.get_clones_from_groupname(option)
+
+                                    if len(list_of_clones_in_group) > 0:
+                                        self.Logs.debug(f"[Clone Part Group] - Part {len(list_of_clones_in_group)} clones from group {option} from the channel {clone_channel_to_part}")
+
+                                    for clone in list_of_clones_in_group:
+                                        self.Protocol.send_part_chan(uidornickname=clone.uid, channel=clone_channel_to_part, print_log=False)
+
                                 else:
-                                    if self.Clone.exists(clone_name):
-                                        clone_uid = self.Clone.get_uid(clone_name)
+                                    if self.Clone.nickname_exists(option):
+                                        clone_uid = self.Clone.get_uid(option)
                                         if not clone_uid is None:
                                             self.Protocol.send_part_chan(uidornickname=clone_uid, channel=clone_channel_to_part, print_log=False)
 
@@ -407,7 +314,7 @@ class Clone():
 
                                 final_message = ' '.join(cmd[4:])
 
-                                if clone_channel is None or not self.Clone.exists(clone_name):
+                                if clone_channel is None or not self.Clone.nickname_exists(clone_name):
                                     self.Protocol.send_notice(
                                         nick_from=dnickname,
                                         nick_to=fromuser,
@@ -415,7 +322,7 @@ class Clone():
                                     )
                                     return None
 
-                                if self.Clone.exists(clone_name):
+                                if self.Clone.nickname_exists(clone_name):
                                     self.Protocol.send_priv_msg(nick_from=clone_name, msg=final_message, channel=clone_channel)
 
                             except Exception as err:
@@ -428,12 +335,12 @@ class Clone():
 
                         case _:
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | group name | nickname]")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group name | nickname] #channel")
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
 
         except IndexError as ie:
             self.Logs.error(f'Index Error: {ie}')
         except Exception as err:
-            self.Logs.error(f'Index Error: {err}')
+            self.Logs.error(f'General Error: {err}')

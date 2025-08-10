@@ -334,3 +334,10 @@ class MClone(MainModel):
     umodes: str = None
     remote_ip: str = '127.0.0.1'
     group: str = 'Default'
+
+@dataclass
+class MCommand(MainModel):
+    module_name: str = None
+    command_name: str = None
+    description: str = None
+    command_level: int = 0

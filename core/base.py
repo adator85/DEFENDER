@@ -186,7 +186,7 @@ class Base:
         # Sort to reload submodules before parent modules
         for name, module in sorted(modules_to_reload, key=lambda x: x[0], reverse=True):
             try:
-                if 'mod_' not in name:
+                if 'mod_' not in name and 'schemas' not in name:
                     importlib.reload(module)
                     self.logs.debug(f'[LOAD_MODULE] Module {module} success')
 

@@ -337,7 +337,6 @@ class Unrealircd6:
     def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
         - Delete uid from User object
-        - Delete uid from Clone object
         - Delete uid from Reputation object
 
         Args:
@@ -345,15 +344,11 @@ class Unrealircd6:
             reason (str): The reason for the quit
         """
         user_obj = self.__Irc.User.get_User(uidornickname=uid)
-        clone_obj = self.__Irc.Clone.get_clone(uidornickname=uid)
         reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
 
         if not user_obj is None:
             self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
             self.__Irc.User.delete(user_obj.uid)
-
-        if not clone_obj is None:
-            self.__Irc.Clone.delete(clone_obj.uid)
 
         if not reputationObj is None:
             self.__Irc.Reputation.delete(reputationObj.uid)
@@ -569,7 +564,6 @@ class Unrealircd6:
             self.__Irc.User.delete(uid_who_quit)
             self.__Irc.Client.delete(uid_who_quit)
             self.__Irc.Reputation.delete(uid_who_quit)
-            self.__Irc.Clone.delete(uid_who_quit)
 
             return None
 

@@ -1,4 +1,4 @@
-from core.classes import user, admin, client, channel, clone, reputation, settings
+from core.classes import user, admin, client, channel, reputation, settings, commands
 import core.definition as df
 import core.base as baseModule
 import core.classes.config as confModule
@@ -15,7 +15,7 @@ class Loader:
         self.BaseModule: baseModule             = baseModule
 
         # Load Classes
-        self.Settings: settings                 = settings.Settings()
+        self.Settings: settings.Settings        = settings.Settings()
 
         self.Config: df.MConfig                 = self.ConfModule.Configuration().ConfigObject
 
@@ -29,6 +29,6 @@ class Loader:
 
         self.Channel: channel.Channel           = channel.Channel(self.Base)
 
-        self.Clone: clone.Clone                 = clone.Clone(self.Base)
-
         self.Reputation: reputation.Reputation  = reputation.Reputation(self.Base)
+
+        self.Commands: commands.Command         = commands.Command(self.Base)

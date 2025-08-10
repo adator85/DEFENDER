@@ -8,9 +8,10 @@ import time
 import traceback
 from ssl import SSLSocket
 from datetime import datetime, timedelta
-from typing import Union
+from typing import Optional, Union
 from core.loader import Loader
 from core.classes.protocol import Protocol
+from core.classes.commands import Command
 
 class Irc:
     _instance = None
@@ -67,9 +68,6 @@ class Irc:
         # Use Channel Instance
         self.Channel = self.Loader.Channel
 
-        # Use Clones Instance
-        self.Clone = self.Loader.Clone
-
         # Use Reputation Instance
         self.Reputation = self.Loader.Reputation
 
@@ -83,7 +81,11 @@ class Irc:
         self.first_connexion_ip: str = None
 
         # Define the dict that will contain all loaded modules
-        self.loaded_classes:dict[str, 'Irc'] = {}           # Definir la variable qui contiendra la liste modules chargés
+        self.loaded_classes:dict[str, 'Irc'] = {}
+
+        # Load Commands Utils
+        self.Commands = self.Loader.Commands
+        """Command utils"""
 
         # Global full module commands that contains level, module name, commands and description
         self.module_commands: dict[int, dict[str, dict[str, str]]] = {}
@@ -341,9 +343,71 @@ class Irc:
         self.module_commands.setdefault(level, {}).setdefault(module_name, {}).update({command_name: command_description})
         self.module_commands_list.append(command_name)
 
+        # Build Model.
+        self.Commands.build(self.Loader.Definition.MCommand(module_name, command_name, command_description, level))
+
         return None
 
-    def generate_help_menu(self, nickname: str) -> None:
+    def generate_help_menu(self, nickname: str, module: Optional[str] = None) -> None:
+
+        # Check if the nickname is an admin
+        p = self.Protocol
+        admin_obj = self.Admin.get_Admin(nickname)
+        dnickname = self.Config.SERVICE_NICKNAME
+        color_bold = self.Config.COLORS.bold
+        color_nogc = self.Config.COLORS.nogc
+        color_blue = self.Config.COLORS.blue
+        color_black = self.Config.COLORS.black
+        color_underline = self.Config.COLORS.underline
+        current_level = 0
+        count = 0
+        if admin_obj is not None:
+            current_level = admin_obj.level
+
+        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f" ***************** LISTE DES COMMANDES *****************")
+        header = f"  {'Level':<8}| {'Command':<25}| {'Module':<15}| {'Description':<35}"
+        line = "-"*75
+        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=header)
+        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f"  {line}")
+        for cmd in self.Commands.get_commands_by_level(current_level):
+            if module is None or cmd.module_name.lower() == module.lower():
+                p.send_notice(
+                            nick_from=dnickname, 
+                            nick_to=nickname, 
+                            msg=f"  {color_black}{cmd.command_level:<8}{color_nogc}| {cmd.command_name:<25}| {cmd.module_name:<15}| {cmd.description:<35}"
+                            )
+        
+        return
+
+        for level, modules in self.module_commands.items():
+            if level > current_level:
+                break
+
+            if count > 0:
+                p.send_notice(nick_from=dnickname, nick_to=nickname, msg=" ")
+
+            p.send_notice(
+                nick_from=dnickname, 
+                nick_to=nickname, 
+                msg=f"{color_blue}{color_bold}Level {level}:{color_nogc}"
+                )
+
+            for module_name, commands in modules.items():
+                if module is None or module.lower() == module_name.lower():
+                    p.send_notice(
+                        nick_from=dnickname, 
+                        nick_to=nickname, 
+                        msg=f"{color_black}  {color_underline}Module: {module_name}{color_nogc}"
+                        )
+                    for command, description in commands.items():
+                        p.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"    {command:<20}: {description}")
+
+            count += 1
+
+        p.send_notice(nick_from=dnickname,nick_to=nickname,msg=f" ***************** FIN DES COMMANDES *****************")
+        return None
+
+    def generate_help_menu_bakcup(self, nickname: str) -> None:
 
         # Check if the nickname is an admin
         admin_obj = self.Admin.get_Admin(nickname)
@@ -578,6 +642,7 @@ class Irc:
                         channel=self.Config.SERVICE_CHANLOG
                     )
             self.Base.db_delete_module(module_name)
+            traceback.print_exc()
 
     def unload_module(self, mod_name: str) -> bool:
         """Unload a module
@@ -1387,8 +1452,12 @@ class Irc:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
 
             case 'help':
-
-                self.generate_help_menu(nickname=fromuser)
+                # Syntax. !help [module_name]
+                module_name = str(cmd[1]) if len(cmd) == 2 else None
+                self.generate_help_menu(nickname=fromuser, module=module_name)
+                
+                for com in self.Commands.get_ordered_commands():
+                    print(com)
 
             case 'load':
                 try:

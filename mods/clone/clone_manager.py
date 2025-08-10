@@ -1,14 +1,16 @@
+from typing import Optional, TYPE_CHECKING
 from core.definition import MClone
-from typing import Any, Optional
-from core.base import Base
 
-class Clone:
+if TYPE_CHECKING:
+    from mods.clone.mod_clone import Clone
+
+class CloneManager:
 
     UID_CLONE_DB: list[MClone] = []
 
-    def __init__(self, base: Base):
+    def __init__(self, uplink: 'Clone'):
 
-        self.Logs = base.logs
+        self.Logs = uplink.Logs
 
     def insert(self, new_clone_object: MClone) -> bool:
         """Create new Clone object
@@ -61,7 +63,7 @@ class Clone:
 
         return True
 
-    def exists(self, nickname: str) -> bool:
+    def nickname_exists(self, nickname: str) -> bool:
         """Check if the nickname exist
 
         Args:
@@ -91,6 +93,21 @@ class Clone:
         
         return False
 
+    def group_exists(self, groupname: str) -> bool:
+        """Verify if a group exist
+
+        Args:
+            groupname (str): The group name
+
+        Returns:
+            bool: _description_
+        """
+        for clone in self.UID_CLONE_DB:
+            if clone.group.strip().lower() == groupname.strip().lower():
+                return True
+
+        return False
+
     def get_clone(self, uidornickname: str) -> Optional[MClone]:
         """Get MClone object or None
 
@@ -108,6 +125,24 @@ class Clone:
 
         return None
 
+    def get_clones_from_groupname(self, groupname: str) -> list[MClone]:
+        """Get list of clone objects by group name
+
+        Args:
+            groupname (str): The group name
+
+        Returns:
+            list[MClone]: List of clones in the group
+        """
+        group_of_clone: list[MClone] = []
+
+        if self.group_exists(groupname):
+            for clone in self.UID_CLONE_DB:
+                if clone.group.strip().lower() == groupname.strip().lower():
+                    group_of_clone.append(clone)
+
+        return group_of_clone
+
     def get_uid(self, uidornickname: str) -> Optional[str]:
         """Get the UID of the clone starting from the UID or the Nickname
 
@@ -124,15 +159,6 @@ class Clone:
                 return record.uid
 
         return None
-
-    def get_clone_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
-
-        clone_obj = self.get_clone(uidornickname=uidornickname)
-
-        if clone_obj is None:
-            return None
-        
-        return clone_obj.to_dict()
 
     def kill(self, nickname:str) -> bool:
 
