@@ -287,7 +287,7 @@ class Votekick():
                     case 'activate':
                         try:
                             # vote activate #channel
-                            if self.Admin.get_Admin(fromuser) is None:
+                            if self.Admin.get_admin(fromuser) is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' :Your are not allowed to execute this command')
                                 return None
 
@@ -321,7 +321,7 @@ class Votekick():
                     case 'deactivate':
                         try:
                             # vote deactivate #channel
-                            if self.Admin.get_Admin(fromuser) is None:
+                            if self.Admin.get_admin(fromuser) is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" Your are not allowed to execute this command")
                                 return None
 
@@ -392,7 +392,7 @@ class Votekick():
                     case 'cancel':
                         try:
                             # vote cancel
-                            if self.Admin.get_Admin(fromuser) is None:
+                            if self.Admin.get_admin(fromuser) is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
                                 return None
 
@@ -430,7 +430,7 @@ class Votekick():
                     case 'submit':
                         try:
                             # vote submit nickname
-                            if self.Admin.get_Admin(fromuser) is None:
+                            if self.Admin.get_admin(fromuser) is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' Your are not allowed to execute this command')
                                 return None
 
@@ -508,7 +508,7 @@ class Votekick():
                     case 'verdict':
                         try:
                             # vote verdict
-                            if self.Admin.get_Admin(fromuser) is None:
+                            if self.Admin.get_admin(fromuser) is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f'Your are not allowed to execute this command')
                                 return None
 

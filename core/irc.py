@@ -355,7 +355,7 @@ class Irc:
 
         # Check if the nickname is an admin
         p = self.Protocol
-        admin_obj = self.Admin.get_Admin(nickname)
+        admin_obj = self.Admin.get_admin(nickname)
         dnickname = self.Config.SERVICE_NICKNAME
         color_bold = self.Config.COLORS.bold
         color_nogc = self.Config.COLORS.nogc
@@ -413,7 +413,7 @@ class Irc:
     def generate_help_menu_bakcup(self, nickname: str) -> None:
 
         # Check if the nickname is an admin
-        admin_obj = self.Admin.get_Admin(nickname)
+        admin_obj = self.Admin.get_admin(nickname)
         dnickname = self.Config.SERVICE_NICKNAME
         color_bold = self.Config.COLORS.bold
         color_nogc = self.Config.COLORS.nogc
@@ -447,7 +447,7 @@ class Irc:
 
     def is_cmd_allowed(self, nickname: str, command_name: str) -> bool:
 
-        admin_obj = self.Admin.get_Admin(nickname)
+        admin_obj = self.Admin.get_admin(nickname)
         current_level = 0
 
         if admin_obj is not None:
@@ -769,7 +769,7 @@ class Irc:
 
     def delete_db_admin(self, uid:str) -> None:
 
-        if self.Admin.get_Admin(uid) is None:
+        if self.Admin.get_admin(uid) is None:
             return None
 
         if not self.Admin.delete(uid):
@@ -1209,7 +1209,7 @@ class Irc:
                     user_to_edit = cmd[1]
                     user_password = self.Loader.Utils.hash_password(cmd[2])
 
-                    get_admin = self.Admin.get_Admin(fromuser)
+                    get_admin = self.Admin.get_admin(fromuser)
                     if get_admin is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no Admin access")
                         return None
@@ -1273,7 +1273,7 @@ class Irc:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}delaccess [USER] [CONFIRMUSER]")
                     return None
 
-                get_admin = self.Admin.get_Admin(fromuser)
+                get_admin = self.Admin.get_admin(fromuser)
 
                 if get_admin is None:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no admin access")
