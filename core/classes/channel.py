@@ -3,7 +3,7 @@ from typing import Any, Optional, Literal, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.definition import MChannel
-    from core.base import Base
+    from core.loader import Loader
 
 class Channel:
 
@@ -11,10 +11,11 @@ class Channel:
     """List that contains all the Channels objects (ChannelModel)
     """
 
-    def __init__(self, base: 'Base') -> None:
+    def __init__(self, loader: 'Loader') -> None:
 
-        self.Logs = base.logs
-        self.Base = base
+        self.Logs = loader.Base.logs
+        self.Base = loader.Base
+        self.Utils = loader.Utils
 
         return None
 
@@ -22,7 +23,7 @@ class Channel:
         """This method will insert a new channel and if the channel exist it will update the user list (uids)
 
         Args:
-            newChan (ChannelModel): The channel model object
+            new_channel (MChannel): The channel model object
 
         Returns:
             bool: True if new channel, False if channel exist (However UID could be updated)
@@ -30,7 +31,7 @@ class Channel:
         result = False
         exist = False
 
-        if not self.Is_Channel(new_channel.name):
+        if not self.is_valid_channel(new_channel.name):
             self.Logs.error(f"The channel {new_channel.name} is not valid, channel must start with #")
             return False
 
@@ -64,8 +65,16 @@ class Channel:
         return result
 
     def delete(self, channel_name: str) -> bool:
+        """Delete channel from the UID_CHANNEL_DB
 
-        chan_obj = self.get_Channel(channel_name)
+        Args:
+            channel_name (str): The Channel name
+
+        Returns:
+            bool: True if it was deleted
+        """
+
+        chan_obj = self.get_channel(channel_name)
 
         if chan_obj is None:
             return False
@@ -75,10 +84,19 @@ class Channel:
         return True
 
     def delete_user_from_channel(self, channel_name: str, uid:str) -> bool:
+        """Delete a user from a channel
+
+        Args:
+            channel_name (str): The channel name
+            uid (str): The Client UID
+
+        Returns:
+            bool: True if the client has been deleted from the channel
+        """
         try:
             result = False
 
-            chan_obj = self.get_Channel(channel_name.lower())
+            chan_obj = self.get_channel(channel_name.lower())
 
             if chan_obj is None:
                 return result
@@ -95,6 +113,14 @@ class Channel:
             self.Logs.error(f'{ve}')
 
     def delete_user_from_all_channel(self, uid:str) -> bool:
+        """Delete a client from all channels
+
+        Args:
+            uid (str): The client UID
+
+        Returns:
+            bool: True if the client has been deleted from all channels
+        """
         try:
             result = False
 
@@ -111,14 +137,22 @@ class Channel:
             self.Logs.error(f'{ve}')
 
     def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
+        """Add a client to a channel
+
+        Args:
+            channel_name (str): The channel name
+            uid (str): The client UID
+
+        Returns:
+            bool: True is the clien has been added
+        """
         try:
-            result = False
-            chan_obj = self.get_Channel(channel_name)
-            self.Logs.debug(f"** {__name__}")
+            chan_obj = self.get_channel(channel_name)
 
             if chan_obj is None:
-                result = self.insert(MChannel(channel_name, uids=[uid]))
-                return result
+                # Create a new channel if the channel don't exist
+                self.Logs.debug(f"New channel will be created ({channel_name} - {uid})")
+                return self.insert(MChannel(channel_name, uids=[uid]))
 
             chan_obj.uids.append(uid)
             del_duplicates = list(set(chan_obj.uids))
@@ -127,18 +161,19 @@ class Channel:
             return True
         except Exception as err:
             self.Logs.error(f'{err}')
+            return False
 
     def is_user_present_in_channel(self, channel_name: str, uid: str) -> bool:
         """Check if a user is present in the channel
 
         Args:
-            channel_name (str): The channel to check
-            uid (str): The UID
+            channel_name (str): The channel name to check
+            uid (str): The client UID
 
         Returns:
             bool: True if the user is present in the channel
         """
-        chan = self.get_Channel(channel_name=channel_name)
+        chan = self.get_channel(channel_name=channel_name)
         if chan is None:
             return False
 
@@ -150,7 +185,7 @@ class Channel:
         return False
 
     def clean_channel(self) -> None:
-        """Remove Channels if empty
+        """If channel doesn't contain any client this method will remove the channel
         """
         try:
             for record in self.UID_CHANNEL_DB:
@@ -161,25 +196,33 @@ class Channel:
         except Exception as err:
             self.Logs.error(f'{err}')
 
-    def get_Channel(self, channel_name: str) -> Optional['MChannel']:
+    def get_channel(self, channel_name: str) -> Optional['MChannel']:
+        """Get the channel object
+
+        Args:
+            channel_name (str): The Channel name
+
+        Returns:
+            MChannel: The channel object model if exist else None
+        """
 
         for record in self.UID_CHANNEL_DB:
-            if record.name == channel_name:
+            if record.name.lower() == channel_name.lower():
                 return record
 
         return None
 
-    def get_channel_asdict(self, chan_name: str) -> Optional[dict[str, Any]]:
+    def get_channel_asdict(self, channel_name: str) -> Optional[dict[str, Any]]:
 
-        channel_obj: Optional['MChannel'] = self.get_Channel(chan_name)
+        channel_obj: Optional['MChannel'] = self.get_channel(channel_name)
 
         if channel_obj is None:
             return None
         
         return channel_obj.to_dict()
 
-    def Is_Channel(self, channel_to_check: str) -> bool:
-        """Check if the string has the # caractere and return True if this is a channel
+    def is_valid_channel(self, channel_to_check: str) -> bool:
+        """Check if the string has the # caractere and return True if this is a valid channel
 
         Args:
             channel_to_check (str): The string to test if it is a channel or not
@@ -216,7 +259,7 @@ class Channel:
             bool: True if action done
         """
         try:
-            channel_name = channel_name.lower() if self.Is_Channel(channel_name) else None
+            channel_name = channel_name.lower() if self.is_valid_channel(channel_name) else None
             core_table = self.Base.Config.TABLE_CHANNEL
 
             if not channel_name:
@@ -231,7 +274,7 @@ class Channel:
                     is_channel_exist = response.fetchone()
 
                     if is_channel_exist is None:
-                        mes_donnees = {'datetime': self.Base.get_datetime(), 'channel_name': channel_name, 'module_name': module_name}
+                        mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'channel_name': channel_name, 'module_name': module_name}
                         insert = self.Base.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
                         if insert.rowcount:
                             self.Logs.debug(f'New channel added: channel={channel_name} / module_name={module_name}')

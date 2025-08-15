@@ -291,7 +291,7 @@ class Votekick():
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' :Your are not allowed to execute this command')
                                 return None
 
-                            sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
+                            sentchannel = str(cmd[2]).lower() if self.Channel.is_valid_channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
@@ -325,7 +325,7 @@ class Votekick():
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" Your are not allowed to execute this command")
                                 return None
 
-                            sentchannel = str(cmd[2]).lower() if self.Channel.Is_Channel(str(cmd[2]).lower()) else None
+                            sentchannel = str(cmd[2]).lower() if self.Channel.is_valid_channel(str(cmd[2]).lower()) else None
                             if sentchannel is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f" The correct command is {self.Config.SERVICE_PREFIX}{command} {option} #CHANNEL")
 
@@ -459,7 +459,7 @@ class Votekick():
                                 return False
 
                             uid_cleaned = self.Base.clean_uid(uid_submitted)
-                            ChannelInfo = self.Channel.get_Channel(channel)
+                            ChannelInfo = self.Channel.get_channel(channel)
                             if ChannelInfo is None:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f' This channel [{channel}] do not exist in the Channel Object')
                                 return False

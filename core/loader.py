@@ -1,25 +1,28 @@
 from core.classes import user, admin, client, channel, reputation, settings, commands
 import core.definition as df
-import core.base as baseModule
-import core.classes.config as confModule
+import core.utils as utils
+import core.base as base_module
+import core.classes.config as conf_module
 
 class Loader:
 
     def __init__(self):
 
-        # Load Modules
-        self.Definition: df                     = df
+        # Load Main Modules
+        self.Definition: df                      = df
 
-        self.ConfModule: confModule             = confModule
+        self.ConfModule: conf_module             = conf_module
 
-        self.BaseModule: baseModule             = baseModule
+        self.BaseModule: base_module             = base_module
+
+        self.Utils: utils                        = utils
 
         # Load Classes
         self.Settings: settings.Settings        = settings.Settings()
 
         self.Config: df.MConfig                 = self.ConfModule.Configuration().ConfigObject
 
-        self.Base: baseModule.Base              = self.BaseModule.Base(self.Config, self.Settings)
+        self.Base: base_module.Base              = self.BaseModule.Base(self)
 
         self.User: user.User                    = user.User(self.Base)
 

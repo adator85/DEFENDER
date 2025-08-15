@@ -12,7 +12,12 @@ def thread_connect_clones(uplink: 'Clone',
                           ):
 
     for i in range(0, number_of_clones):
-        uplink.Utils.create_new_clone(uplink, uplink.Faker, group=group, auto_remote_ip=auto_remote_ip)
+        uplink.Utils.create_new_clone(
+            uplink=uplink,
+            faker_instance=uplink.Faker,
+            group=group,
+            auto_remote_ip=auto_remote_ip
+        )
 
     for clone in uplink.Clone.UID_CLONE_DB:
 

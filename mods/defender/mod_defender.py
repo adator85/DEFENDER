@@ -7,39 +7,42 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from core.irc import Irc
 
-class Defender():
+class Defender:
 
-    def __init__(self, ircInstance: 'Irc') -> None:
+    def __init__(self, irc_instance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
-        self.Irc = ircInstance
+        self.Irc = irc_instance
 
         # Add Loader Object to the module (Mandatory)
-        self.Loader = ircInstance.Loader
+        self.Loader = irc_instance.Loader
 
         # Add server protocol Object to the module (Mandatory)
-        self.Protocol = ircInstance.Protocol
+        self.Protocol = irc_instance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
-        self.Config = ircInstance.Config
+        self.Config = irc_instance.Config
 
         # Add Base object to the module (Mandatory)
-        self.Base = ircInstance.Base
+        self.Base = irc_instance.Base
 
         # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Base.logs
+        self.Logs = irc_instance.Base.logs
 
         # Add User object to the module (Mandatory)
-        self.User = ircInstance.User
+        self.User = irc_instance.User
 
         # Add Channel object to the module (Mandatory)
-        self.Channel = ircInstance.Channel
+        self.Channel = irc_instance.Channel
+
+        # Add Settings object to save objects when reloading modules (Mandatory)
+        self.Settings = irc_instance.Settings
 
         # Add Reputation object to the module (Optional)
-        self.Reputation = ircInstance.Reputation
+        self.Reputation = irc_instance.Reputation
 
         # Add module schemas
         self.Schemas = schemas
@@ -158,10 +161,39 @@ class Defender():
 
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
+    def __onload(self):
+
+        abuseipdb = self.Settings.get_cache('ABUSEIPDB')
+        freeipapi = self.Settings.get_cache('FREEIPAPI')
+        cloudfilt = self.Settings.get_cache('CLOUDFILT')
+        psutils = self.Settings.get_cache('PSUTIL')
+        localscan = self.Settings.get_cache('LOCALSCAN')
+
+        if abuseipdb:
+            self.Schemas.DB_ABUSEIPDB_USERS = abuseipdb
+
+        if freeipapi:
+            self.Schemas.DB_FREEIPAPI_USERS = freeipapi
+
+        if cloudfilt:
+            self.Schemas.DB_CLOUD_FILT_USERS = cloudfilt
+
+        if psutils:
+            self.Schemas.DB_PSUTIL_USERS = psutils
+
+        if localscan:
+            self.Schemas.DB_LOCALSCAN_USERS = localscan
+
     def unload(self) -> None:
         """Cette methode sera executée a chaque désactivation ou 
         rechargement de module
         """
+        self.Settings.set_cache('ABUSEIPDB', self.Schemas.DB_ABUSEIPDB_USERS)
+        self.Settings.set_cache('FREEIPAPI', self.Schemas.DB_FREEIPAPI_USERS)
+        self.Settings.set_cache('CLOUDFILT', self.Schemas.DB_CLOUDFILT_USERS)
+        self.Settings.set_cache('PSUTIL', self.Schemas.DB_PSUTIL_USERS)
+        self.Settings.set_cache('LOCALSCAN', self.Schemas.DB_LOCALSCAN_USERS)
+
         self.Schemas.DB_ABUSEIPDB_USERS = []
         self.Schemas.DB_FREEIPAPI_USERS = []
         self.Schemas.DB_CLOUDFILT_USERS = []
@@ -300,7 +332,7 @@ class Defender():
 
         command = str(cmd[0]).lower()
         fromuser = user
-        channel = fromchannel = channel if self.Channel.Is_Channel(channel) else None
+        channel = fromchannel = channel if self.Channel.is_valid_channel(channel) else None
 
         dnickname = self.Config.SERVICE_NICKNAME            # Defender nickname
         dchanlog = self.Config.SERVICE_CHANLOG              # Defender chan log

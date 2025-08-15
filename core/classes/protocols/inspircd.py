@@ -14,6 +14,7 @@ class Inspircd:
         self.__Irc = ircInstance
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
+        self.__Utils = ircInstance.Loader.Utils
 
         self.__Base.logs.info(f"** Loading protocol [{__name__}]")
 
@@ -169,7 +170,7 @@ class Inspircd:
 
     def sjoin(self, channel: str) -> None:
 
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -259,7 +260,7 @@ class Inspircd:
         if userObj is None:
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -284,7 +285,7 @@ class Inspircd:
             self.__Base.logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -600,7 +601,7 @@ class Inspircd:
             nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
-            current_datetime = self.__Base.get_datetime()
+            current_datetime = self.__Utils.get_sdatetime()
 
             if nickname is None:
                 return None

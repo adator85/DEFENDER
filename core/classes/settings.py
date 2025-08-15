@@ -26,7 +26,8 @@ class Settings:
 
     def set_cache(self, key: str, value_to_cache: Any):
         """When you want to store a variable 
-        Ex. 
+
+        Ex.
         ```python
             set_cache('MY_KEY', {'key1': 'value1', 'key2', 'value2'})
         ```

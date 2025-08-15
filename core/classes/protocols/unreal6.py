@@ -16,6 +16,7 @@ class Unrealircd6:
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
         self.__Settings = ircInstance.Base.Settings
+        self.__Utils = ircInstance.Loader.Utils
 
         self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
@@ -242,7 +243,7 @@ class Unrealircd6:
         Args:
             channel (str): Channel to join
         """
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -264,7 +265,7 @@ class Unrealircd6:
         try:
 
             userObj = self.__Irc.User.get_User(uidornickname=nick_to_sapart)
-            chanObj = self.__Irc.Channel.get_Channel(channel_name)
+            chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
             if userObj is None or chanObj is None:
@@ -288,7 +289,7 @@ class Unrealircd6:
         try:
 
             userObj = self.__Irc.User.get_User(uidornickname=nick_to_sajoin)
-            chanObj = self.__Irc.Channel.get_Channel(channel_name)
+            chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
             if userObj is None:
@@ -297,7 +298,7 @@ class Unrealircd6:
 
             if chanObj is None:
                 # Channel not exist
-                if not self.__Irc.Channel.Is_Channel(channel_name):
+                if not self.__Irc.Channel.is_valid_channel(channel_name):
                     # Incorrect channel: leave
                     return None
 
@@ -412,7 +413,7 @@ class Unrealircd6:
         if userObj is None:
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -452,7 +453,7 @@ class Unrealircd6:
             self.__Base.logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
+        if not self.__Irc.Channel.is_valid_channel(channel):
             self.__Base.logs.error(f"The channel [{channel}] is not valid")
             return None
 
@@ -464,7 +465,7 @@ class Unrealircd6:
 
     def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
 
-        channel = self.__Irc.Channel.Is_Channel(channel_name)
+        channel = self.__Irc.Channel.is_valid_channel(channel_name)
         if not channel:
             self.__Base.logs.error(f'The channel [{channel_name}] is not correct')
             return None
@@ -939,7 +940,7 @@ class Unrealircd6:
                 cmd_to_send = convert_to_string.replace(':','')
                 self.__Base.log_cmd(user_trigger, cmd_to_send)
 
-                fromchannel = str(cmd[2]).lower() if self.__Irc.Channel.Is_Channel(cmd[2]) else None
+                fromchannel = str(cmd[2]).lower() if self.__Irc.Channel.is_valid_channel(cmd[2]) else None
                 self.__Irc.hcmds(user_trigger, fromchannel, arg, cmd)
 
             if cmd[2] == self.__Config.SERVICE_ID:
@@ -975,7 +976,7 @@ class Unrealircd6:
 
                     fromchannel = None
                     if len(arg) >= 2:
-                        fromchannel = str(arg[1]).lower() if self.__Irc.Channel.Is_Channel(arg[1]) else None
+                        fromchannel = str(arg[1]).lower() if self.__Irc.Channel.is_valid_channel(arg[1]) else None
 
                     self.__Irc.hcmds(user_trigger, fromchannel, arg, cmd)
             return None
@@ -1039,7 +1040,7 @@ class Unrealircd6:
             nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
-            current_datetime = self.__Base.get_datetime()
+            current_datetime = self.__Utils.get_sdatetime()
 
             if nickname is None:
                 return None

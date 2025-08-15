@@ -1,5 +1,5 @@
 from typing import Optional, TYPE_CHECKING
-from core.definition import MClone
+from mods.clone.schemas import MClone
 
 if TYPE_CHECKING:
     from mods.clone.mod_clone import Clone
@@ -16,33 +16,24 @@ class CloneManager:
         """Create new Clone object
 
         Args:
-            newCloneObject (CloneModel): New CloneModel object
+            new_clone_object (MClone): New Clone object
 
         Returns:
             bool: True if inserted
         """
-        result = False
-        exist = False
+        if new_clone_object is None:
+            self.Logs.debug('New Clone object must not be None')
+            return False
 
         for record in self.UID_CLONE_DB:
-            if record.nickname == new_clone_object.nickname:
+            if record.nickname == new_clone_object.nickname or record.uid == new_clone_object.uid:
                 # If the user exist then return False and do not go further
-                exist = True
-                self.Logs.warning(f'Nickname {record.nickname} already exist')
-                return result
-            if record.uid == new_clone_object.uid:
-                exist = True
-                self.Logs.warning(f'UID: {record.uid} already exist')
-                return result
+                self.Logs.debug(f'Nickname/UID {record.nickname}/{record.uid} already exist')
+                return False
 
-        if not exist:
-            self.UID_CLONE_DB.append(new_clone_object)
-            result = True
-
-        if not result:
-            self.Logs.critical(f'The Clone Object was not inserted {new_clone_object}')
-
-        return result
+        self.UID_CLONE_DB.append(new_clone_object)
+        self.Logs.debug(f'New Clone object created: {new_clone_object}')
+        return True
 
     def delete(self, uidornickname: str) -> bool:
         """Delete the Clone Object starting from the nickname or the UID

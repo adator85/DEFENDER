@@ -1,6 +1,4 @@
-import time, logging
-from typing import TYPE_CHECKING, Optional
-from faker import Faker
+from typing import TYPE_CHECKING, Optional, Any
 import mods.clone.utils as utils
 import mods.clone.threads as thds
 import mods.clone.schemas as schemas
@@ -8,40 +6,41 @@ from mods.clone.clone_manager import CloneManager
 
 if TYPE_CHECKING:
     from core.irc import Irc
+    from faker import Faker
 
-class Clone():
+class Clone:
 
-    def __init__(self, ircInstance: 'Irc') -> None:
+    def __init__(self, irc_instance: 'Irc') -> None:
 
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Add Irc Object to the module (Mandatory)
-        self.Irc = ircInstance
+        self.Irc = irc_instance
 
         # Add Irc Protocol Object to the module (Mandatory)
-        self.Protocol = ircInstance.Protocol
+        self.Protocol = irc_instance.Protocol
 
         # Add Global Configuration to the module (Mandatory)
-        self.Config = ircInstance.Config
+        self.Config = irc_instance.Config
 
         # Add Base object to the module (Mandatory)
-        self.Base = ircInstance.Base
+        self.Base = irc_instance.Base
 
         # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Base.logs
+        self.Logs = irc_instance.Base.logs
 
         # Add User object to the module (Mandatory)
-        self.User = ircInstance.User
+        self.User = irc_instance.User
 
         # Add Channel object to the module (Mandatory)
-        self.Channel = ircInstance.Channel
+        self.Channel = irc_instance.Channel
         
         # Add global definitions
-        self.Definition = ircInstance.Loader.Definition
+        self.Definition = irc_instance.Loader.Definition
 
         # The Global Settings
-        self.Settings = ircInstance.Loader.Settings
+        self.Settings = irc_instance.Loader.Settings
 
         self.Schemas = schemas
 
@@ -88,8 +87,6 @@ class Clone():
     def __create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -136,15 +133,15 @@ class Clone():
 
         return None
 
-    def cmd(self, data:list):
+    def cmd(self, data:list) -> None:
         try:
             if not data or len(data) < 2:
-                return
+                return None
 
             cmd = data.copy() if isinstance(data, list) else list(data).copy()
             index, command = self.Irc.Protocol.get_ircd_protocol_poisition(cmd)
             if index == -1:
-                return
+                return None
 
             match command:
 
@@ -152,15 +149,16 @@ class Clone():
                     return self.Utils.handle_on_privmsg(self, cmd)
 
                 case 'QUIT':
-                    return
+                    return None
 
                 case _:
-                    return
+                    return None
 
         except Exception as err:
             self.Logs.error(f'General Error: {err}', exc_info=True)
+            return None
 
-    def hcmds(self, user: str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
 
         try:
 
@@ -310,7 +308,7 @@ class Clone():
                             try:
                                 # clone say clone_nickname #channel message
                                 clone_name = str(cmd[2])
-                                clone_channel = str(cmd[3]) if self.Channel.Is_Channel(str(cmd[3])) else None
+                                clone_channel = str(cmd[3]) if self.Channel.is_valid_channel(str(cmd[3])) else None
 
                                 final_message = ' '.join(cmd[4:])
 

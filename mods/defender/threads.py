@@ -155,7 +155,7 @@ def timer_release_mode_mute(uplink: 'Defender', action: str, channel: str):
     """
     service_id = uplink.Config.SERVICE_ID
 
-    if not uplink.Channel.Is_Channel(channel):
+    if not uplink.Channel.is_valid_channel(channel):
         uplink.Logs.debug(f"Channel is not valid {channel}")
         return
 

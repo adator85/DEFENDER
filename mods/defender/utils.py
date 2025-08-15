@@ -52,7 +52,7 @@ def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
 
     if confmodel.autolimit == 1:
         if mode == '+l' or mode == '-l':
-            chan = irc.Channel.get_Channel(channel)
+            chan = irc.Channel.get_channel(channel)
             p.send2socket(f":{gconfig.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + confmodel.autolimit_amount}")
 
     if gconfig.SALON_JAIL == channel:
@@ -80,7 +80,7 @@ def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
     gconfig = uplink.Config
     confmodel = uplink.ModConfig
 
-    parsed_chan = srvmsg[4] if irc.Channel.Is_Channel(srvmsg[4]) else None
+    parsed_chan = srvmsg[4] if irc.Channel.is_valid_channel(srvmsg[4]) else None
     parsed_UID = irc.User.clean_uid(srvmsg[5])
 
     if parsed_chan is None or parsed_UID is None:
@@ -265,7 +265,7 @@ def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
     channel = srvmsg[3]
     User = irc.User.get_User(user_trigger)
 
-    if User is None or not irc.Channel.Is_Channel(channel_to_check=channel):
+    if User is None or not irc.Channel.is_valid_channel(channel_to_check=channel):
         return
 
     flood_time = confmodel.flood_time

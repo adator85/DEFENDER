@@ -190,7 +190,7 @@ class Jsonrpc():
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
     def unload(self) -> None:
-        if self.UnrealIrcdRpcLive.Error.code != -1:
+        if self.UnrealIrcdRpcLive.get_error.code != -1:
             self.UnrealIrcdRpcLive.unsubscribe()
         return None
 
@@ -271,16 +271,13 @@ class Jsonrpc():
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{rpc.get_error.message}')
                                 return None
 
-                            chan_list = []
-                            for chan in UserInfo.user.channels:
-                                chan_list.append(chan.name)
 
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {chan_list}')
+                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {[chan.name for chan in UserInfo.user.channels]}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
 

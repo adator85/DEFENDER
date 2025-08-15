@@ -31,6 +31,9 @@ class Irc:
         # Load the configuration
         self.Config = self.Loader.Config
 
+        # Load Main utils functions
+        self.Utils = self.Loader.Utils
+
         # Date et heure de la premiere connexion de Defender
         self.defender_connexion_datetime = self.Config.DEFENDER_CONNEXION_DATETIME
 
@@ -802,7 +805,7 @@ class Irc:
 
         hostname = get_user.hostname
         vhost = get_user.vhost
-        spassword = self.Base.crypt_password(password)
+        spassword = self.Loader.Utils.hash_password(password)
 
         mes_donnees = {'admin': nickname}
         query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user=:admin"
@@ -811,7 +814,7 @@ class Irc:
 
         # On verifie si le user exist dans la base
         if not exist_user:
-            mes_donnees = {'datetime': self.Base.get_datetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level}
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level}
             self.Base.db_execute_query(f'''INSERT INTO {self.Config.TABLE_ADMIN} 
                     (createdOn, user, password, hostname, vhost, level) VALUES
                     (:datetime, :user, :password, :hostname, :vhost, :level)
@@ -833,7 +836,7 @@ class Irc:
             log_msg (str): the message to log
         """
         try:
-            mes_donnees = {'datetime': self.Base.get_datetime(), 'server_msg': log_msg}
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'server_msg': log_msg}
             self.Base.db_execute_query(f'INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)', mes_donnees)
 
             return None
@@ -1151,7 +1154,7 @@ class Irc:
                     return False
 
                 if not user_to_log is None:
-                    mes_donnees = {'user': user_to_log, 'password': self.Base.crypt_password(password)}
+                    mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
                     query = f"SELECT id, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
                     result = self.Base.db_execute_query(query, mes_donnees)
                     user_from_db = result.fetchone()
@@ -1204,7 +1207,7 @@ class Irc:
                         return None
 
                     user_to_edit = cmd[1]
-                    user_password = self.Base.crypt_password(cmd[2])
+                    user_password = self.Loader.Utils.hash_password(cmd[2])
 
                     get_admin = self.Admin.get_Admin(fromuser)
                     if get_admin is None:
@@ -1343,9 +1346,9 @@ class Irc:
 
                     # If the account doesn't exist then insert into database
                     data_to_record = {
-                        'createdOn': self.Base.get_datetime(), 'account': fromuser,
+                        'createdOn': self.Utils.get_sdatetime(), 'account': fromuser,
                         'nickname': user_obj.nickname, 'hostname': user_obj.hostname, 'vhost': user_obj.vhost, 'realname': user_obj.realname, 'email': email,
-                        'password': self.Base.crypt_password(password=password), 'level': 0
+                        'password': self.Loader.Utils.hash_password(password=password), 'level': 0
                     }
 
                     insert_to_db = self.Base.db_execute_query(f"""
@@ -1380,7 +1383,7 @@ class Irc:
                         return None
 
                     account = str(cmd[1]) # account
-                    encrypted_password = self.Base.crypt_password(cmd[2])
+                    encrypted_password = self.Loader.Utils.hash_password(cmd[2])
                     user_obj = self.User.get_User(fromuser)
                     client_obj = self.Client.get_Client(user_obj.uid)
 

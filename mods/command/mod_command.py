@@ -1,4 +1,4 @@
-from typing import Union, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
@@ -271,7 +271,7 @@ class Command:
 
                         user_uid = self.User.clean_uid(cmd[5])
                         userObj: MUser = self.User.get_User(user_uid)
-                        channel_name = cmd[4] if self.Channel.Is_Channel(cmd[4]) else None
+                        channel_name = cmd[4] if self.Channel.is_valid_channel(cmd[4]) else None
                         client_obj = self.Client.get_Client(user_uid)
                         nickname = userObj.nickname if userObj is not None else None
 
@@ -296,7 +296,7 @@ class Command:
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, uidornickname: str, channel_name: Union[str, None], cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
@@ -324,7 +324,7 @@ class Command:
                             # userObj: MUser = self.User.get_User(str(cmd[2]))
                             nickname = str(cmd[2])
                             mode = str(cmd[3])
-                            chan: str = str(cmd[4]).lower() if self.Channel.Is_Channel(cmd[4]) else None
+                            chan: str = str(cmd[4]).lower() if self.Channel.is_valid_channel(cmd[4]) else None
                             sign = mode[0] if mode.startswith( ('+', '-')) else None
                             clean_mode = mode[1:] if len(mode) > 0 else None
 
@@ -422,7 +422,7 @@ class Command:
 
             case 'voiceall':
                 try:
-                    chan_info = self.Channel.get_Channel(fromchannel)
+                    chan_info = self.Channel.get_channel(fromchannel)
                     set_mode = 'v'
                     mode:str = ''
                     users:str = ''
@@ -444,7 +444,7 @@ class Command:
 
             case 'opall':
                 try:
-                    chan_info = self.Channel.get_Channel(fromchannel)
+                    chan_info = self.Channel.get_channel(fromchannel)
                     set_mode = 'o'
                     mode:str = ''
                     users:str = ''
@@ -739,7 +739,7 @@ class Command:
             case 'ban':
                 # .ban #channel nickname
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sentchannel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sentchannel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                         return False
@@ -757,7 +757,7 @@ class Command:
             case 'unban':
                 # .unban #channel nickname
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sentchannel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sentchannel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
@@ -775,7 +775,7 @@ class Command:
             case 'kick':
                 # .kick #channel nickname reason
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sentchannel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sentchannel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
@@ -794,7 +794,7 @@ class Command:
             case 'kickban':
                 # .kickban #channel nickname reason
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sentchannel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sentchannel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
                         return False
@@ -814,7 +814,7 @@ class Command:
             case 'join' | 'assign':
 
                 try:
-                    sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sent_channel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sent_channel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}JOIN #channel")
                         return False
@@ -832,7 +832,7 @@ class Command:
             case 'part' | 'unassign':
 
                 try:
-                    sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
+                    sent_channel = str(cmd[1]) if self.Channel.is_valid_channel(cmd[1]) else None
                     if sent_channel is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}PART #channel")
                         return False
@@ -859,7 +859,7 @@ class Command:
                         return None
 
                     chan = str(cmd[1])
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
                         return None
@@ -959,7 +959,7 @@ class Command:
 
                     chan = str(cmd[1])
 
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel")
                         return None
@@ -980,7 +980,7 @@ class Command:
                     nickname = str(cmd[1])
                     chan = str(cmd[2])
 
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
@@ -1051,7 +1051,7 @@ class Command:
 
                     if len(cmd) == 2:
                         channel_mode = cmd[1]
-                        if self.Channel.Is_Channel(fromchannel):
+                        if self.Channel.is_valid_channel(fromchannel):
                             self.Protocol.send2socket(f":{dnickname} MODE {fromchannel} {channel_mode}")
                         else:
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : Channel [{fromchannel}] is not correct should start with #")

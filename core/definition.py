@@ -321,21 +321,6 @@ class MConfig(MainModel):
         """0: utf-8 | 1: iso-8859-1"""
 
 @dataclass
-class MClone(MainModel):
-    """Model Clone"""
-    connected: bool = False
-    uid: str = None
-    nickname: str = None
-    username: str = None
-    realname: str = None
-    channels: list = field(default_factory=list)
-    vhost: str = None
-    hostname: str = 'localhost'
-    umodes: str = None
-    remote_ip: str = '127.0.0.1'
-    group: str = 'Default'
-
-@dataclass
 class MCommand(MainModel):
     module_name: str = None
     command_name: str = None
