@@ -1,4 +1,6 @@
 .pyenv/
+.venv/
+.idea/
 db/
 logs/
 __pycache__/
