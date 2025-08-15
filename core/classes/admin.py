@@ -1,15 +1,15 @@
 from typing import Optional
 from core.base import Base
-import core.definition as df
+from core.definition import MAdmin
 
 class Admin:
 
-    UID_ADMIN_DB: list[df.MAdmin] = []
+    UID_ADMIN_DB: list[MAdmin] = []
 
     def __init__(self, base: Base) -> None:
         self.Logs = base.logs
 
-    def insert(self, new_admin: df.MAdmin) -> bool:
+    def insert(self, new_admin: MAdmin) -> bool:
         """Insert a new admin object model
 
         Args:
@@ -99,7 +99,7 @@ class Admin:
 
         return False
 
-    def get_admin(self, uidornickname: str) -> Optional[df.MAdmin]:
+    def get_admin(self, uidornickname: str) -> Optional[MAdmin]:
         """Get the admin object model
 
         Args:
