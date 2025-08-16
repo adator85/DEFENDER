@@ -127,7 +127,7 @@ class Irc:
 
 
         # Define the IrcSocket object
-        self.IrcSocket:Union[socket.socket, SSLSocket] = None
+        self.IrcSocket: Union[socket.socket, SSLSocket] = None
 
         self.__create_table()
         self.Base.create_thread(func=self.heartbeat, func_args=(self.beat, ))
@@ -145,6 +145,7 @@ class Irc:
             self.init_service_user()
             self.__create_socket()
             self.__connect_to_irc(ircInstance)
+
         except AssertionError as ae:
             self.Logs.critical(f'Assertion error: {ae}')
 
@@ -197,6 +198,7 @@ class Irc:
             self.Logs.critical(f"AttributeError: {ae} - {soc.fileno()}")
 
     def __ssl_context(self) -> ssl.SSLContext:
+
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE

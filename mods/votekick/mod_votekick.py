@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import re
 from dataclasses import dataclass, field
 
@@ -54,6 +54,9 @@ class Votekick():
 
         # Add Channel object to the module
         self.Channel = ircInstance.Channel
+
+        # Add Utils.
+        self.Utils = ircInstance.Utils
 
         # Créer les nouvelles commandes du module
         self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
@@ -150,7 +153,7 @@ class Votekick():
         Args:
             channel (str): le salon à enregistrer.
         """
-        current_datetime = self.Base.get_datetime()
+        current_datetime = self.Utils.get_sdatetime()
         mes_donnees = {'channel': channel}
 
         response = self.Base.db_execute_query("SELECT id FROM votekick_channel WHERE channel = :channel", mes_donnees)
@@ -256,7 +259,7 @@ class Votekick():
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user:str, channel: Any, cmd: list, fullcmd: list = []) -> None:
         # cmd is the command starting from the user command
         # full cmd is sending the entire server response
 

@@ -1,3 +1,6 @@
+'''
+Main utils library.
+'''
 from pathlib import Path
 from typing import Literal, Optional, Any
 from datetime import datetime
