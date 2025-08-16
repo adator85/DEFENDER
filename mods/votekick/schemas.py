@@ -1,6 +1,6 @@
 from typing import Optional
-from core.definition import MainModel, dataclass, field
-
+from core.definition import MainModel
+from dataclasses import dataclass, field
 
 @dataclass
 class VoteChannelModel(MainModel):
