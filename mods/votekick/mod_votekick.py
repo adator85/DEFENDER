@@ -1,20 +1,23 @@
+'''
+    File        : mod_votekick.py
+    Version     : 1.0.0
+    Description : Manages votekick sessions for multiple channels.
+                Handles activation, ongoing vote checks, and cleanup.
+    Author      : adator
+    Created     : 2025-08-16
+    Last Updated: 2025-08-16
+-----------------------------------------
+'''
 from typing import TYPE_CHECKING, Any
 import re
 from dataclasses import dataclass, field
+import mods.votekick.votekick_manager
 
 if TYPE_CHECKING:
     from core.irc import Irc
 
-# Activer le systeme sur un salon (activate #salon)
-#   Le service devra se connecter au salon
-#   Le service devra se mettre en op
-# Soumettre un nom de user (submit nickname)
-# voter pour un ban (vote_for)
-# voter contre un ban (vote_against)
 
-
-
-class Votekick():
+class Votekick:
 
     @dataclass
     class VoteChannelModel:
@@ -57,6 +60,11 @@ class Votekick():
 
         # Add Utils.
         self.Utils = ircInstance.Utils
+
+        metadata = ircInstance.Loader.Settings.get_cache('VOTEKICK')
+        
+        if metadata is not None:
+            self.VOTE_CHANNEL_DB = metadata
 
         # Créer les nouvelles commandes du module
         self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
@@ -106,6 +114,9 @@ class Votekick():
 
     def unload(self) -> None:
         try:
+            # Cache the local DB with current votes.
+            self.Loader.Settings.set_cache('VOTEKICK', self.VOTE_CHANNEL_DB)
+
             for chan in self.VOTE_CHANNEL_DB:
                 self.Protocol.send_part_chan(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)
 

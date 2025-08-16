@@ -2,7 +2,7 @@
 '''
 from threading import Timer, Thread, RLock
 from socket import socket
-from typing import Any
+from typing import Any, Optional
 
 class Settings:
     """This Class will never be reloaded. 
@@ -37,7 +37,7 @@ class Settings:
         """
         self.__CACHE[key] = value_to_cache
     
-    def get_cache(self, key) -> Any:
+    def get_cache(self, key) -> Optional[Any]:
         """It returns the value associated to the key and finally it removes the entry"""
         if self.__CACHE.get(key):
             return self.__CACHE.pop(key)
