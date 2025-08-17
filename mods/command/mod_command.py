@@ -34,8 +34,11 @@ class Command:
         # Add Base object to the module (Mandatory)
         self.Base = ircInstance.Base
 
+        # Add main Utils to the module
+        self.MainUtils = ircInstance.Utils
+
         # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Base.logs
+        self.Logs = ircInstance.Loader.Logs
 
         # Add User object to the module (Mandatory)
         self.User = ircInstance.User
@@ -296,7 +299,7 @@ class Command:
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []):
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
@@ -307,7 +310,8 @@ class Command:
         fromchannel = channel_name
 
         match command:
-            case "automode":
+
+            case 'automode':
                 # automode set nickname [+/-mode] #channel
                 # automode set adator +o #channel
                 try:
@@ -346,7 +350,7 @@ class Command:
 
                             if db_result is not None:
                                 if sign == '+':
-                                    db_data = {"updated_on": self.Base.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
+                                    db_data = {"updated_on": self.MainUtils.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
                                     db_result = self.Base.db_execute_query(query="UPDATE command_automode SET mode = :mode, updated_on = :updated_on WHERE nickname = :nickname and channel = :channel",
                                                                     params=db_data)
                                     if db_result.rowcount > 0:
@@ -432,7 +436,7 @@ class Command:
                     for uid in uids_split:
                         for i in range(0, len(uid)):
                             mode += set_mode
-                            users += f'{self.User.get_nickname(self.Base.clean_uid(uid[i]))} '
+                            users += f'{self.User.get_nickname(self.MainUtils.clean_uid(uid[i]))} '
                             if i == len(uid) - 1:
                                 self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{mode} {users}")
                                 mode = ''
@@ -454,7 +458,7 @@ class Command:
                     for uid in uids_split:
                         for i in range(0, len(uid)):
                             mode += set_mode
-                            users += f'{self.User.get_nickname(self.Base.clean_uid(uid[i]))} '
+                            users += f'{self.User.get_nickname(self.MainUtils.clean_uid(uid[i]))} '
                             if i == len(uid) - 1:
                                 self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{mode} {users}")
                                 mode = ''
@@ -1146,7 +1150,7 @@ class Command:
                     # .svsnick nickname newnickname
                     nickname = str(cmd[1])
                     newnickname = str(cmd[2])
-                    unixtime = self.Base.get_unixtime()
+                    unixtime = self.MainUtils.get_unixtime()
 
                     if self.User.get_nickname(nickname) is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
@@ -1192,7 +1196,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     gline_reason = ' '.join(cmd[3:])
 
@@ -1201,7 +1205,7 @@ class Command:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
-                    self.Protocol.gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
+                    self.Protocol.send_gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1222,7 +1226,7 @@ class Command:
                     hostname = str(cmd[2])
 
                     # self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} TKL - G {nickname} {hostname} {dnickname}")
-                    self.Protocol.ungline(nickname=nickname, hostname=hostname)
+                    self.Protocol.send_ungline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1240,7 +1244,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     gline_reason = ' '.join(cmd[3:])
 
@@ -1249,7 +1253,7 @@ class Command:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
-                    self.Protocol.kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
+                    self.Protocol.send_kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1269,7 +1273,7 @@ class Command:
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
 
-                    self.Protocol.unkline(nickname=nickname, hostname=hostname)
+                    self.Protocol.send_unkline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1288,7 +1292,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     shun_reason = ' '.join(cmd[3:])
 

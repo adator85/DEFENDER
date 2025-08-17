@@ -1,14 +1,16 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from core.definition import MReputation
-from core.base import Base
+
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Reputation:
 
     UID_REPUTATION_DB: list[MReputation] = []
 
-    def __init__(self, base: Base):
+    def __init__(self, loader: 'Loader'):
 
-        self.Logs = base.logs
+        self.Logs = loader.Logs
         self.MReputation: MReputation = MReputation
 
     def insert(self, new_reputation_user: MReputation) -> bool:

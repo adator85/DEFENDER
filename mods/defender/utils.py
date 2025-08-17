@@ -81,7 +81,7 @@ def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
     confmodel = uplink.ModConfig
 
     parsed_chan = srvmsg[4] if irc.Channel.is_valid_channel(srvmsg[4]) else None
-    parsed_UID = irc.User.clean_uid(srvmsg[5])
+    parsed_UID = uplink.Loader.Utils.clean_uid(srvmsg[5])
 
     if parsed_chan is None or parsed_UID is None:
         return
@@ -145,7 +145,7 @@ def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
         srvmsg (list[str]): The Server MSG
         confmodel (ModConfModel): The Module Configuration
     """
-    uid = uplink.User.clean_uid(str(srvmsg[1]))
+    uid = uplink.Loader.Utils.clean_uid(str(srvmsg[1]))
     p = uplink.Protocol
     confmodel = uplink.ModConfig
 
@@ -180,7 +180,7 @@ def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
     confmodel = uplink.ModConfig
 
     ban_all_chan = uplink.Base.int_if_possible(confmodel.reputation_ban_all_chan)
-    final_UID = uplink.User.clean_uid(str(srvmsg[1]))
+    final_UID = uplink.Loader.Utils.clean_uid(str(srvmsg[1]))
     jail_salon = uplink.Config.SALON_JAIL
     service_id = uplink.Config.SERVICE_ID
     get_user_reputation = uplink.Reputation.get_Reputation(final_UID)
@@ -238,7 +238,7 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
                 irc.Reputation.insert(
                     irc.Loader.Definition.MReputation(
                         **_User.to_dict(),
-                        secret_code=irc.Base.get_random(8)
+                        secret_code=irc.Utils.generate_random_string(8)
                     )
                 )
                 if irc.Reputation.is_exist(_User.uid):
@@ -278,7 +278,7 @@ def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
 
     get_detected_uid = User.uid
     get_detected_nickname = User.nickname
-    unixtime = irc.Base.get_unixtime()
+    unixtime = irc.Utils.get_unixtime()
     get_diff_secondes = 0
 
     def get_flood_user(uid: str) -> Optional[FloodUser]:

@@ -1,13 +1,16 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from core.base import Base
 from core.definition import MAdmin
+
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Admin:
 
     UID_ADMIN_DB: list[MAdmin] = []
 
-    def __init__(self, base: Base) -> None:
-        self.Logs = base.logs
+    def __init__(self, loader: 'Loader') -> None:
+        self.Logs = loader.Logs
 
     def insert(self, new_admin: MAdmin) -> bool:
         """Insert a new admin object model

@@ -3,17 +3,17 @@ from typing import Any, Optional, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from core.base import Base
+    from core.loader import Loader
     from core.definition import MUser
 
 class User:
 
     UID_DB: list['MUser'] = []
 
-    def __init__(self, base: 'Base'):
+    def __init__(self, loader: 'Loader'):
 
-        self.Logs = base.logs
-        self.Base = base
+        self.Logs = loader.Logs
+        self.Base = loader.Base
 
     def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object

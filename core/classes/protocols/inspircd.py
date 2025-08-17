@@ -15,8 +15,9 @@ class Inspircd:
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
         self.__Utils = ircInstance.Loader.Utils
+        self.__Logs = ircInstance.Loader.Logs
 
-        self.__Base.logs.info(f"** Loading protocol [{__name__}]")
+        self.__Logs.info(f"** Loading protocol [{__name__}]")
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -28,24 +29,24 @@ class Inspircd:
             with self.__Base.lock:
                 self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[0]))
                 if print_log:
-                    self.__Base.logs.debug(f'<< {message}')
+                    self.__Logs.debug(f'<< {message}')
 
         except UnicodeDecodeError as ude:
-            self.__Base.logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
+            self.__Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
             self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
         except UnicodeEncodeError as uee:
-            self.__Base.logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
+            self.__Logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
             self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
         except AssertionError as ae:
-            self.__Base.logs.warning(f'Assertion Error {ae} - message: {message}')
+            self.__Logs.warning(f'Assertion Error {ae} - message: {message}')
         except SSLEOFError as soe:
-            self.__Base.logs.error(f"SSLEOFError: {soe} - {message}")
+            self.__Logs.error(f"SSLEOFError: {soe} - {message}")
         except SSLError as se:
-            self.__Base.logs.error(f"SSLError: {se} - {message}")
+            self.__Logs.error(f"SSLError: {se} - {message}")
         except OSError as oe:
-            self.__Base.logs.error(f"OSError: {oe} - {message}")
+            self.__Logs.error(f"OSError: {oe} - {message}")
         except AttributeError as ae:
-            self.__Base.logs.critical(f"Attribute Error: {ae}")
+            self.__Logs.critical(f"Attribute Error: {ae}")
 
     def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
@@ -62,7 +63,7 @@ class Inspircd:
             User_to      = self.__Irc.User.get_User(nick_to) if nick_to is None else None
 
             if User_from is None:
-                self.__Base.logs.error(f"The sender nickname [{nick_from}] do not exist")
+                self.__Logs.error(f"The sender nickname [{nick_from}] do not exist")
                 return None
 
             if not channel is None:
@@ -75,7 +76,7 @@ class Inspircd:
                     batch = str(msg)[i:i+batch_size]
                     self.send2socket(f":{nick_from} PRIVMSG {User_to.uid} :{batch}")
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err}")
+            self.__Logs.error(f"General Error: {err}")
 
     def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
@@ -91,7 +92,7 @@ class Inspircd:
             User_to     = self.__Irc.User.get_User(nick_to)
 
             if User_from is None or User_to is None:
-                self.__Base.logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
+                self.__Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
                 return None
 
             for i in range(0, len(str(msg)), batch_size):
@@ -99,9 +100,9 @@ class Inspircd:
                 self.send2socket(f":{User_from.uid} NOTICE {User_to.uid} :{batch}")
 
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err}")
+            self.__Logs.error(f"General Error: {err}")
 
-    def link(self):
+    def send_link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
@@ -123,7 +124,7 @@ class Inspircd:
         service_id = self.__Config.SERVICE_ID
 
         version = self.__Config.CURRENT_VERSION
-        unixtime = self.__Base.get_unixtime()
+        unixtime = self.__Utils.get_unixtime()
 
 
         self.send2socket(f"CAPAB START 1206")
@@ -133,7 +134,7 @@ class Inspircd:
         self.send2socket(f"BURST {unixtime}")
         self.send2socket(f":{server_id} ENDBURST")
 
-        self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
+        self.__Logs.debug(f'>> {__name__} Link information sent to the server')
 
     def gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
@@ -142,12 +143,12 @@ class Inspircd:
 
         return None
 
-    def set_nick(self, newnickname: str) -> None:
+    def send_set_nick(self, newnickname: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} NICK {newnickname}")
         return None
 
-    def squit(self, server_id: str, server_link: str, reason: str) -> None:
+    def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
 
         if not reason:
             reason = 'Service Shutdown'
@@ -155,26 +156,26 @@ class Inspircd:
         self.send2socket(f":{server_id} SQUIT {server_link} :{reason}")
         return None
 
-    def ungline(self, nickname:str, hostname: str) -> None:
+    def send_ungline(self, nickname:str, hostname: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
 
         return None
 
-    def kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
 
         return None
 
-    def sjoin(self, channel: str) -> None:
+    def send_sjoin(self, channel: str) -> None:
 
         if not self.__Irc.Channel.is_valid_channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
+        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Utils.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
@@ -202,7 +203,7 @@ class Inspircd:
             self.__Irc.Reputation.delete(reputationObj.uid)
 
         if not self.__Irc.Channel.delete_user_from_all_channel(uid):
-            self.__Base.logs.error(f"The UID [{uid}] has not been deleted from all channels")
+            self.__Logs.error(f"The UID [{uid}] has not been deleted from all channels")
 
         return None
 
@@ -221,9 +222,9 @@ class Inspircd:
             print_log (bool, optional): print logs if true. Defaults to True.
         """
         # {self.Config.SERVEUR_ID} UID 
-        # {clone.nickname} 1 {self.Base.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
+        # {clone.nickname} 1 {self.__Utils.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
         try:
-            unixtime = self.__Base.get_unixtime()
+            unixtime = self.__Utils.get_unixtime()
             encoded_ip = self.__Base.encode_ip(remote_ip)
 
             # Create the user
@@ -242,7 +243,7 @@ class Inspircd:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
@@ -261,7 +262,7 @@ class Inspircd:
             return None
 
         if not self.__Irc.Channel.is_valid_channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} JOIN {channel} {passwordChannel}", print_log=print_log)
@@ -282,11 +283,11 @@ class Inspircd:
         userObj = self.__Irc.User.get_User(uidornickname)
 
         if userObj is None:
-            self.__Base.logs.error(f"The user [{uidornickname}] is not valid")
+            self.__Logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
         if not self.__Irc.Channel.is_valid_channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} PART {channel}", print_log=print_log)
@@ -295,7 +296,7 @@ class Inspircd:
         self.__Irc.Channel.delete_user_from_channel(channel, userObj.uid)
         return None
 
-    def unkline(self, nickname:str, hostname: str) -> None:
+    def send_unkline(self, nickname:str, hostname: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
 
@@ -322,14 +323,14 @@ class Inspircd:
             # TODO : User object should be able to update user modes
             if self.__Irc.User.update_mode(userObj.uid, userMode):
                 return None
-                # self.__Base.logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
+                # self.__Logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
 
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_quit(self, serverMsg: list[str]) -> None:
         """Handle quit coming from a server
@@ -350,9 +351,9 @@ class Inspircd:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_squit(self, serverMsg: list[str]) -> None:
         """Handle squit coming from a server
@@ -409,9 +410,9 @@ class Inspircd:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_sjoin(self, serverMsg: list[str]) -> None:
         """Handle sjoin coming from a server
@@ -444,7 +445,7 @@ class Inspircd:
             # Boucle qui va ajouter l'ensemble des users (UID)
             for i in range(start_boucle, len(serverMsg)):
                 parsed_UID = str(serverMsg[i])
-                clean_uid = self.__Irc.User.clean_uid(parsed_UID)
+                clean_uid = self.__Utils.clean_uid(parsed_UID)
                 if not clean_uid is None and len(clean_uid) == 9:
                     list_users.append(parsed_UID)
 
@@ -458,9 +459,9 @@ class Inspircd:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_part(self, serverMsg: list[str]) -> None:
         """Handle part coming from a server
@@ -479,9 +480,9 @@ class Inspircd:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_uid(self, serverMsg: list[str]) -> None:
         """Handle uid message coming from the server
@@ -542,9 +543,9 @@ class Inspircd:
             )
             return None
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server
@@ -562,7 +563,7 @@ class Inspircd:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
@@ -574,7 +575,7 @@ class Inspircd:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
 
@@ -586,7 +587,7 @@ class Inspircd:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_time(self, serverMsg: list[str]) -> None:
         """Sending TIME answer to a requestor
@@ -598,7 +599,7 @@ class Inspircd:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
             current_datetime = self.__Utils.get_sdatetime()
@@ -611,7 +612,7 @@ class Inspircd:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_ping(self, serverMsg: list[str]) -> None:
         """Sending a PING answer to requestor
@@ -623,7 +624,7 @@ class Inspircd:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
 
@@ -632,7 +633,7 @@ class Inspircd:
 
             if arg == '\x01PING':
                 recieved_unixtime = int(serverMsg[5].replace('\x01',''))
-                current_unixtime = self.__Base.get_unixtime()
+                current_unixtime = self.__Utils.get_unixtime()
                 ping_response = current_unixtime - recieved_unixtime
 
                 # self.__Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
@@ -644,7 +645,7 @@ class Inspircd:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_version_msg(self, serverMsg: list[str]) -> None:
         """Handle version coming from the server
@@ -654,7 +655,7 @@ class Inspircd:
         """
         try:
             # ['@label=0073', ':0014E7P06', 'VERSION', 'PyDefender']
-            getUser  = self.__Irc.User.get_User(self.__Irc.User.clean_uid(serverMsg[1]))
+            getUser  = self.__Irc.User.get_User(self.__Utils.clean_uid(serverMsg[1]))
 
             if getUser is None:
                 return None
@@ -669,4 +670,4 @@ class Inspircd:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")

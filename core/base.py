@@ -32,8 +32,9 @@ class Base:
         self.Config = loader.Config
         self.Settings = loader.Settings
         self.Utils = loader.Utils
+        self.logs = loader.Logs
 
-        self.init_log_system()                                  # Demarrer le systeme de log
+        # self.init_log_system()                                  # Demarrer le systeme de log
         self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
 
         # Liste des timers en cours
@@ -140,18 +141,6 @@ class Base:
         except Exception as err:
             self.logs.error(f'General Error: {err}')
 
-    def get_unixtime(self) -> int:
-        """
-        Cette fonction retourne un UNIXTIME de type 12365456
-        Return: Current time in seconds since the Epoch (int)
-        """
-        cet_offset = timezone(timedelta(hours=2))
-        now_cet = datetime.now(cet_offset)
-        unixtime_cet = int(now_cet.timestamp())
-        unixtime = int( time.time() )
-
-        return unixtime
-
     def get_all_modules(self) -> list[str]:
         """Get list of all main modules
         using this pattern mod_*.py
@@ -200,73 +189,6 @@ class Base:
         sql_insert = f"INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)"
         mes_donnees = {'datetime': str(self.Utils.get_sdatetime()),'server_msg': f'{log_message}'}
         self.db_execute_query(sql_insert, mes_donnees)
-
-        return None
-
-    def init_log_system(self) -> None:
-        # Create folder if not available
-        logs_directory = f'logs{self.Config.OS_SEP}'
-        if not os.path.exists(f'{logs_directory}'):
-            os.makedirs(logs_directory)
-
-        # Init logs object
-        self.logs = logging.getLogger(self.Config.LOGGING_NAME)
-        self.logs.setLevel(self.Config.DEBUG_LEVEL)
-
-        # Add Handlers
-        file_hanlder = logging.FileHandler(f'logs{self.Config.OS_SEP}defender.log',encoding='UTF-8')
-        file_hanlder.setLevel(self.Config.DEBUG_LEVEL)
-
-        stdout_handler = logging.StreamHandler()
-        stdout_handler.setLevel(50)
-
-        # Define log format
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
-
-        # Apply log format
-        file_hanlder.setFormatter(formatter)
-        stdout_handler.setFormatter(formatter)
-
-        # Add handler to logs
-        self.logs.addHandler(file_hanlder)
-        self.logs.addHandler(stdout_handler)
-
-        # Apply the filter
-        self.logs.addFilter(self.replace_filter)
-
-        # self.logs.Logger('defender').addFilter(self.replace_filter)
-        self.logs.info('#################### STARTING DEFENDER ####################')
-
-        return None
-
-    def replace_filter(self, record: logging.LogRecord) -> bool:
-
-        response = True
-        filters: list[str] = ['PING',
-                              f':{self.Config.SERVICE_PREFIX}auth']
-
-        # record.msg = record.getMessage().replace("PING", "[REDACTED]")
-        if self.Settings.CONSOLE:
-            print(record.getMessage())
-
-        for f in filters:
-            if f in record.getMessage():
-                response = False
-
-        return response  # Retourne True pour permettre l'affichage du message
-
-    def delete_logger(self, logger_name: str) -> None:
-
-        # Récupérer le logger
-        logger = logging.getLogger(logger_name)
-
-        # Retirer tous les gestionnaires du logger et les fermer
-        for handler in logger.handlers[:]:  # Utiliser une copie de la liste
-            logger.removeHandler(handler)
-            handler.close()
-
-        # Supprimer le logger du dictionnaire global
-        logging.Logger.manager.loggerDict.pop(logger_name, None)
 
         return None
 
@@ -830,15 +752,6 @@ class Base:
             self.logs.critical(f'General Error: {err}')
             return None
 
-    def get_random(self, lenght:int) -> str:
-        """
-        Retourn une chaîne aléatoire en fonction de la longueur spécifiée.
-        """
-        caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        randomize = ''.join(random.choice(caracteres) for _ in range(lenght))
-
-        return randomize
-
     def execute_periodic_action(self) -> None:
 
         if not self.periodic_func:
@@ -878,23 +791,3 @@ class Base:
 
         self.logs.debug(f'Method to execute : {str(self.periodic_func)}')
         return None
-
-    def clean_uid(self, uid:str) -> Optional[str]:
-        """Clean UID by removing @ / % / + / ~ / * / :
-
-        Args:
-            uid (str): The UID to clean
-
-        Returns:
-            str: Clean UID without any sign
-        """
-        try:
-            if uid is None:
-                return None
-
-            pattern = fr'[:|@|%|\+|~|\*]*'
-            parsed_UID = re.sub(pattern, '', uid)
-
-            return parsed_UID
-        except TypeError as te:
-            self.logs.error(f'Type Error: {te}')

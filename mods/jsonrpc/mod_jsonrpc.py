@@ -33,7 +33,7 @@ class Jsonrpc():
         self.Base = ircInstance.Base
 
         # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Base.logs
+        self.Logs = ircInstance.Loader.Logs
 
         # Add User object to the module (Mandatory)
         self.User = ircInstance.User

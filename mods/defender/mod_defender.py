@@ -30,7 +30,7 @@ class Defender:
         self.Base = irc_instance.Base
 
         # Add logs object to the module (Mandatory)
-        self.Logs = irc_instance.Base.logs
+        self.Logs = irc_instance.Loader.Logs
 
         # Add User object to the module (Mandatory)
         self.User = irc_instance.User
@@ -118,7 +118,7 @@ class Defender:
             self.Base.create_thread(func=thds.thread_autolimit, func_args=(self, ))
 
         if self.ModConfig.reputation == 1:
-            self.Protocol.sjoin(self.Config.SALON_JAIL)
+            self.Protocol.send_sjoin(self.Config.SALON_JAIL)
             self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.SALON_JAIL} +o {self.Config.SERVICE_NICKNAME}")
 
         return None
@@ -176,7 +176,7 @@ class Defender:
             self.Schemas.DB_FREEIPAPI_USERS = freeipapi
 
         if cloudfilt:
-            self.Schemas.DB_CLOUD_FILT_USERS = cloudfilt
+            self.Schemas.DB_CLOUDFILT_USERS = cloudfilt
 
         if psutils:
             self.Schemas.DB_PSUTIL_USERS = psutils
@@ -239,7 +239,7 @@ class Defender:
 
             for channel in channels:
                 chan = channel[0]
-                self.Protocol.sjoin(chan)
+                self.Protocol.send_sjoin(chan)
                 if chan == jail_chan:
                     self.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
                     self.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
@@ -931,15 +931,15 @@ class Defender:
 
             case 'info':
                 try:
+                    if len(cmd) < 2:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} INFO [nickname]")
+                        return None
+
                     nickoruid = cmd[1]
                     UserObject = self.User.get_User(nickoruid)
 
                     if UserObject is not None:
-                        channels: list = []
-                        for chan in self.Channel.UID_CHANNEL_DB:
-                            for uid_in_chan in chan.uids:
-                                if self.Base.clean_uid(uid_in_chan) == UserObject.uid:
-                                    channels.append(chan.name)
+                        channels: list = [chan.name for chan in self.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.Loader.Utils.clean_uid(uid_in_chan) == UserObject.uid]
 
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {UserObject.uid}')
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {UserObject.nickname}')
@@ -956,7 +956,7 @@ class Defender:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CHANNELS         : {channels}')
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CONNECTION TIME  : {UserObject.connexion_datetime}')
                     else:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f":{dnickname} NOTICE {fromuser} : This user {nickoruid} doesn't exist")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {nickoruid} doesn't exist")
 
                 except KeyError as ke:
                     self.Logs.warning(f"Key error info user : {ke}")

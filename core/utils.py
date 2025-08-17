@@ -2,8 +2,9 @@
 Main utils library.
 '''
 from pathlib import Path
+from re import sub
 from typing import Literal, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from time import time
 from random import choice
 from hashlib import md5, sha3_512
@@ -29,6 +30,9 @@ def get_unixtime() -> int:
     Returns:
         int: Current time in seconds since the Epoch (int)
     """
+    cet_offset = timezone(timedelta(hours=2))
+    now_cet = datetime.now(cet_offset)
+    unixtime_cet = int(now_cet.timestamp())
     return int(time())
 
 def get_sdatetime() -> str:
@@ -90,3 +94,20 @@ def get_all_modules() -> list[str]:
     """
     base_path = Path('mods')
     return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
+
+def clean_uid(uid: str) -> Optional[str]:
+    """Clean UID by removing @ / % / + / ~ / * / :
+
+    Args:
+        uid (str): The UID to clean
+
+    Returns:
+        str: Clean UID without any sign
+    """
+    if uid is None:
+        return None
+
+    pattern = fr'[:|@|%|\+|~|\*]*'
+    parsed_UID = sub(pattern, '', uid)
+
+    return parsed_UID

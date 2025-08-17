@@ -13,7 +13,7 @@ class Channel:
 
     def __init__(self, loader: 'Loader') -> None:
 
-        self.Logs = loader.Base.logs
+        self.Logs = loader.Logs
         self.Base = loader.Base
         self.Utils = loader.Utils
 
@@ -102,7 +102,7 @@ class Channel:
                 return result
 
             for userid in chan_obj.uids:
-                if self.Base.clean_uid(userid) == self.Base.clean_uid(uid):
+                if self.Utils.clean_uid(userid) == self.Utils.clean_uid(uid):
                     chan_obj.uids.remove(userid)
                     result = True
 
@@ -126,7 +126,7 @@ class Channel:
 
             for record in self.UID_CHANNEL_DB:
                 for user_id in record.uids:
-                    if self.Base.clean_uid(user_id) == self.Base.clean_uid(uid):
+                    if self.Utils.clean_uid(user_id) == self.Utils.clean_uid(uid):
                         record.uids.remove(user_id)
                         result = True
 
@@ -177,9 +177,9 @@ class Channel:
         if chan is None:
             return False
 
-        clean_uid = self.Base.clean_uid(uid=uid)
+        clean_uid = self.Utils.clean_uid(uid=uid)
         for chan_uid in chan.uids:
-            if self.Base.clean_uid(chan_uid) == clean_uid:
+            if self.Utils.clean_uid(chan_uid) == clean_uid:
                 return True
 
         return False

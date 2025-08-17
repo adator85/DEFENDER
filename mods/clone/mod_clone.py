@@ -28,7 +28,7 @@ class Clone:
         self.Base = irc_instance.Base
 
         # Add logs object to the module (Mandatory)
-        self.Logs = irc_instance.Base.logs
+        self.Logs = irc_instance.Loader.Logs
 
         # Add User object to the module (Mandatory)
         self.User = irc_instance.User

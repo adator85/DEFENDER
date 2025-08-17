@@ -2,14 +2,14 @@ from typing import TYPE_CHECKING, Optional
 from core.definition import MCommand
 
 if TYPE_CHECKING:
-    from core.base import Base
+    from core.loader import Loader
 
 class Command:
 
     DB_COMMANDS: list['MCommand'] = []
 
-    def __init__(self, base: 'Base'):
-        self.Base = base
+    def __init__(self, loader: 'Loader'):
+        self.Base = loader.Base
 
     def build(self, new_command_obj: MCommand) -> bool:
 

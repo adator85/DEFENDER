@@ -156,7 +156,7 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
         uid = generate_uid_for_clone(faker, uplink.Config.SERVEUR_ID)
         checkUid = uplink.Clone.uid_exists(uid=uid)
 
-    clone = uplink.Definition.MClone(
+    clone = uplink.Schemas.MClone(
                 connected=False,
                 nickname=nickname,
                 username=username,
@@ -176,7 +176,7 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
 def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]):
     
-    uid_sender = uplink.User.clean_uid(srvmsg[1])
+    uid_sender = uplink.Irc.Utils.clean_uid(srvmsg[1])
     senderObj = uplink.User.get_User(uid_sender)
 
     if senderObj.hostname in uplink.Config.CLONE_LOG_HOST_EXEMPT:
