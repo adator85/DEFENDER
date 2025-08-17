@@ -316,9 +316,10 @@ class Command:
                 # automode set adator +o #channel
                 try:
                     option: str = str(cmd[1]).lower()
+                    allowed_modes: list[str] = self.Loader.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
+
                     match option:
                         case 'set':
-                            allowed_modes: list[str] = self.Base.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
 
                             if len(cmd) < 5:
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} [nickname] [+/-mode] [#channel]")
@@ -350,7 +351,7 @@ class Command:
 
                             if db_result is not None:
                                 if sign == '+':
-                                    db_data = {"updated_on": self.MainUtils.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
+                                    db_data = {"updated_on": self.MainUtils.get_sdatetime(), "nickname": nickname, "channel": chan, "mode": mode}
                                     db_result = self.Base.db_execute_query(query="UPDATE command_automode SET mode = :mode, updated_on = :updated_on WHERE nickname = :nickname and channel = :channel",
                                                                     params=db_data)
                                     if db_result.rowcount > 0:
@@ -368,7 +369,7 @@ class Command:
 
                             # Instert a new automode
                             if sign == '+':
-                                db_data = {"created_on": self.Base.get_datetime(), "updated_on": self.Base.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
+                                db_data = {"created_on": self.MainUtils.get_sdatetime(), "updated_on": self.MainUtils.get_sdatetime(), "nickname": nickname, "channel": chan, "mode": mode}
                                 db_query = self.Base.db_execute_query(
                                     query="INSERT INTO command_automode (created_on, updated_on, nickname, channel, mode) VALUES (:created_on, :updated_on, :nickname, :channel, :mode)",
                                     params=db_data
@@ -402,7 +403,7 @@ class Command:
                 except IndexError:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.Base.Settings.PROTOCTL_PREFIX)}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.Loader.Settings.PROTOCTL_PREFIX)}")
                 except Exception as err:
                     self.Logs.error(f"General Error: {err}")
 
