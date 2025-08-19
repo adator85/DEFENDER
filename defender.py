@@ -1,7 +1,7 @@
 from core import installation
 
 #############################################
-#       @Version : 6                        #
+#       @Version : 6.2                      #
 #       Requierements :                     #
 #           Python3.10 or higher            #
 #           SQLAlchemy, requests, psutil    #
@@ -14,7 +14,6 @@ try:
 
     from core.loader import Loader
     from core.irc import Irc
-    # loader = Loader()
     ircInstance = Irc(Loader())
     ircInstance.init_irc(ircInstance)
 

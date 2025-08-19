@@ -1,4 +1,6 @@
+import gc
 import logging
+from time import sleep
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from unrealircd_rpc_py.Live import LiveWebsocket
@@ -44,6 +46,7 @@ class Jsonrpc():
         # Create module commands (Mandatory)
         self.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
         self.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
+        self.Irc.build_command(1, self.module_name, 'jrinstances', 'Get number of instances')
 
         # Init the module
         self.__init_module()
@@ -51,10 +54,13 @@ class Jsonrpc():
         # Log the module
         self.Logs.debug(f'Module {self.module_name} loaded ...')
 
+    def compter_instances(self, cls) -> int:
+        return sum(1 for obj in gc.get_objects() if isinstance(obj, cls))
+
     def __init_module(self) -> None:
 
         logging.getLogger('websockets').setLevel(logging.WARNING)
-        logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
+        logging.getLogger('unrealircd-rpc-py').setLevel(logging.DEBUG)
 
         # Create you own tables (Mandatory)
         # self.__create_tables()
@@ -68,11 +74,12 @@ class Jsonrpc():
                     username=self.Config.JSONRPC_USER,
                     password=self.Config.JSONRPC_PASSWORD,
                     callback_object_instance=self,
-                    callback_method_or_function_name='callback_sent_to_irc'
+                    callback_method_or_function_name='callback_sent_to_irc',
+                    debug_level=10
                     )
         
         if self.UnrealIrcdRpcLive.get_error.code != 0:
-            self.Logs.error(self.UnrealIrcdRpcLive.get_error.code, self.UnrealIrcdRpcLive.get_error.message)
+            self.Logs.error(f"{self.UnrealIrcdRpcLive.get_error.message} ({self.UnrealIrcdRpcLive.get_error.code})")
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
@@ -88,7 +95,8 @@ class Jsonrpc():
         )
 
         if self.Rpc.get_error.code != 0:
-            self.Logs.error(self.Rpc.get_error.code, self.Rpc.get_error.message)
+
+            self.Logs.error(f"{self.Rpc.get_error.message} ({self.Rpc.get_error.code})")
             self.Protocol.send_priv_msg(
                 nick_from=self.Config.SERVICE_NICKNAME,
                 msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.get_error.message}",
@@ -132,10 +140,14 @@ class Jsonrpc():
         red = self.Config.COLORS.red
 
         if hasattr(response, 'result'):
+            if response.method == 'log.unsubscribe':
+                print(f">>>>>>>>>>>>>>>>> {response}")
+                return None
+
             if isinstance(response.result, bool) and response.result:
                 self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{bold}{green}JSONRPC{nogc}{bold}] Event activated", 
+                    msg=f"[{bold}{green}JSONRPC{nogc}{bold}] JSONRPC Event activated on {self.Config.JSONRPC_URL}",
                     channel=dchanlog)
                 return None
 
@@ -155,15 +167,37 @@ class Jsonrpc():
 
     def thread_start_jsonrpc(self):
 
+        if not hasattr(self, 'UnrealIrcdRpcLive'):
+            return None
+
         if self.UnrealIrcdRpcLive.get_error.code == 0:
-            self.UnrealIrcdRpcLive.subscribe(["all"])
             self.subscribed = True
+            self.UnrealIrcdRpcLive.subscribe(["all"])
         else:
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
                 )
+        
+        if not self.subscribed:
+            self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.green}JSONRPC{self.Config.COLORS.nogc}] Stream is OFF", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
+        else:
+            self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}JSONRPC{self.Config.COLORS.nogc}] Stream has crashed!", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
+
+    def thread_stop_jsonrpc(self) -> None:
+        self.subscribed = False
+        self.UnrealIrcdRpcLive.unsubscribe()
+        self.Logs.debug("[JSONRPC UNLOAD] Unsubscribe from the stream!")
+        self.__update_configuration('jsonrpc', 0)
 
     def __load_module_configuration(self) -> None:
         """### Load Module Configuration
@@ -189,9 +223,31 @@ class Jsonrpc():
         """
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
+    def restart_jsonrpc(self) -> None:
+        self.Logs.debug("[JSONRPC THREAD] Rescue the connection of JSONRPC")
+        you_can_run_jsonrpc = False
+        limit = 10
+        inc = 0
+
+        for thread in self.Base.running_threads:
+            if thread.name == 'thread_start_jsonrpc':
+                while thread.is_alive():
+                    sleep(2)
+                    inc += 1
+                    if inc > limit:
+                        break
+
+                if not thread.is_alive():
+                    you_can_run_jsonrpc = True
+                    break
+        
+        if you_can_run_jsonrpc:
+            self.Logs.debug("[JSONRPC THREAD] Success re run jsonrpc")
+            self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
+
     def unload(self) -> None:
-        if self.UnrealIrcdRpcLive.get_error.code != -1:
-            self.UnrealIrcdRpcLive.unsubscribe()
+        self.Base.create_thread(func=self.thread_stop_jsonrpc, run_once=True)
+        self.Logs.debug(f"Unloading {self.module_name}")
         return None
 
     def cmd(self, data:list) -> None:
@@ -243,7 +299,8 @@ class Jsonrpc():
                             self.__update_configuration('jsonrpc', 1)
 
                         case 'off':
-                            self.UnrealIrcdRpcLive.unsubscribe()
+                            self.subscribed = False
+                            self.Base.create_thread(func=self.thread_stop_jsonrpc, run_once=True)
                             self.__update_configuration('jsonrpc', 0)
 
                 except IndexError as ie:
@@ -300,22 +357,11 @@ class Jsonrpc():
                 except IndexError as ie:
                     self.Logs.error(ie)
 
-            case 'ia':
+            case 'jrinstances':
                 try:
-
-                    self.Base.create_thread(self.thread_ask_ia, ('',))
-
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This is a notice to the sender ...")
-                    self.Protocol.send_priv_msg(nick_from=dnickname, msg="This is private message to the sender ...", nick_to=fromuser)
-
-                    if not fromchannel is None:
-                        self.Protocol.send_priv_msg(nick_from=dnickname, msg="This is channel message to the sender ...", channel=fromchannel)
-
-                    # How to update your module configuration
-                    self.__update_configuration('param_exemple2', 7)
-
-                    # Log if you want the result
-                    self.Logs.debug(f"Test logs ready")
-
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"GC Collect: {gc.collect()}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance LiveWebsock: {self.compter_instances(LiveWebsocket)}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance Loader: {self.compter_instances(Loader)}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre de toute les instances: {len(gc.get_objects())}")
                 except Exception as err:
                     self.Logs.error(f"Unknown Error: {err}")

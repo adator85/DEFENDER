@@ -1,5 +1,6 @@
 import logging
 from os import path, makedirs, sep
+from typing import Optional
 
 class ServiceLogging:
 
@@ -25,10 +26,13 @@ class ServiceLogging:
 
              return logs_obj
 
-        def remove_logger(self) -> None:
+        def remove_logger(self, logger_name: Optional[str] = None) -> None:
+            
+            if logger_name is None:
+                logger_name = self.LOGGING_NAME
 
             # Récupérer le logger
-            logger = logging.getLogger(self.LOGGING_NAME)
+            logger = logging.getLogger(logger_name)
 
             # Retirer tous les gestionnaires du logger et les fermer
             for handler in logger.handlers[:]:  # Utiliser une copie de la liste
@@ -37,7 +41,7 @@ class ServiceLogging:
                 handler.close()
 
             # Supprimer le logger du dictionnaire global
-            logging.Logger.manager.loggerDict.pop(self.LOGGING_NAME, None)
+            logging.Logger.manager.loggerDict.pop(logger_name, None)
 
             return None
 

@@ -28,7 +28,7 @@ class Loader:
 
         self.Settings: settings.Settings        = settings.Settings()
 
-        self.Config: df.MConfig                 = self.ConfModule.Configuration().ConfigObject
+        self.Config: df.MConfig                 = self.ConfModule.Configuration(self.Logs).ConfigObject
 
         self.Base: base_module.Base             = self.BaseModule.Base(self)
 

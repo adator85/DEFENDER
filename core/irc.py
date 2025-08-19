@@ -233,9 +233,10 @@ class Irc:
                             self.Logs.warning('--* Waiting for socket to close ...')
 
                         # Reload configuration
+                        self.Loader.Logs = self.Loader.LoggingModule.ServiceLogging().get_logger()
                         self.Logs.debug('Reloading configuration')
-                        self.Config = self.Loader.ConfModule.Configuration().ConfigObject
-                        self.Base = self.Loader.BaseModule.Base(self.Config, self.Settings)
+                        self.Config = self.Loader.ConfModule.Configuration(self.Logs).ConfigObject
+                        self.Base = self.Loader.BaseModule.Base(self.Loader)
                         self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, ircInstance).Protocol
 
                         self.init_service_user()
@@ -1488,18 +1489,23 @@ class Irc:
 
                 self.User.UID_DB.clear()                # Clear User Object
                 self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-                self.Base.delete_logger(self.Config.LOGGING_NAME)
+                self.Base.garbage_collector_thread()
 
                 self.Protocol.send_squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
                 self.Logs.info(f'Redémarrage du server {dnickname}')
                 self.loaded_classes.clear()
                 self.Config.DEFENDER_RESTART = 1                 # Set restart status to 1 saying that the service will restart
                 self.Config.DEFENDER_INIT = 1                    # set init to 1 saying that the service will be re initiated
+                self.Loader.ServiceLogging.remove_logger()
 
             case 'rehash':
+                self.Loader.ServiceLogging.remove_logger()
+                self.Loader.ServiceLogging = self.Loader.LoggingModule.ServiceLogging()
+                self.Loader.Logs = self.Loader.ServiceLogging.get_logger()
+
                 need_a_restart = ["SERVEUR_ID"]
                 restart_flag = False
-                Config_bakcup = self.Config.__dict__.copy()
+                Config_bakcup = self.Config.to_dict().copy()
                 serveur_id = self.Config.SERVEUR_ID
                 service_nickname = self.Config.SERVICE_NICKNAME
                 hsid = self.Config.HSID
@@ -1519,7 +1525,7 @@ class Irc:
 
                 importlib.reload(mod_definition)
                 importlib.reload(mod_config)
-                self.Config = self.Loader.ConfModule.Configuration().ConfigObject
+                self.Config = self.Loader.ConfModule.Configuration(self.Loader.Logs).ConfigObject
                 self.Config.HSID = hsid
                 self.Config.DEFENDER_INIT = defender_init
                 self.Config.DEFENDER_RESTART = defender_restart
@@ -1529,7 +1535,7 @@ class Irc:
                 importlib.reload(mod_base)
 
                 conf_bkp_dict: dict = Config_bakcup
-                config_dict: dict = self.Config.__dict__
+                config_dict: dict = self.Config.to_dict()
 
                 for key, value in conf_bkp_dict.items():
                     if config_dict[key] != value and key != 'COLORS':
@@ -1548,9 +1554,6 @@ class Irc:
                     self.Config.SERVEUR_ID = serveur_id
                     self.Protocol.send_priv_msg(nick_from=self.Config.SERVICE_NICKNAME, msg='You need to restart defender !', channel=self.Config.SERVICE_CHANLOG)
 
-                self.Loader.ServiceLogging.remove_logger()
-                self.Loader.ServiceLogging = self.Loader.LoggingModule.ServiceLogging()
-                self.Loader.Logs = self.Loader.ServiceLogging.get_logger()
                 self.Base = self.Loader.BaseModule.Base(self.Loader)
 
                 importlib.reload(mod_unreal6)
