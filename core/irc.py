@@ -536,14 +536,12 @@ class Irc:
             module_folder = module_name.split('_')[1].lower() # ==> voice
             class_name = module_name.split('_')[1].capitalize() # ==> Voice
 
-            # print(self.loaded_classes)
-
-            # Si le module est déja chargé
-            if 'mods.' + module_name in sys.modules:
-                self.Logs.info("Module déja chargé ...")
-                self.Logs.info('module name = ' + module_name)
+            # Check if the module is already loaded.
+            if 'mods.' + module_folder + '.' + module_name in sys.modules:
+                self.Logs.debug(f"Module [{module_folder}.{module_name}] already loaded!")
                 if class_name in self.loaded_classes:
                     # Si le module existe dans la variable globale retourne False
+                    self.Logs.debug(f"Module [{module_folder}.{module_name}] exist in the local variable!")
                     self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
                         msg=f"Le module {module_name} est déja chargé ! si vous souhaiter le recharge tapez {self.Config.SERVICE_PREFIX}reload {module_name}",
@@ -566,11 +564,11 @@ class Irc:
                         msg=f"Module {module_name} chargé",
                         channel=self.Config.SERVICE_CHANLOG
                     )
-                return False
+                self.Logs.debug(f"Module [{module_folder}.{module_name}] reloaded!")
+                return True
 
             # Charger le module
             loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
-
             my_class = getattr(loaded_module, class_name, None)                 # Récuperer le nom de classe
             create_instance_of_the_class = my_class(self.ircObject)             # Créer une nouvelle instance de la classe
 
@@ -597,7 +595,7 @@ class Irc:
                         channel=self.Config.SERVICE_CHANLOG
                     )
 
-            self.Logs.info(f"Module {class_name} has been loaded")
+            self.Logs.debug(f"Module {class_name} has been loaded")
 
             return True
 
@@ -605,19 +603,21 @@ class Irc:
             self.Logs.error(f"MODULE_NOT_FOUND: {moduleNotFound}")
             self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ {self.Config.COLORS.red}MODULE_NOT_FOUND{self.Config.COLORS.black} ]: {moduleNotFound}",
+                        msg=f"[ {self.Config.COLORS.red}MODULE ERROR{self.Config.COLORS.black} ]: {moduleNotFound}",
                         channel=self.Config.SERVICE_CHANLOG
                     )
             self.Base.db_delete_module(module_name)
+            return False
+
         except Exception as err:
-            self.Logs.error(f"Something went wrong with a module you want to load : {err}")
+            self.Logs.error(f"[LOAD MODULE ERROR]: {err}", exc_info=True)
             self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ {self.Config.COLORS.red}ERROR{self.Config.COLORS.black} ]: {err}",
+                        msg=f"[ {self.Config.COLORS.red}MODULE ERROR{self.Config.COLORS.black} ]: {err}",
                         channel=self.Config.SERVICE_CHANLOG
                     )
             self.Base.db_delete_module(module_name)
-            traceback.print_exc()
+            return False
 
     def unload_module(self, mod_name: str) -> bool:
         """Unload a module
@@ -629,21 +629,28 @@ class Irc:
             bool: True if success
         """
         try:
-            module_name = mod_name.lower()                              # Le nom du module. exemple: mod_defender
-            class_name = module_name.split('_')[1].capitalize()            # Nom de la class. exemple: Defender
+            # Le nom du module. exemple: mod_defender
+            module_name = mod_name.lower()
+            module_folder = module_name.split('_')[1].lower() # ==> defender
+            class_name = module_name.split('_')[1].capitalize() # Nom de la class. exemple: Defender
 
             if class_name in self.loaded_classes:
                 self.loaded_classes[class_name].unload()
                 del self.loaded_classes[class_name]
+
+                # Delete from the sys.
+                if sys.modules.get(f'{module_folder}.{module_name}'):
+                    del sys.modules[f"{module_folder}.{module_name}"]
 
                 # Supprimer le module de la base de données
                 self.Base.db_delete_module(module_name)
 
                 self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} supprimé",
+                        msg=f"[ MODULE INFO ] Module {module_name} has been deleted!",
                         channel=self.Config.SERVICE_CHANLOG
                     )
+                self.Logs.debug(f"[ MODULE ] {module_name} has been deleted!")
                 return True
 
         except Exception as err:

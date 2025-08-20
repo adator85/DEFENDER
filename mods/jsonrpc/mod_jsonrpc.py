@@ -1,9 +1,11 @@
 import gc
 import logging
+import asyncio
 from time import sleep
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
-from unrealircd_rpc_py.Live import LiveWebsocket
+from unrealircd_rpc_py.Live import LiveWebsocket, LiveUnixSocket
 from unrealircd_rpc_py.Loader import Loader
 
 if TYPE_CHECKING:
@@ -43,6 +45,12 @@ class Jsonrpc():
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
 
+        # Is RPC Active?
+        self.is_streaming = False
+
+        # Run Garbage collector.
+        self.Base.create_timer(10, gc.collect)
+
         # Create module commands (Mandatory)
         self.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
         self.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
@@ -60,7 +68,8 @@ class Jsonrpc():
     def __init_module(self) -> None:
 
         logging.getLogger('websockets').setLevel(logging.WARNING)
-        logging.getLogger('unrealircd-rpc-py').setLevel(logging.DEBUG)
+        logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
+        logging.getLogger('unrealircd-liverpc-py').setLevel(logging.CRITICAL)
 
         # Create you own tables (Mandatory)
         # self.__create_tables()
@@ -77,7 +86,7 @@ class Jsonrpc():
                     callback_method_or_function_name='callback_sent_to_irc',
                     debug_level=10
                     )
-        
+       
         if self.UnrealIrcdRpcLive.get_error.code != 0:
             self.Logs.error(f"{self.UnrealIrcdRpcLive.get_error.message} ({self.UnrealIrcdRpcLive.get_error.code})")
             self.Protocol.send_priv_msg(
@@ -85,7 +94,7 @@ class Jsonrpc():
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
                 )
-            return
+            raise Exception(f"[LIVE-JSONRPC ERROR] {self.UnrealIrcdRpcLive.get_error.message}")
 
         self.Rpc: Loader = Loader(
             req_method=self.Config.JSONRPC_METHOD,
@@ -95,19 +104,17 @@ class Jsonrpc():
         )
 
         if self.Rpc.get_error.code != 0:
-
             self.Logs.error(f"{self.Rpc.get_error.message} ({self.Rpc.get_error.code})")
             self.Protocol.send_priv_msg(
                 nick_from=self.Config.SERVICE_NICKNAME,
-                msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.Rpc.get_error.message}",
+                msg=f"[{self.Config.COLORS.red}JSONRPC ERROR{self.Config.COLORS.nogc}] {self.Rpc.get_error.message}",
                 channel=self.Config.SERVICE_CHANLOG
                 )
-
-        self.subscribed = False
+            raise Exception(f"[JSONRPC ERROR] {self.Rpc.get_error.message}")
 
         if self.ModConfig.jsonrpc == 1:
             self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
-
+        
         return None
 
     def __create_tables(self) -> None:
@@ -130,7 +137,7 @@ class Jsonrpc():
         self.Base.db_execute_query(table_logs)
         return None
 
-    def callback_sent_to_irc(self, response):
+    def callback_sent_to_irc(self, response: SimpleNamespace) -> None:
 
         dnickname = self.Config.SERVICE_NICKNAME
         dchanlog = self.Config.SERVICE_CHANLOG
@@ -139,17 +146,29 @@ class Jsonrpc():
         bold = self.Config.COLORS.bold
         red = self.Config.COLORS.red
 
-        if hasattr(response, 'result'):
-            if response.method == 'log.unsubscribe':
-                print(f">>>>>>>>>>>>>>>>> {response}")
-                return None
+        if self.UnrealIrcdRpcLive.get_error.code != 0:
+            self.Protocol.send_priv_msg(nick_from=dnickname,
+                        msg=f"[{bold}{red}JSONRPC ERROR{nogc}{bold}] {self.UnrealIrcdRpcLive.get_error.message}",
+                        channel=dchanlog)
+            return None
 
-            if isinstance(response.result, bool) and response.result:
+        if hasattr(response, 'error'):
+            if response.error.code != 0:
                 self.Protocol.send_priv_msg(
-                    nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{bold}{green}JSONRPC{nogc}{bold}] JSONRPC Event activated on {self.Config.JSONRPC_URL}",
-                    channel=dchanlog)
-                return None
+                        nick_from=self.Config.SERVICE_NICKNAME,
+                        msg=f"[{bold}{red}JSONRPC{nogc}{bold}] JSONRPC Event activated on {self.Config.JSONRPC_URL}",
+                        channel=dchanlog)
+
+            return None
+
+        if hasattr(response, 'result'):
+            if isinstance(response.result, bool):
+                if response.result:
+                    self.Protocol.send_priv_msg(
+                        nick_from=self.Config.SERVICE_NICKNAME,
+                        msg=f"[{bold}{green}JSONRPC{nogc}{bold}] JSONRPC Event activated on {self.Config.JSONRPC_URL}",
+                        channel=dchanlog)
+                    return None
 
         level = response.result.level if hasattr(response.result, 'level') else ''
         subsystem = response.result.subsystem if hasattr(response.result, 'subsystem') else ''
@@ -158,29 +177,30 @@ class Jsonrpc():
         msg = response.result.msg if hasattr(response.result, 'msg') else ''
 
         build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
-
-        # Check if there is an error
-        if self.UnrealIrcdRpcLive.get_error.code != 0:
-            self.Logs.error(f"RpcLiveError: {self.UnrealIrcdRpcLive.get_error.message}")
-
         self.Protocol.send_priv_msg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
+        
+        return None
 
     def thread_start_jsonrpc(self):
-
-        if not hasattr(self, 'UnrealIrcdRpcLive'):
-            return None
+        response: dict[str, dict] = {}
 
         if self.UnrealIrcdRpcLive.get_error.code == 0:
-            self.subscribed = True
-            self.UnrealIrcdRpcLive.subscribe(["all"])
+            self.is_streaming = True
+            response = asyncio.run(self.UnrealIrcdRpcLive.subscribe(["all"]))
         else:
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.red}ERROR{self.Config.COLORS.nogc}] {self.UnrealIrcdRpcLive.get_error.message}", 
                     channel=self.Config.SERVICE_CHANLOG
                 )
-        
-        if not self.subscribed:
+
+        if response is None:
+            return
+
+        code = response.get('error', {}).get('code', 0)
+        message = response.get('error', {}).get('message', None)
+
+        if code == 0:
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
                     msg=f"[{self.Config.COLORS.green}JSONRPC{self.Config.COLORS.nogc}] Stream is OFF", 
@@ -189,15 +209,30 @@ class Jsonrpc():
         else:
             self.Protocol.send_priv_msg(
                     nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{self.Config.COLORS.red}JSONRPC{self.Config.COLORS.nogc}] Stream has crashed!", 
+                    msg=f"[{self.Config.COLORS.red}JSONRPC{self.Config.COLORS.nogc}] Stream has crashed! {code} - {message}", 
                     channel=self.Config.SERVICE_CHANLOG
                 )
-
+        
     def thread_stop_jsonrpc(self) -> None:
-        self.subscribed = False
-        self.UnrealIrcdRpcLive.unsubscribe()
+
+        response: dict[str, dict] = asyncio.run(self.UnrealIrcdRpcLive.unsubscribe())
         self.Logs.debug("[JSONRPC UNLOAD] Unsubscribe from the stream!")
+        self.is_streaming = False
         self.__update_configuration('jsonrpc', 0)
+
+        if response is None:
+            print(f"... Response is None ?! {response}")
+            return None
+
+        code = response.get('error', {}).get('code', 0)
+        message = response.get('error', {}).get('message', None)
+
+        if code != 0:
+            self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}JSONRPC ERROR{self.Config.COLORS.nogc}] {message} ({code})", 
+                    channel=self.Config.SERVICE_CHANLOG
+                )
 
     def __load_module_configuration(self) -> None:
         """### Load Module Configuration
@@ -223,34 +258,19 @@ class Jsonrpc():
         """
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
-    def restart_jsonrpc(self) -> None:
-        self.Logs.debug("[JSONRPC THREAD] Rescue the connection of JSONRPC")
-        you_can_run_jsonrpc = False
-        limit = 10
-        inc = 0
-
-        for thread in self.Base.running_threads:
-            if thread.name == 'thread_start_jsonrpc':
-                while thread.is_alive():
-                    sleep(2)
-                    inc += 1
-                    if inc > limit:
-                        break
-
-                if not thread.is_alive():
-                    you_can_run_jsonrpc = True
-                    break
-        
-        if you_can_run_jsonrpc:
-            self.Logs.debug("[JSONRPC THREAD] Success re run jsonrpc")
-            self.Base.create_thread(self.thread_start_jsonrpc, run_once=True)
-
     def unload(self) -> None:
+        if self.is_streaming:
+            self.Protocol.send_priv_msg(
+                        nick_from=self.Config.SERVICE_NICKNAME,
+                        msg=f"[{self.Config.COLORS.green}JSONRPC INFO{self.Config.COLORS.nogc}] Shutting down RPC system!", 
+                        channel=self.Config.SERVICE_CHANLOG
+                    )
         self.Base.create_thread(func=self.thread_stop_jsonrpc, run_once=True)
+        self.__update_configuration('jsonrpc', 0)
         self.Logs.debug(f"Unloading {self.module_name}")
         return None
 
-    def cmd(self, data:list) -> None:
+    def cmd(self, data: list) -> None:
 
         return None
 
@@ -299,7 +319,6 @@ class Jsonrpc():
                             self.__update_configuration('jsonrpc', 1)
 
                         case 'off':
-                            self.subscribed = False
                             self.Base.create_thread(func=self.thread_stop_jsonrpc, run_once=True)
                             self.__update_configuration('jsonrpc', 0)
 
@@ -361,6 +380,7 @@ class Jsonrpc():
                 try:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"GC Collect: {gc.collect()}")
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance LiveWebsock: {self.compter_instances(LiveWebsocket)}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance LiveUnixSocket: {self.compter_instances(LiveUnixSocket)}")
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance Loader: {self.compter_instances(Loader)}")
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre de toute les instances: {len(gc.get_objects())}")
                 except Exception as err:
