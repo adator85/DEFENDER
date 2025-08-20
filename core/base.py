@@ -508,12 +508,11 @@ class Base:
         """Methode qui supprime les timers qui ont finis leurs job
         """
         try:
-
             for timer in self.running_timers:
                 if not timer.is_alive():
                     timer.cancel()
                     self.running_timers.remove(timer)
-                    self.logs.info(f"-- Timer {str(timer)} removed")
+                    self.logs.debug(f"-- Timer {str(timer)} removed")
                 else:
                     self.logs.debug(f"--* Timer {str(timer)} Still running ...")
 
