@@ -726,13 +726,10 @@ class Unrealircd6:
             serverMsg (list[str]): Original server message
         """
         try:
-            # ['@unrealircd.org/geoip=FR;unrealircd.org/userhost=50d6492c@80.214.73.44;unrealircd.org/userip=50d6492c@80.214.73.44;msgid=YSIPB9q4PcRu0EVfC9ci7y-/mZT0+Gj5FLiDSZshH5NCw;time=2024-08-15T15:35:53.772Z', 
-            # ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
-
+            # ['@unrealircd.org', ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
             uid = str(serverMsg[1]).lstrip(':')
             channel = str(serverMsg[3]).lower()
             self.__Irc.Channel.delete_user_from_channel(channel, uid)
-
             return None
 
         except IndexError as ie:

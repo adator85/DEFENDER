@@ -897,7 +897,7 @@ class Irc:
                     self.Protocol.on_squit(serverMsg=original_response)
 
                 case 'PART':
-                    self.Protocol.on_part(serverMsg=parsed_protocol)
+                    self.Protocol.on_part(serverMsg=original_response)
 
                 case 'VERSION':
                     self.Protocol.on_version_msg(serverMsg=original_response)

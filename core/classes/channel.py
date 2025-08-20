@@ -83,7 +83,7 @@ class Channel:
 
         return True
 
-    def delete_user_from_channel(self, channel_name: str, uid:str) -> bool:
+    def delete_user_from_channel(self, channel_name: str, uid: str) -> bool:
         """Delete a user from a channel
 
         Args:
@@ -95,8 +95,7 @@ class Channel:
         """
         try:
             result = False
-
-            chan_obj = self.get_channel(channel_name.lower())
+            chan_obj = self.get_channel(channel_name)
 
             if chan_obj is None:
                 return result
