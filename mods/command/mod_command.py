@@ -1,5 +1,6 @@
-from typing import Union, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+import mods.command.utils as utils
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -34,8 +35,11 @@ class Command:
         # Add Base object to the module (Mandatory)
         self.Base = ircInstance.Base
 
+        # Add main Utils to the module
+        self.MainUtils = ircInstance.Utils
+
         # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Base.logs
+        self.Logs = ircInstance.Loader.Logs
 
         # Add User object to the module (Mandatory)
         self.User = ircInstance.User
@@ -45,6 +49,9 @@ class Command:
 
         # Add Channel object to the module (Mandatory)
         self.Channel = ircInstance.Channel
+
+        # Module Utils
+        self.mod_utils = utils
 
         self.Irc.build_command(1, self.module_name, 'join', 'Join a channel')
         self.Irc.build_command(1, self.module_name, 'assign', 'Assign a user to a role or task')
@@ -271,7 +278,7 @@ class Command:
 
                         user_uid = self.User.clean_uid(cmd[5])
                         userObj: MUser = self.User.get_User(user_uid)
-                        channel_name = cmd[4] if self.Channel.Is_Channel(cmd[4]) else None
+                        channel_name = cmd[4] if self.Channel.is_valid_channel(cmd[4]) else None
                         client_obj = self.Client.get_Client(user_uid)
                         nickname = userObj.nickname if userObj is not None else None
 
@@ -296,7 +303,7 @@ class Command:
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, uidornickname: str, channel_name: Union[str, None], cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []):
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
@@ -307,293 +314,78 @@ class Command:
         fromchannel = channel_name
 
         match command:
-            case "automode":
-                # automode set nickname [+/-mode] #channel
-                # automode set adator +o #channel
+
+            case 'automode':
                 try:
-                    option: str = str(cmd[1]).lower()
-                    match option:
-                        case 'set':
-                            allowed_modes: list[str] = self.Base.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
-
-                            if len(cmd) < 5:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} [nickname] [+/-mode] [#channel]")
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"AutoModes available: {' / '.join(allowed_modes)}")
-                                return None
-
-                            # userObj: MUser = self.User.get_User(str(cmd[2]))
-                            nickname = str(cmd[2])
-                            mode = str(cmd[3])
-                            chan: str = str(cmd[4]).lower() if self.Channel.Is_Channel(cmd[4]) else None
-                            sign = mode[0] if mode.startswith( ('+', '-')) else None
-                            clean_mode = mode[1:] if len(mode) > 0 else None
-
-                            if sign is None:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You must provide the flag mode + or -")
-                                return None
-
-                            if clean_mode not in allowed_modes:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You should use one of those modes {' / '.join(allowed_modes)}")
-                                return None
-
-                            if chan is None:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You should use one of those modes {' / '.join(allowed_modes)}")
-                                return None
-
-                            db_data: dict[str, str] = {"nickname": nickname, "channel": chan}
-                            db_query = self.Base.db_execute_query(query="SELECT id FROM command_automode WHERE nickname = :nickname and channel = :channel", params=db_data)
-                            db_result = db_query.fetchone()
-
-                            if db_result is not None:
-                                if sign == '+':
-                                    db_data = {"updated_on": self.Base.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
-                                    db_result = self.Base.db_execute_query(query="UPDATE command_automode SET mode = :mode, updated_on = :updated_on WHERE nickname = :nickname and channel = :channel",
-                                                                    params=db_data)
-                                    if db_result.rowcount > 0:
-                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Automode {mode} edited for {nickname} in {chan}")
-                                elif sign == '-':
-                                    db_data = {"nickname": nickname, "channel": chan, "mode": f"+{clean_mode}"}
-                                    db_result = self.Base.db_execute_query(query="DELETE FROM command_automode WHERE nickname = :nickname and channel = :channel and mode = :mode",
-                                                                    params=db_data)
-                                    if db_result.rowcount > 0:
-                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Automode {mode} deleted for {nickname} in {chan}")
-                                    else:
-                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The mode [{mode}] has not been found for {nickname} in channel {chan}")
-
-                                return None
-
-                            # Instert a new automode
-                            if sign == '+':
-                                db_data = {"created_on": self.Base.get_datetime(), "updated_on": self.Base.get_datetime(), "nickname": nickname, "channel": chan, "mode": mode}
-                                db_query = self.Base.db_execute_query(
-                                    query="INSERT INTO command_automode (created_on, updated_on, nickname, channel, mode) VALUES (:created_on, :updated_on, :nickname, :channel, :mode)",
-                                    params=db_data
-                                )
-
-                                if db_query.rowcount > 0:
-                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Automode {mode} applied to {nickname} in {chan}")
-                                    if self.Channel.is_user_present_in_channel(chan, self.User.get_uid(nickname)):
-                                        self.Protocol.send2socket(f":{service_id} MODE {chan} {mode} {nickname}")
-                            else:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"AUTOMODE {mode} cannot be added to {nickname} in {chan} because it doesn't exist")
-
-                        case 'list':
-                            db_query: CursorResult = self.Base.db_execute_query("SELECT nickname, channel, mode FROM command_automode")
-                            db_results: Sequence[Row] = db_query.fetchall()
-
-                            if not db_results:
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
-                                                          msg="There is no automode to display.")
-
-                            for db_result in db_results:
-                                db_nickname, db_channel, db_mode = db_result
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
-                                                          msg=f"Nickname: {db_nickname} | Channel: {db_channel} | Mode: {db_mode}")
-
-                        case _:
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
-                            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(allowed_modes)}")
-
+                    self.mod_utils.set_automode(self, cmd, fromuser)
                 except IndexError:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.Base.Settings.PROTOCTL_PREFIX)}")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.Loader.Settings.PROTOCTL_PREFIX)}")
                 except Exception as err:
                     self.Logs.error(f"General Error: {err}")
 
             case 'deopall':
                 try:
-                    self.Protocol.send2socket(f":{service_id} SVSMODE {fromchannel} -o")
-
-                except IndexError as ie:
-                    self.Logs.warning(f'_hcmd OP: {str(ie)}')
+                    self.mod_utils.set_deopall(self, fromchannel)
                 except Exception as err:
-                    self.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'devoiceall':
                 try:
-                    self.Protocol.send2socket(f":{service_id} SVSMODE {fromchannel} -v")
-
-                except IndexError as e:
-                    self.Logs.warning(f'_hcmd OP: {str(e)}')
+                    self.mod_utils.set_devoiceall(self, fromchannel)
                 except Exception as err:
-                    self.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'voiceall':
                 try:
-                    chan_info = self.Channel.get_Channel(fromchannel)
-                    set_mode = 'v'
-                    mode:str = ''
-                    users:str = ''
-                    uids_split = [chan_info.uids[i:i + 6] for i in range(0, len(chan_info.uids), 6)]
-
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{set_mode} {dnickname}")
-                    for uid in uids_split:
-                        for i in range(0, len(uid)):
-                            mode += set_mode
-                            users += f'{self.User.get_nickname(self.Base.clean_uid(uid[i]))} '
-                            if i == len(uid) - 1:
-                                self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{mode} {users}")
-                                mode = ''
-                                users = ''
-                except IndexError as e:
-                    self.Logs.warning(f'_hcmd OP: {str(e)}')
+                    self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'v')
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'opall':
                 try:
-                    chan_info = self.Channel.get_Channel(fromchannel)
-                    set_mode = 'o'
-                    mode:str = ''
-                    users:str = ''
-                    uids_split = [chan_info.uids[i:i + 6] for i in range(0, len(chan_info.uids), 6)]
-
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{set_mode} {dnickname}")
-                    for uid in uids_split:
-                        for i in range(0, len(uid)):
-                            mode += set_mode
-                            users += f'{self.User.get_nickname(self.Base.clean_uid(uid[i]))} '
-                            if i == len(uid) - 1:
-                                self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +{mode} {users}")
-                                mode = ''
-                                users = ''
-                except IndexError as e:
-                    self.Logs.warning(f'_hcmd OP: {str(e)}')
+                    self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'o')
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'op':
-                # /mode #channel +o user
-                # .op #channel user
-                # /msg dnickname op #channel user
-                # [':adator', 'PRIVMSG', '#services', ':.o', '#services', 'dktmb']
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{dnickname} MODE {fromchannel} +o {fromuser}")
-                        return True
-
-                    # deop nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +o {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +o {nickname}")
-
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+o')
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd OP: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deop':
-                # /mode #channel -o user
-                # .deop #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -o {fromuser}")
-                        return True
-
-                    # deop nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -o {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -o {nickname}")
-
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-o')
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd DEOP: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'owner':
-                # /mode #channel +q user
-                # .owner #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +q {fromuser}")
-                        return True
-
-                    # owner nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +q {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +q {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+q')
 
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd OWNER: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deowner':
-                # /mode #channel -q user
-                # .deowner #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -q {fromuser}")
-                        return True
-
-                    # deowner nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -q {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -q {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-q')
 
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'protect':
-                # /mode #channel +a user
-                # .protect #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +a {fromuser}")
-                        return True
-
-                    # deowner nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +a {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +a {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+a')
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
@@ -602,25 +394,8 @@ class Command:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deprotect':
-                # /mode #channel -a user
-                # .deprotect #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -a {fromuser}")
-                        return True
-
-                    # deowner nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -a {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -a {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-a')
 
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
@@ -629,125 +404,42 @@ class Command:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'halfop':
-                # /mode #channel +h user
-                # .halfop #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +h {fromuser}")
-                        return True
-
-                    # deop nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +h {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +h {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+h')
 
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd halfop: {str(e)}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} halfop [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'dehalfop':
-                # /mode #channel -h user
-                # .dehalfop #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -h {fromuser}")
-                        return True
-
-                    # dehalfop nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -h {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -h {nickname}")
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-h')
 
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd DEHALFOP: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'voice':
-                # /mode #channel +v user
-                # .voice #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +v {fromuser}")
-                        return True
-
-                    # voice nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +v {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} +v {nickname}")
-
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+v')
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd VOICE: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'devoice':
-                # /mode #channel -v user
-                # .devoice #channel user
                 try:
-                    if fromchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
-                        return False
-
-                    if len(cmd) == 1:
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -v {fromuser}")
-                        return True
-
-                    # dehalfop nickname
-                    if len(cmd) == 2:
-                        nickname = cmd[1]
-                        self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -v {nickname}")
-                        return True
-
-                    nickname = cmd[2]
-                    self.Protocol.send2socket(f":{service_id} MODE {fromchannel} -v {nickname}")
-
+                    self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-v')
                 except IndexError as e:
-                    self.Logs.warning(f'_hcmd DEVOICE: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'ban':
-                # .ban #channel nickname
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sentchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
-                        return False
-
-                    nickname = cmd[2]
-
-                    self.Protocol.send2socket(f":{service_id} MODE {sentchannel} +b {nickname}!*@*")
-                    self.Logs.debug(f'{fromuser} has banned {nickname} from {sentchannel}')
+                    self.mod_utils.set_ban(self, cmd, '+', fromuser)
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd BAN: {str(e)}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
@@ -755,97 +447,43 @@ class Command:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'unban':
-                # .unban #channel nickname
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sentchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
-                        return False
-                    nickname = cmd[2]
-
-                    self.Protocol.send2socket(f":{service_id} MODE {sentchannel} -b {nickname}!*@*")
-                    self.Logs.debug(f'{fromuser} has unbanned {nickname} from {sentchannel}')
-
+                    self.mod_utils.set_ban(self, cmd, '-', fromuser)
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd UNBAN: {str(e)}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} unban [#SALON] [NICKNAME]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kick':
-                # .kick #channel nickname reason
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sentchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
-                        return False
-                    nickname = cmd[2]
-                    final_reason = ' '.join(cmd[3:])
-
-                    self.Protocol.send2socket(f":{service_id} KICK {sentchannel} {nickname} {final_reason}")
-                    self.Logs.debug(f'{fromuser} has kicked {nickname} from {sentchannel} : {final_reason}')
-
+                    self.mod_utils.set_kick(self, cmd, fromuser)
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd KICK: {str(e)}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kick [#SALON] [NICKNAME] [REASON]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kickban':
-                # .kickban #channel nickname reason
                 try:
-                    sentchannel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sentchannel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} ban [#SALON] [NICKNAME]")
-                        return False
-                    nickname = cmd[2]
-                    final_reason = ' '.join(cmd[3:])
-
-                    self.Protocol.send2socket(f":{service_id} KICK {sentchannel} {nickname} {final_reason}")
-                    self.Protocol.send2socket(f":{service_id} MODE {sentchannel} +b {nickname}!*@*")
-                    self.Logs.debug(f'{fromuser} has kicked and banned {nickname} from {sentchannel} : {final_reason}')
-
+                    self.mod_utils.set_kickban(self, cmd, fromuser)
                 except IndexError as e:
                     self.Logs.warning(f'_hcmd KICKBAN: {str(e)}')
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} kickban [#SALON] [NICKNAME] [REASON]")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'join' | 'assign':
-
                 try:
-                    sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sent_channel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}JOIN #channel")
-                        return False
-
-                    # self.Protocol.send2socket(f':{service_id} JOIN {sent_channel}')
-                    self.Protocol.send_join_chan(uidornickname=dnickname,channel=sent_channel)
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} JOINED {sent_channel}")
-                    self.Channel.db_query_channel('add', self.module_name, sent_channel)
-
+                    self.mod_utils.set_assign_channel_to_service(self, cmd, fromuser)
                 except IndexError as ie:
-                    self.Logs.error(f'{ie}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'part' | 'unassign':
-
                 try:
-                    sent_channel = str(cmd[1]) if self.Channel.Is_Channel(cmd[1]) else None
-                    if sent_channel is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.Config.SERVICE_PREFIX}PART #channel")
-                        return False
-
-                    if sent_channel ==  dchanlog:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} CAN'T LEFT {sent_channel} AS IT IS LOG CHANNEL")
-                        return False
-
-                    self.Protocol.send_part_chan(uidornickname=dnickname, channel=sent_channel)
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {dnickname} LEFT {sent_channel}")
-
-                    self.Channel.db_query_channel('del', self.module_name, sent_channel)
-
+                    self.mod_utils.set_unassign_channel_to_service(self, cmd, fromuser)
                 except IndexError as ie:
                     self.Logs.error(f'{ie}')
                 except Exception as err:
@@ -859,7 +497,7 @@ class Command:
                         return None
 
                     chan = str(cmd[1])
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} TOPIC #channel THE_TOPIC_MESSAGE")
                         return None
@@ -959,7 +597,7 @@ class Command:
 
                     chan = str(cmd[1])
 
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} #channel")
                         return None
@@ -980,7 +618,7 @@ class Command:
                     nickname = str(cmd[1])
                     chan = str(cmd[2])
 
-                    if not self.Channel.Is_Channel(chan):
+                    if not self.Channel.is_valid_channel(chan):
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="The channel must start with #")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {str(cmd[0]).upper()} NICKNAME #CHANNEL")
                         return None
@@ -1051,7 +689,7 @@ class Command:
 
                     if len(cmd) == 2:
                         channel_mode = cmd[1]
-                        if self.Channel.Is_Channel(fromchannel):
+                        if self.Channel.is_valid_channel(fromchannel):
                             self.Protocol.send2socket(f":{dnickname} MODE {fromchannel} {channel_mode}")
                         else:
                             self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : Channel [{fromchannel}] is not correct should start with #")
@@ -1146,7 +784,7 @@ class Command:
                     # .svsnick nickname newnickname
                     nickname = str(cmd[1])
                     newnickname = str(cmd[2])
-                    unixtime = self.Base.get_unixtime()
+                    unixtime = self.MainUtils.get_unixtime()
 
                     if self.User.get_nickname(nickname) is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
@@ -1192,7 +830,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     gline_reason = ' '.join(cmd[3:])
 
@@ -1201,7 +839,7 @@ class Command:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
-                    self.Protocol.gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
+                    self.Protocol.send_gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1222,7 +860,7 @@ class Command:
                     hostname = str(cmd[2])
 
                     # self.Protocol.send2socket(f":{self.Config.SERVEUR_ID} TKL - G {nickname} {hostname} {dnickname}")
-                    self.Protocol.ungline(nickname=nickname, hostname=hostname)
+                    self.Protocol.send_ungline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1240,7 +878,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     gline_reason = ' '.join(cmd[3:])
 
@@ -1249,7 +887,7 @@ class Command:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
                         return None
 
-                    self.Protocol.kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
+                    self.Protocol.send_kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1269,7 +907,7 @@ class Command:
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
 
-                    self.Protocol.unkline(nickname=nickname, hostname=hostname)
+                    self.Protocol.send_unkline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
                     self.Logs.error(ke)
@@ -1288,7 +926,7 @@ class Command:
 
                     nickname = str(cmd[1])
                     hostname = str(cmd[2])
-                    set_at_timestamp = self.Base.get_unixtime()
+                    set_at_timestamp = self.MainUtils.get_unixtime()
                     expire_time = (60 * 60 * 24) + set_at_timestamp
                     shun_reason = ' '.join(cmd[3:])
 

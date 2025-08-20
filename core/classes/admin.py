@@ -1,127 +1,157 @@
-from typing import Union
-import core.definition as df
+from typing import TYPE_CHECKING, Optional
 from core.base import Base
+from core.definition import MAdmin
 
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Admin:
 
-    UID_ADMIN_DB: list[df.MAdmin] = []
+    UID_ADMIN_DB: list[MAdmin] = []
 
-    def __init__(self, baseObj: Base) -> None:
-        self.Logs = baseObj.logs
-        pass
+    def __init__(self, loader: 'Loader') -> None:
+        self.Logs = loader.Logs
 
-    def insert(self, newAdmin: df.MAdmin) -> bool:
+    def insert(self, new_admin: MAdmin) -> bool:
+        """Insert a new admin object model
 
-        result = False
-        exist = False
+        Args:
+            new_admin (MAdmin): The new admin object model to insert
+
+        Returns:
+            bool: True if it was inserted
+        """
 
         for record in self.UID_ADMIN_DB:
-            if record.uid == newAdmin.uid:
+            if record.uid == new_admin.uid:
                 # If the admin exist then return False and do not go further
-                exist = True
                 self.Logs.debug(f'{record.uid} already exist')
-                return result
+                return False
 
-        if not exist:
-            self.UID_ADMIN_DB.append(newAdmin)
-            result = True
-            self.Logs.debug(f'UID ({newAdmin.uid}) has been created')
+        self.UID_ADMIN_DB.append(new_admin)
+        self.Logs.debug(f'A new admin ({new_admin.nickname}) has been created')
+        return True
 
-        if not result:
-            self.Logs.critical(f'The User Object was not inserted {newAdmin}')
+    def update_nickname(self, uid: str, new_admin_nickname: str) -> bool:
+        """Update nickname of an admin
 
-        return result
+        Args:
+            uid (str): The Admin UID
+            new_admin_nickname (str): The new nickname of the admin
 
-    def update_nickname(self, uid: str, newNickname: str) -> bool:
-
-        result = False
+        Returns:
+            bool: True if the nickname has been updated.
+        """
 
         for record in self.UID_ADMIN_DB:
             if record.uid == uid:
                 # If the admin exist, update and do not go further
-                record.nickname = newNickname
-                result = True
-                self.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {newNickname}')
-                return result
+                record.nickname = new_admin_nickname
+                self.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {new_admin_nickname}')
+                return True
 
-        if not result:
-            self.Logs.debug(f'The new nickname {newNickname} was not updated, uid = {uid} - The Client is not an admin')
 
-        return result
+        self.Logs.debug(f'The new nickname {new_admin_nickname} was not updated, uid = {uid} - The Client is not an admin')
+        return False
 
-    def update_level(self, nickname: str, newLevel: int) -> bool:
+    def update_level(self, nickname: str, new_admin_level: int) -> bool:
+        """Update the admin level
 
-        result = False
+        Args:
+            nickname (str): The admin nickname
+            new_admin_level (int): The new level of the admin
+
+        Returns:
+            bool: True if the admin level has been updated
+        """
 
         for record in self.UID_ADMIN_DB:
             if record.nickname == nickname:
                 # If the admin exist, update and do not go further
-                record.level = newLevel
-                result = True
-                self.Logs.debug(f'Admin ({record.nickname}) has been updated with new level {newLevel}')
-                return result
+                record.level = new_admin_level
+                self.Logs.debug(f'Admin ({record.nickname}) has been updated with new level {new_admin_level}')
+                return True
 
-        if not result:
-            self.Logs.debug(f'The new level {newLevel} was not updated, nickname = {nickname} - The Client is not an admin')
+        self.Logs.debug(f'The new level {new_admin_level} was not updated, nickname = {nickname} - The Client is not an admin')
 
-        return result
+        return False
 
     def delete(self, uidornickname: str) -> bool:
+        """Delete admin
 
-        result = False
+        Args:
+            uidornickname (str): The UID or nickname of the admin
+
+        Returns:
+            bool: True if the admin has been deleted
+        """
 
         for record in self.UID_ADMIN_DB:
             if record.uid == uidornickname:
                 # If the admin exist, delete and do not go further
                 self.UID_ADMIN_DB.remove(record)
-                result = True
                 self.Logs.debug(f'UID ({record.uid}) has been deleted')
-                return result
-            if record.nickname == uidornickname:
+                return True
+            if record.nickname.lower() == uidornickname.lower():
                 # If the admin exist, delete and do not go further
                 self.UID_ADMIN_DB.remove(record)
-                result = True
                 self.Logs.debug(f'nickname ({record.nickname}) has been deleted')
-                return result
+                return True
 
-        if not result:
-            self.Logs.critical(f'The UID {uidornickname} was not deleted')
+        self.Logs.debug(f'The UID {uidornickname} was not deleted')
 
-        return result
+        return False
 
-    def get_Admin(self, uidornickname: str) -> Union[df.MAdmin, None]:
+    def get_admin(self, uidornickname: str) -> Optional[MAdmin]:
+        """Get the admin object model
 
-        Admin = None
+        Args:
+            uidornickname (str): UID or Nickname of the admin
+
+        Returns:
+            Optional[MAdmin]: The MAdmin object model if exist
+        """
+
         for record in self.UID_ADMIN_DB:
             if record.uid == uidornickname:
-                Admin = record
-            elif record.nickname == uidornickname:
-                Admin = record
+                return record
+            elif record.nickname.lower() == uidornickname.lower():
+                return record
 
-        #self.Logs.debug(f'Search {uidornickname} -- result = {Admin}')
+        return None
 
-        return Admin
+    def get_uid(self, uidornickname:str) -> Optional[str]:
+        """Get the UID of the admin
 
-    def get_uid(self, uidornickname:str) -> Union[str, None]:
+        Args:
+            uidornickname (str): The UID or nickname of the admin
 
-        uid = None
+        Returns:
+            Optional[str]: The UID of the admin
+        """
+
         for record in self.UID_ADMIN_DB:
             if record.uid == uidornickname:
-                uid = record.uid
-            if record.nickname == uidornickname:
-                uid = record.uid
+                return record.uid
+            if record.nickname.lower() == uidornickname.lower():
+                return record.uid
 
-        self.Logs.debug(f'The UID that you are looking for {uidornickname} has been found {uid}')
-        return uid
+        return None
 
-    def get_nickname(self, uidornickname:str) -> Union[str, None]:
+    def get_nickname(self, uidornickname:str) -> Optional[str]:
+        """Get the nickname of the admin
 
-        nickname = None
+        Args:
+            uidornickname (str): The UID or the nickname of the admin
+
+        Returns:
+            Optional[str]: The nickname of the admin
+        """
+
         for record in self.UID_ADMIN_DB:
-            if record.nickname == uidornickname:
-                nickname = record.nickname
+            if record.nickname.lower() == uidornickname.lower():
+                return record.nickname
             if record.uid == uidornickname:
-                nickname = record.nickname
-        self.Logs.debug(f'The value {uidornickname} -- {nickname}')
-        return nickname
+                return record.nickname
+
+        return None

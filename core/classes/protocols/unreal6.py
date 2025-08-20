@@ -1,6 +1,6 @@
 from re import match, findall, search
 from datetime import datetime
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional
 from ssl import SSLEOFError, SSLError
 
 if TYPE_CHECKING:
@@ -16,14 +16,33 @@ class Unrealircd6:
         self.__Config = ircInstance.Config
         self.__Base = ircInstance.Base
         self.__Settings = ircInstance.Base.Settings
+        self.__Utils = ircInstance.Loader.Utils
+        self.__Logs = ircInstance.Loader.Logs
 
-        self.known_protocol = ['SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
+        self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
-                               'SLOG', 'NICK', 'PART', 'PONG'
-                               ]
+                               'SLOG', 'NICK', 'PART', 'PONG', 
+                               'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO'}
 
-        self.__Base.logs.info(f"** Loading protocol [{__name__}]")
+        self.__Logs.info(f"** Loading protocol [{__name__}]")
+
+    def get_ircd_protocol_poisition(self, cmd: list[str]) -> tuple[int, Optional[str]]:
+        """Get the position of known commands
+
+        Args:
+            cmd (list[str]): The server response
+
+        Returns:
+            tuple[int, Optional[str]]: The position and the command.
+        """
+        for index, token in enumerate(cmd):
+            if token.upper() in self.known_protocol:
+                return index, token.upper()
+        
+        self.__Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
+
+        return (-1, None)
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -35,24 +54,24 @@ class Unrealircd6:
             with self.__Base.lock:
                 self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[0]))
                 if print_log:
-                    self.__Base.logs.debug(f'<< {message}')
+                    self.__Logs.debug(f'<< {message}')
 
         except UnicodeDecodeError as ude:
-            self.__Base.logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
+            self.__Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
             self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
         except UnicodeEncodeError as uee:
-            self.__Base.logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
+            self.__Logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
             self.__Irc.IrcSocket.send(f"{message}\r\n".encode(self.__Config.SERVEUR_CHARSET[1],'replace'))
         except AssertionError as ae:
-            self.__Base.logs.warning(f'Assertion Error {ae} - message: {message}')
+            self.__Logs.warning(f'Assertion Error {ae} - message: {message}')
         except SSLEOFError as soe:
-            self.__Base.logs.error(f"SSLEOFError: {soe} - {message}")
+            self.__Logs.error(f"SSLEOFError: {soe} - {message}")
         except SSLError as se:
-            self.__Base.logs.error(f"SSLError: {se} - {message}")
+            self.__Logs.error(f"SSLError: {se} - {message}")
         except OSError as oe:
-            self.__Base.logs.error(f"OSError: {oe} - {message}")
+            self.__Logs.error(f"OSError: {oe} - {message}")
         except AttributeError as ae:
-            self.__Base.logs.critical(f"Attribute Error: {ae}")
+            self.__Logs.critical(f"Attribute Error: {ae}")
 
     def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
@@ -69,7 +88,7 @@ class Unrealircd6:
             User_to         = self.__Irc.User.get_User(nick_to) if not nick_to is None else None
 
             if User_from is None:
-                self.__Base.logs.error(f"The sender nickname [{nick_from}] do not exist")
+                self.__Logs.error(f"The sender nickname [{nick_from}] do not exist")
                 return None
 
             if not channel is None:
@@ -83,8 +102,8 @@ class Unrealircd6:
                     self.send2socket(f":{nick_from} PRIVMSG {User_to.uid} :{batch}")
 
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err}")
-            self.__Base.logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
+            self.__Logs.error(f"General Error: {err}")
+            self.__Logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
 
     def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
@@ -100,7 +119,7 @@ class Unrealircd6:
             User_to     = self.__Irc.User.get_User(nick_to)
 
             if User_from is None or User_to is None:
-                self.__Base.logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
+                self.__Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
                 return None
 
             for i in range(0, len(str(msg)), batch_size):
@@ -108,9 +127,9 @@ class Unrealircd6:
                 self.send2socket(f":{User_from.uid} NOTICE {User_to.uid} :{batch}")
 
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err}")
+            self.__Logs.error(f"General Error: {err}")
 
-    def parse_server_msg(self, server_msg: list[str]) -> Union[str, None]:
+    def parse_server_msg(self, server_msg: list[str]) -> Optional[str]:
         """Parse the server message and return the command
 
         Args:
@@ -144,7 +163,7 @@ class Unrealircd6:
 
         return None
 
-    def link(self):
+    def send_link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
@@ -167,7 +186,7 @@ class Unrealircd6:
         service_id = self.__Config.SERVICE_ID
 
         version = self.__Config.CURRENT_VERSION
-        unixtime = self.__Base.get_unixtime()
+        unixtime = self.__Utils.get_unixtime()
 
         self.send2socket(f":{server_id} PASS :{password}", print_log=False)
         self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
@@ -177,20 +196,20 @@ class Unrealircd6:
         self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
         self.send2socket(f":{server_id} {nickname} :Reserved for services")
         self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        self.sjoin(chan)
+        self.send_sjoin(chan)
         self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
         self.send2socket(f":{service_id} MODE {chan} {cmodes}")
 
-        self.__Base.logs.debug(f'>> {__name__} Link information sent to the server')
+        self.__Logs.debug(f'>> {__name__} Link information sent to the server')
 
-    def gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
 
         return None
 
-    def set_nick(self, newnickname: str) -> None:
+    def send_set_nick(self, newnickname: str) -> None:
         """Change nickname of the server
         \n This method will also update the User object
         Args:
@@ -202,7 +221,7 @@ class Unrealircd6:
         self.__Irc.User.update_nickname(userObj.uid, newnickname)
         return None
 
-    def squit(self, server_id: str, server_link: str, reason: str) -> None:
+    def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
 
         if not reason:
             reason = 'Service Shutdown'
@@ -210,36 +229,36 @@ class Unrealircd6:
         self.send2socket(f":{server_id} SQUIT {server_link} :{reason}")
         return None
 
-    def ungline(self, nickname:str, hostname: str) -> None:
+    def send_ungline(self, nickname:str, hostname: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
 
         return None
 
-    def kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
 
         return None
 
-    def unkline(self, nickname:str, hostname: str) -> None:
+    def send_unkline(self, nickname:str, hostname: str) -> None:
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self.__Config.SERVICE_NICKNAME}")
 
         return None
 
-    def sjoin(self, channel: str) -> None:
+    def send_sjoin(self, channel: str) -> None:
         """Server will join a channel with pre defined umodes
 
         Args:
             channel (str): Channel to join
         """
-        if not self.__Irc.Channel.Is_Channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+        if not self.__Irc.Channel.is_valid_channel(channel):
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Base.get_unixtime()} {channel} {self.__Config.SERVICE_UMODES} :{self.__Config.SERVICE_ID}")
+        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Utils.get_unixtime()} {channel} {self.__Config.SERVICE_UMODES} :{self.__Config.SERVICE_ID}")
         self.send2socket(f":{self.__Config.SERVICE_ID} MODE {channel} {self.__Config.SERVICE_UMODES} {self.__Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
@@ -257,7 +276,7 @@ class Unrealircd6:
         try:
 
             userObj = self.__Irc.User.get_User(uidornickname=nick_to_sapart)
-            chanObj = self.__Irc.Channel.get_Channel(channel_name)
+            chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
             if userObj is None or chanObj is None:
@@ -269,7 +288,7 @@ class Unrealircd6:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def send_sajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
         """_summary_
@@ -281,7 +300,7 @@ class Unrealircd6:
         try:
 
             userObj = self.__Irc.User.get_User(uidornickname=nick_to_sajoin)
-            chanObj = self.__Irc.Channel.get_Channel(channel_name)
+            chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
             if userObj is None:
@@ -290,7 +309,7 @@ class Unrealircd6:
 
             if chanObj is None:
                 # Channel not exist
-                if not self.__Irc.Channel.Is_Channel(channel_name):
+                if not self.__Irc.Channel.is_valid_channel(channel_name):
                     # Incorrect channel: leave
                     return None
 
@@ -306,7 +325,7 @@ class Unrealircd6:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def send_svs_mode(self, nickname: str, user_mode: str) -> None:
         try:
@@ -325,34 +344,29 @@ class Unrealircd6:
 
             return None
         except Exception as err:
-                self.__Base.logs.error(f"{__name__} - General Error: {err}")
+                self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
         - Delete uid from User object
-        - Delete uid from Clone object
         - Delete uid from Reputation object
 
         Args:
             uidornickname (str): The UID or the Nickname
             reason (str): The reason for the quit
         """
-        userObj = self.__Irc.User.get_User(uidornickname=uid)
-        cloneObj = self.__Irc.Clone.get_Clone(uidornickname=uid)
+        user_obj = self.__Irc.User.get_User(uidornickname=uid)
         reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
 
-        if not userObj is None:
-            self.send2socket(f":{userObj.uid} QUIT :{reason}", print_log=print_log)
-            self.__Irc.User.delete(userObj.uid)
-
-        if not cloneObj is None:
-            self.__Irc.Clone.delete(cloneObj.uid)
+        if not user_obj is None:
+            self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
+            self.__Irc.User.delete(user_obj.uid)
 
         if not reputationObj is None:
             self.__Irc.Reputation.delete(reputationObj.uid)
 
         if not self.__Irc.Channel.delete_user_from_all_channel(uid):
-            self.__Base.logs.error(f"The UID [{uid}] has not been deleted from all channels")
+            self.__Logs.error(f"The UID [{uid}] has not been deleted from all channels")
 
         return None
 
@@ -371,9 +385,9 @@ class Unrealircd6:
             print_log (bool, optional): print logs if true. Defaults to True.
         """
         # {self.Config.SERVEUR_ID} UID 
-        # {clone.nickname} 1 {self.Base.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
+        # {clone.nickname} 1 {self.__Utils.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
         try:
-            unixtime = self.__Base.get_unixtime()
+            unixtime = self.__Utils.get_unixtime()
             encoded_ip = self.__Base.encode_ip(remote_ip)
 
             # Create the user
@@ -392,7 +406,7 @@ class Unrealircd6:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
@@ -410,8 +424,8 @@ class Unrealircd6:
         if userObj is None:
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+        if not self.__Irc.Channel.is_valid_channel(channel):
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} JOIN {channel} {passwordChannel}", print_log=print_log)
@@ -447,11 +461,11 @@ class Unrealircd6:
         userObj = self.__Irc.User.get_User(uidornickname)
 
         if userObj is None:
-            self.__Base.logs.error(f"The user [{uidornickname}] is not valid")
+            self.__Logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
-        if not self.__Irc.Channel.Is_Channel(channel):
-            self.__Base.logs.error(f"The channel [{channel}] is not valid")
+        if not self.__Irc.Channel.is_valid_channel(channel):
+            self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         self.send2socket(f":{userObj.uid} PART {channel}", print_log=print_log)
@@ -462,9 +476,9 @@ class Unrealircd6:
 
     def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
 
-        channel = self.__Irc.Channel.Is_Channel(channelToCheck=channel_name)
+        channel = self.__Irc.Channel.is_valid_channel(channel_name)
         if not channel:
-            self.__Base.logs.error(f'The channel [{channel_name}] is not correct')
+            self.__Logs.error(f'The channel [{channel_name}] is not correct')
             return None
 
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
@@ -502,9 +516,9 @@ class Unrealircd6:
 
             return None
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_mode(self, serverMsg: list[str]) -> None:
         """Handle mode coming from a server
@@ -538,14 +552,14 @@ class Unrealircd6:
             # TODO : User object should be able to update user modes
             if self.__Irc.User.update_mode(userObj.uid, userMode):
                 return None
-                # self.__Base.logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
+                # self.__Logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
 
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_quit(self, serverMsg: list[str]) -> None:
         """Handle quit coming from a server
@@ -562,14 +576,13 @@ class Unrealircd6:
             self.__Irc.User.delete(uid_who_quit)
             self.__Irc.Client.delete(uid_who_quit)
             self.__Irc.Reputation.delete(uid_who_quit)
-            self.__Irc.Clone.delete(uid_who_quit)
 
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_squit(self, serverMsg: list[str]) -> None:
         """Handle squit coming from a server
@@ -649,9 +662,9 @@ class Unrealircd6:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_sjoin(self, serverMsg: list[str]) -> None:
         """Handle sjoin coming from a server
@@ -688,7 +701,7 @@ class Unrealircd6:
             # Boucle qui va ajouter l'ensemble des users (UID)
             for i in range(start_boucle, len(serverMsg_copy)):
                 parsed_UID = str(serverMsg_copy[i])
-                clean_uid = self.__Irc.User.clean_uid(parsed_UID)
+                clean_uid = self.__Utils.clean_uid(parsed_UID)
                 if not clean_uid is None and len(clean_uid) == 9:
                     list_users.append(clean_uid)
 
@@ -702,9 +715,9 @@ class Unrealircd6:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_part(self, serverMsg: list[str]) -> None:
         """Handle part coming from a server
@@ -723,9 +736,9 @@ class Unrealircd6:
             return None
 
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_eos(self, serverMsg: list[str]) -> None:
         """Handle EOS coming from a server
@@ -757,16 +770,16 @@ class Unrealircd6:
                     print(f"# VERSION  :    {version}                       ")
                     print(f"################################################")
 
-                    self.__Base.logs.info(f"################### DEFENDER ###################")
-                    self.__Base.logs.info(f"#               SERVICE CONNECTE                ")
-                    self.__Base.logs.info(f"# SERVEUR  :    {self.__Config.SERVEUR_IP}        ")
-                    self.__Base.logs.info(f"# PORT     :    {self.__Config.SERVEUR_PORT}      ")
-                    self.__Base.logs.info(f"# SSL      :    {self.__Config.SERVEUR_SSL}       ")
-                    self.__Base.logs.info(f"# SSL VER  :    {self.__Config.SSL_VERSION}       ")
-                    self.__Base.logs.info(f"# NICKNAME :    {self.__Config.SERVICE_NICKNAME}  ")
-                    self.__Base.logs.info(f"# CHANNEL  :    {self.__Config.SERVICE_CHANLOG}   ")
-                    self.__Base.logs.info(f"# VERSION  :    {version}                       ")
-                    self.__Base.logs.info(f"################################################")
+                    self.__Logs.info(f"################### DEFENDER ###################")
+                    self.__Logs.info(f"#               SERVICE CONNECTE                ")
+                    self.__Logs.info(f"# SERVEUR  :    {self.__Config.SERVEUR_IP}        ")
+                    self.__Logs.info(f"# PORT     :    {self.__Config.SERVEUR_PORT}      ")
+                    self.__Logs.info(f"# SSL      :    {self.__Config.SERVEUR_SSL}       ")
+                    self.__Logs.info(f"# SSL VER  :    {self.__Config.SSL_VERSION}       ")
+                    self.__Logs.info(f"# NICKNAME :    {self.__Config.SERVICE_NICKNAME}  ")
+                    self.__Logs.info(f"# CHANNEL  :    {self.__Config.SERVICE_CHANLOG}   ")
+                    self.__Logs.info(f"# VERSION  :    {version}                       ")
+                    self.__Logs.info(f"################################################")
 
                     if self.__Base.check_for_new_version(False):
                         self.send_priv_msg(
@@ -789,11 +802,11 @@ class Unrealircd6:
 
                 return None
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Key Error: {ie}")
+            self.__Logs.error(f"{__name__} - Key Error: {ie}")
         except KeyError as ke:
-            self.__Base.logs.error(f"{__name__} - Key Error: {ke}")
+            self.__Logs.error(f"{__name__} - Key Error: {ke}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_reputation(self, serverMsg: list[str]) -> None:
         """Handle REPUTATION coming from a server
@@ -824,7 +837,7 @@ class Unrealircd6:
             self.__Irc.first_score = 0
             self.Logs.error(f'Value Error {__name__}: {ve}')
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_uid(self, serverMsg: list[str]) -> None:
         """Handle uid message coming from the server
@@ -885,9 +898,9 @@ class Unrealircd6:
             )
             return None
         except IndexError as ie:
-            self.__Base.logs.error(f"{__name__} - Index Error: {ie}")
+            self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_privmsg(self, serverMsg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
@@ -908,11 +921,11 @@ class Unrealircd6:
                 if cmd[2] == 'PRIVMSG' and cmd[4] == ':auth':
                     data_copy = cmd.copy()
                     data_copy[6] = '**********'
-                    self.__Base.logs.debug(f">> {data_copy}")
+                    self.__Logs.debug(f">> {data_copy}")
                 else:
-                    self.__Base.logs.debug(f">> {cmd}")
+                    self.__Logs.debug(f">> {cmd}")
             else:
-                self.__Base.logs.debug(f">> {cmd}")
+                self.__Logs.debug(f">> {cmd}")
 
             get_uid_or_nickname = str(cmd[0].replace(':',''))
             user_trigger = self.__Irc.User.get_nickname(get_uid_or_nickname)
@@ -927,7 +940,7 @@ class Unrealircd6:
                 arg = convert_to_string.split()
                 arg.remove(f':{self.__Config.SERVICE_PREFIX}')
                 if not arg[0].lower() in self.__Irc.module_commands_list:
-                    self.__Base.logs.debug(f"This command {arg[0]} is not available")
+                    self.__Logs.debug(f"This command {arg[0]} is not available")
                     self.send_notice(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         nick_to=user_trigger,
@@ -938,7 +951,7 @@ class Unrealircd6:
                 cmd_to_send = convert_to_string.replace(':','')
                 self.__Base.log_cmd(user_trigger, cmd_to_send)
 
-                fromchannel = str(cmd[2]).lower() if self.__Irc.Channel.Is_Channel(cmd[2]) else None
+                fromchannel = str(cmd[2]).lower() if self.__Irc.Channel.is_valid_channel(cmd[2]) else None
                 self.__Irc.hcmds(user_trigger, fromchannel, arg, cmd)
 
             if cmd[2] == self.__Config.SERVICE_ID:
@@ -966,7 +979,7 @@ class Unrealircd6:
                         return False
 
                     if not arg[0].lower() in self.__Irc.module_commands_list:
-                        self.__Base.logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
+                        self.__Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
                         return False
 
                     cmd_to_send = convert_to_string.replace(':','')
@@ -974,17 +987,17 @@ class Unrealircd6:
 
                     fromchannel = None
                     if len(arg) >= 2:
-                        fromchannel = str(arg[1]).lower() if self.__Irc.Channel.Is_Channel(arg[1]) else None
+                        fromchannel = str(arg[1]).lower() if self.__Irc.Channel.is_valid_channel(arg[1]) else None
 
                     self.__Irc.hcmds(user_trigger, fromchannel, arg, cmd)
             return None
 
         except KeyError as ke:
-            self.__Base.logs.error(f"Key Error: {ke}")
+            self.__Logs.error(f"Key Error: {ke}")
         except AttributeError as ae:
-            self.__Base.logs.error(f"Attribute Error: {ae}")
+            self.__Logs.error(f"Attribute Error: {ae}")
         except Exception as err:
-            self.__Base.logs.error(f"General Error: {err} - {srv_msg}")
+            self.__Logs.error(f"General Error: {err} - {srv_msg}")
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server
@@ -999,7 +1012,7 @@ class Unrealircd6:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
@@ -1011,7 +1024,7 @@ class Unrealircd6:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
 
@@ -1023,7 +1036,7 @@ class Unrealircd6:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_time(self, serverMsg: list[str]) -> None:
         """Sending TIME answer to a requestor
@@ -1035,10 +1048,10 @@ class Unrealircd6:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
-            current_datetime = self.__Base.get_datetime()
+            current_datetime = self.__Utils.get_sdatetime()
 
             if nickname is None:
                 return None
@@ -1048,7 +1061,7 @@ class Unrealircd6:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_ping(self, serverMsg: list[str]) -> None:
         """Sending a PING answer to requestor
@@ -1060,7 +1073,7 @@ class Unrealircd6:
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self.__Irc.User.get_nickname(self.__Base.clean_uid(serverMsg[1]))
+            nickname = self.__Irc.User.get_nickname(self.__Utils.clean_uid(serverMsg[1]))
             dnickname = self.__Config.SERVICE_NICKNAME
             arg = serverMsg[4].replace(':', '')
 
@@ -1069,7 +1082,7 @@ class Unrealircd6:
 
             if arg == '\x01PING':
                 recieved_unixtime = int(serverMsg[5].replace('\x01',''))
-                current_unixtime = self.__Base.get_unixtime()
+                current_unixtime = self.__Utils.get_unixtime()
                 ping_response = current_unixtime - recieved_unixtime
 
                 # self.__Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
@@ -1081,7 +1094,7 @@ class Unrealircd6:
 
             return None
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_version_msg(self, serverMsg: list[str]) -> None:
         """Handle version coming from the server
@@ -1095,7 +1108,7 @@ class Unrealircd6:
             if '@' in list(serverMsg_copy[0])[0]:
                 serverMsg_copy.pop(0)
 
-            getUser  = self.__Irc.User.get_User(self.__Irc.User.clean_uid(serverMsg_copy[0]))
+            getUser  = self.__Irc.User.get_User(self.__Utils.clean_uid(serverMsg_copy[0]))
 
             if getUser is None:
                 return None
@@ -1113,4 +1126,4 @@ class Unrealircd6:
             return None
 
         except Exception as err:
-            self.__Base.logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}")

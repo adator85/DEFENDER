@@ -1,6 +1,8 @@
+import importlib
 import os
 import re
 import json
+import sys
 import time
 import random
 import socket
@@ -8,41 +10,44 @@ import hashlib
 import logging
 import threading
 import ipaddress
-
 import ast
 import requests
-
+from pathlib import Path
+from types import ModuleType
 from dataclasses import fields
-from typing import Union, Literal, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
-from core.definition import MConfig
 
 if TYPE_CHECKING:
-    from core.classes.settings import Settings
+    from core.loader import Loader
 
 class Base:
 
-    def __init__(self, Config: MConfig, settings: 'Settings') -> None:
+    def __init__(self, loader: 'Loader') -> None:
 
-        self.Config = Config                                    # Assigner l'objet de configuration
-        self.Settings: Settings = settings
-        self.init_log_system()                                  # Demarrer le systeme de log
+        self.Loader = loader
+        self.Config = loader.Config
+        self.Settings = loader.Settings
+        self.Utils = loader.Utils
+        self.logs = loader.Logs
+
+        # self.init_log_system()                                  # Demarrer le systeme de log
         self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
 
         # Liste des timers en cours
-        self.running_timers:list[threading.Timer] = self.Settings.RUNNING_TIMERS
+        self.running_timers: list[threading.Timer] = self.Settings.RUNNING_TIMERS
 
         # Liste des threads en cours
-        self.running_threads:list[threading.Thread] = self.Settings.RUNNING_THREADS
+        self.running_threads: list[threading.Thread] = self.Settings.RUNNING_THREADS
 
         # Les sockets ouvert
         self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
 
         # Liste des fonctions en attentes
-        self.periodic_func:dict[object] = self.Settings.PERIODIC_FUNC
+        self.periodic_func: dict[object] = self.Settings.PERIODIC_FUNC
 
         # Création du lock
         self.lock = self.Settings.LOCK
@@ -136,120 +141,62 @@ class Base:
         except Exception as err:
             self.logs.error(f'General Error: {err}')
 
-    def get_unixtime(self) -> int:
+    def get_all_modules(self) -> list[str]:
+        """Get list of all main modules
+        using this pattern mod_*.py
+
+        Returns:
+            list[str]: List of module names.
         """
-        Cette fonction retourne un UNIXTIME de type 12365456
-        Return: Current time in seconds since the Epoch (int)
+        base_path = Path('mods')
+        return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
+
+    def reload_modules_with_dependencies(self, prefix: str = 'mods'):
         """
-        cet_offset = timezone(timedelta(hours=2))
-        now_cet = datetime.now(cet_offset)
-        unixtime_cet = int(now_cet.timestamp())
-        unixtime = int( time.time() )
-
-        return unixtime
-
-    def get_datetime(self) -> str:
+        Reload all modules in sys.modules that start with the given prefix.
+        Useful for reloading a full package during development.
         """
-        Retourne une date au format string (24-12-2023 20:50:59)
-        """
-        currentdate = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-        return currentdate
+        modules_to_reload = []
 
-    def get_all_modules(self) -> list:
+        # Collect target modules
+        for name, module in sys.modules.items():
+            if (
+                isinstance(module, ModuleType)
+                and module is not None
+                and name.startswith(prefix)
+            ):
+                modules_to_reload.append((name, module))
 
-        all_files = os.listdir('mods/')
-        all_modules: list = []
-        for module in all_files:
-            if module.endswith('.py') and not module == '__init__.py':
-                all_modules.append(module.replace('.py', '').lower())
+        # Sort to reload submodules before parent modules
+        for name, module in sorted(modules_to_reload, key=lambda x: x[0], reverse=True):
+            try:
+                if 'mod_' not in name and 'schemas' not in name:
+                    importlib.reload(module)
+                    self.logs.debug(f'[LOAD_MODULE] Module {module} success')
 
-        return all_modules
+            except Exception as err:
+                self.logs.error(f'[LOAD_MODULE] Module {module} failed [!] - {err}')
 
     def create_log(self, log_message: str) -> None:
         """Enregiste les logs
 
         Args:
-            string (str): Le message a enregistrer
+            log_message (str): Le message a enregistrer
 
         Returns:
             None: Aucun retour
         """
         sql_insert = f"INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)"
-        mes_donnees = {'datetime': str(self.get_datetime()),'server_msg': f'{log_message}'}
+        mes_donnees = {'datetime': str(self.Utils.get_sdatetime()),'server_msg': f'{log_message}'}
         self.db_execute_query(sql_insert, mes_donnees)
 
         return None
 
-    def init_log_system(self) -> None:
-        # Create folder if not available
-        logs_directory = f'logs{self.Config.OS_SEP}'
-        if not os.path.exists(f'{logs_directory}'):
-            os.makedirs(logs_directory)
-
-        # Init logs object
-        self.logs = logging.getLogger(self.Config.LOGGING_NAME)
-        self.logs.setLevel(self.Config.DEBUG_LEVEL)
-
-        # Add Handlers
-        file_hanlder = logging.FileHandler(f'logs{self.Config.OS_SEP}defender.log',encoding='UTF-8')
-        file_hanlder.setLevel(self.Config.DEBUG_LEVEL)
-
-        stdout_handler = logging.StreamHandler()
-        stdout_handler.setLevel(50)
-
-        # Define log format
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(message)s')
-
-        # Apply log format
-        file_hanlder.setFormatter(formatter)
-        stdout_handler.setFormatter(formatter)
-
-        # Add handler to logs
-        self.logs.addHandler(file_hanlder)
-        self.logs.addHandler(stdout_handler)
-
-        # Apply the filter
-        self.logs.addFilter(self.replace_filter)
-
-        # self.logs.Logger('defender').addFilter(self.replace_filter)
-        self.logs.info('#################### STARTING DEFENDER ####################')
-
-        return None
-
-    def replace_filter(self, record: logging.LogRecord) -> bool:
-
-        response = True
-        filter: list[str] = ['PING', f":{self.Config.SERVICE_PREFIX}auth"]
-
-        # record.msg = record.getMessage().replace("PING", "[REDACTED]")
-        if self.Settings.CONSOLE:
-            print(record.getMessage())
-
-        for f in filter:
-            if f in record.getMessage():
-                response = False
-
-        return response  # Retourne True pour permettre l'affichage du message
-
-    def delete_logger(self, logger_name: str) -> None:
-
-        # Récupérer le logger
-        logger = logging.getLogger(logger_name)
-
-        # Retirer tous les gestionnaires du logger et les fermer
-        for handler in logger.handlers[:]:  # Utiliser une copie de la liste
-            logger.removeHandler(handler)
-            handler.close()
-
-        # Supprimer le logger du dictionnaire global
-        logging.Logger.manager.loggerDict.pop(logger_name, None)
-
-        return None
-
-    def log_cmd(self, user_cmd:str, cmd:str) -> None:
+    def log_cmd(self, user_cmd: str, cmd: str) -> None:
         """Enregistre les commandes envoyées par les utilisateurs
 
         Args:
+            user_cmd (str): The user who performed the command
             cmd (str): la commande a enregistrer
         """
         cmd_list = cmd.split()
@@ -260,10 +207,10 @@ class Base:
                 cmd = ' '.join(cmd_list)
 
         insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
-        mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'commande': cmd}
+        mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'commande': cmd}
         self.db_execute_query(insert_cmd_query, mes_donnees)
 
-        return False
+        return None
 
     def db_isModuleExist(self, module_name:str) -> bool:
         """Teste si un module existe déja dans la base de données
@@ -283,22 +230,24 @@ class Base:
         else:
             return False
 
-    def db_record_module(self, user_cmd:str, module_name:str, isdefault:int = 0) -> None:
+    def db_record_module(self, user_cmd: str, module_name: str, isdefault: int = 0) -> None:
         """Enregistre les modules dans la base de données
 
         Args:
-            cmd (str): le module a enregistrer
+            user_cmd (str): The user who performed the command
+            module_name (str): The module name
+            isdefault (int): Is this a default module. Default 0
         """
 
         if not self.db_isModuleExist(module_name):
             self.logs.debug(f"Le module {module_name} n'existe pas alors ont le créer")
             insert_cmd_query = f"INSERT INTO {self.Config.TABLE_MODULE} (datetime, user, module_name, isdefault) VALUES (:datetime, :user, :module_name, :isdefault)"
-            mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'module_name': module_name, 'isdefault': isdefault}
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'module_name': module_name, 'isdefault': isdefault}
             self.db_execute_query(insert_cmd_query, mes_donnees)
         else:
             self.logs.debug(f"Le module {module_name} existe déja dans la base de données")
 
-        return False
+        return None
 
     def db_update_module(self, user_cmd: str, module_name: str) -> None:
         """Modifie la date et le user qui a rechargé le module
@@ -308,22 +257,22 @@ class Base:
             module_name (str): le module a rechargé
         """
         update_cmd_query = f"UPDATE {self.Config.TABLE_MODULE} SET datetime = :datetime, user = :user WHERE module_name = :module_name"
-        mes_donnees = {'datetime': self.get_datetime(), 'user': user_cmd, 'module_name': module_name}
+        mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'module_name': module_name}
         self.db_execute_query(update_cmd_query, mes_donnees)
 
-        return False
+        return None
 
     def db_delete_module(self, module_name:str) -> None:
         """Supprime les modules de la base de données
 
         Args:
-            cmd (str): le module a supprimer
+            module_name (str): The module name you want to delete
         """
         insert_cmd_query = f"DELETE FROM {self.Config.TABLE_MODULE} WHERE module_name = :module_name"
         mes_donnees = {'module_name': module_name}
         self.db_execute_query(insert_cmd_query, mes_donnees)
 
-        return False
+        return None
 
     def db_sync_core_config(self, module_name: str, dataclassObj: object) -> bool:
         """Sync module local parameters with the database
@@ -341,7 +290,7 @@ class Base:
         """
         try:
             response = True
-            current_date = self.get_datetime()
+            current_date = self.Utils.get_sdatetime()
             core_table = self.Config.TABLE_CONFIG
 
             # Add local parameters to DB
@@ -391,7 +340,7 @@ class Base:
             result = response.fetchall()
 
             for param, value in result:
-                if type(getattr(dataclassObj, param)) == list:
+                if isinstance(getattr(dataclassObj, param), list):
                     value = ast.literal_eval(value)
 
                 setattr(dataclassObj, param, self.int_if_possible(value))
@@ -418,7 +367,7 @@ class Base:
         isParamExist = result.fetchone()
 
         if not isParamExist is None:
-            mes_donnees = {'datetime': self.get_datetime(),
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(),
                            'module_name': module_name,
                            'param_key': param_key,
                            'param_value': param_value
@@ -443,9 +392,9 @@ class Base:
         user = self.db_execute_query(f"SELECT id FROM {self.Config.TABLE_ADMIN}")
         if not user.fetchall():
             admin = self.Config.OWNER
-            password = self.crypt_password(self.Config.PASSWORD)
+            password = self.Utils.hash_password(self.Config.PASSWORD)
 
-            mes_donnees = {'createdOn': self.get_datetime(), 
+            mes_donnees = {'createdOn': self.Utils.get_sdatetime(), 
                            'user': admin, 
                            'password': password, 
                            'hostname': '*', 
@@ -472,8 +421,11 @@ class Base:
 
             self.logs.debug(f"-- Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
 
+            return None
+
         except AssertionError as ae:
             self.logs.error(f'Assertion Error -> {ae}')
+            return None
 
     def create_thread(self, func:object, func_args: tuple = (), run_once:bool = False, daemon: bool = True) -> None:
         """Create a new thread and store it into running_threads variable
@@ -499,6 +451,39 @@ class Base:
 
         except AssertionError as ae:
             self.logs.error(f'{ae}')
+
+    def is_thread_alive(self, thread_name: str) -> bool:
+        """Check if the thread is still running! using the is_alive method of Threads.
+
+        Args:
+            thread_name (str): The thread name
+
+        Returns:
+            bool: True if is alive
+        """
+        for thread in self.running_threads:
+            if thread.name.lower() == thread_name.lower():
+                if thread.is_alive():
+                    return True
+                else:
+                    return False
+
+        return False
+
+    def is_thread_exist(self, thread_name: str) -> bool:
+        """Check if the thread exist in the local var (running_threads)
+
+        Args:
+            thread_name (str): The thread name
+
+        Returns:
+            bool: True if the thread exist
+        """
+        for thread in self.running_threads:
+            if thread.name.lower() == thread_name.lower():
+                    return True
+
+        return False
 
     def thread_count(self, thread_name: str) -> int:
         """This method return the number of existing threads 
@@ -709,19 +694,6 @@ class Base:
         except AttributeError as ae:
             self.logs.error(f"Attribute Error : {ae}")
 
-    def crypt_password(self, password:str) -> str:
-        """Retourne un mot de passe chiffré en MD5
-
-        Args:
-            password (str): Le password en clair
-
-        Returns:
-            str: Le password en MD5
-        """
-        md5_password = hashlib.md5(password.encode()).hexdigest()
-
-        return md5_password
-
     def int_if_possible(self, value):
         """Convertit la valeur reçue en entier, si possible.
         Sinon elle retourne la valeur initiale.
@@ -740,14 +712,14 @@ class Base:
         except TypeError:
             return value
 
-    def convert_to_int(self, value: any) -> Union[int, None]:
+    def convert_to_int(self, value: Any) -> Optional[int]:
         """Convert a value to int
 
         Args:
             value (any): Value to convert to int if possible
 
         Returns:
-            Union[int, None]: Return the int value or None if not possible
+            int: Return the int value or None if not possible
         """
         try:
             response = int(value)
@@ -788,7 +760,7 @@ class Base:
             self.logs.error(f'General Error: {err}')
             return False
 
-    def decode_ip(self, ip_b64encoded: str) -> Union[str, None]:
+    def decode_ip(self, ip_b64encoded: str) -> Optional[str]:
 
         binary_ip = b64decode(ip_b64encoded)
         try:
@@ -799,7 +771,7 @@ class Base:
             self.logs.critical(f'This remote ip is not valid : {ve}')
             return None
 
-    def encode_ip(self, remote_ip_address: str) -> Union[str, None]:
+    def encode_ip(self, remote_ip_address: str) -> Optional[str]:
 
         binary_ip = socket.inet_aton(remote_ip_address)
         try:
@@ -812,15 +784,6 @@ class Base:
         except Exception as err:
             self.logs.critical(f'General Error: {err}')
             return None
-
-    def get_random(self, lenght:int) -> str:
-        """
-        Retourn une chaîne aléatoire en fonction de la longueur spécifiée.
-        """
-        caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        randomize = ''.join(random.choice(caracteres) for _ in range(lenght))
-
-        return randomize
 
     def execute_periodic_action(self) -> None:
 
@@ -861,23 +824,3 @@ class Base:
 
         self.logs.debug(f'Method to execute : {str(self.periodic_func)}')
         return None
-
-    def clean_uid(self, uid:str) -> Union[str, None]:
-        """Clean UID by removing @ / % / + / ~ / * / :
-
-        Args:
-            uid (str): The UID to clean
-
-        Returns:
-            str: Clean UID without any sign
-        """
-        try:
-            if uid is None:
-                return None
-
-            pattern = fr'[:|@|%|\+|~|\*]*'
-            parsed_UID = re.sub(pattern, '', uid)
-
-            return parsed_UID
-        except TypeError as te:
-            self.logs.error(f'Type Error: {te}')

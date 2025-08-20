@@ -261,21 +261,21 @@ class Install:
         if not do_install:
             return None
 
-        print("===> Vider le cache de pip")
+        print("===> Clean pip cache")
         self.run_subprocess([self.config.venv_pip_executable, 'cache', 'purge'])
         
-        print("===> Verifier si pip est a jour")
+        print("===> Check if pip is up to date")
         self.run_subprocess([self.config.venv_python_executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
 
         if not self.check_package('greenlet'):
             self.run_subprocess([self.config.venv_pip_executable, 'install', '--only-binary', ':all:', 'greenlet'])
-            print('====> Module Greenlet installé')
+            print('====> Greenlet installed')
 
         for module in self.config.venv_cmd_requirements:
             if not self.check_package(module):
                 print("### Trying to install missing python packages ###")
                 self.run_subprocess([self.config.venv_pip_executable, 'install', module])
-                print(f"====> Module {module} installé")
+                print(f"====> Module {module} installed!")
             else:
                 print(f"==> {module} already installed")
 
@@ -307,8 +307,8 @@ WantedBy=default.target
             with open(full_service_file_path, 'w+') as servicefile:
                 servicefile.write(contain)
                 servicefile.close()
-                print(f'Service file generated with current configuration')
-                print(f'Running Defender IRC Service ...')
+                print('Service file generated with current configuration')
+                print('Running IRC Service ...')
                 self.run_subprocess(self.config.service_cmd_daemon_reload)
                 self.run_subprocess(self.config.service_cmd_executable)
 
@@ -316,8 +316,8 @@ WantedBy=default.target
             with open(full_service_file_path, 'w+') as servicefile:
                 servicefile.write(contain)
                 servicefile.close()
-                print(f'Service file generated with current configuration')
-                print(f'Running Defender IRC Service ...')
+                print('Service file generated with current configuration')
+                print('Running IRC Service ...')
                 self.run_subprocess(self.config.service_cmd_daemon_reload)
                 self.run_subprocess(self.config.service_cmd_executable)
 

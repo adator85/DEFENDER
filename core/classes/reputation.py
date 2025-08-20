@@ -1,23 +1,23 @@
-from typing import Union
+from typing import TYPE_CHECKING, Optional
 from core.definition import MReputation
-from core.base import Base
+
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Reputation:
 
     UID_REPUTATION_DB: list[MReputation] = []
 
-    def __init__(self, baseObj: Base) -> None:
+    def __init__(self, loader: 'Loader'):
 
-        self.Logs = baseObj.logs
+        self.Logs = loader.Logs
         self.MReputation: MReputation = MReputation
 
-        return None
-
-    def insert(self, newReputationUser: MReputation) -> bool:
+    def insert(self, new_reputation_user: MReputation) -> bool:
         """Insert a new Reputation User object
 
         Args:
-            newReputationUser (MReputation): New Reputation Model object
+            new_reputation_user (MReputation): New Reputation Model object
 
         Returns:
             bool: True if inserted
@@ -26,23 +26,23 @@ class Reputation:
         exist = False
 
         for record in self.UID_REPUTATION_DB:
-            if record.uid == newReputationUser.uid:
+            if record.uid == new_reputation_user.uid:
                 # If the user exist then return False and do not go further
                 exist = True
                 self.Logs.debug(f'{record.uid} already exist')
                 return result
 
         if not exist:
-            self.UID_REPUTATION_DB.append(newReputationUser)
+            self.UID_REPUTATION_DB.append(new_reputation_user)
             result = True
-            self.Logs.debug(f'New Reputation User Captured: ({newReputationUser})')
+            self.Logs.debug(f'New Reputation User Captured: ({new_reputation_user})')
 
         if not result:
-            self.Logs.critical(f'The Reputation User Object was not inserted {newReputationUser}')
+            self.Logs.critical(f'The Reputation User Object was not inserted {new_reputation_user}')
 
         return result
 
-    def update(self, uid: str, newNickname: str) -> bool:
+    def update(self, uid: str, new_nickname: str) -> bool:
         """Update the nickname starting from the UID
 
         Args:
@@ -53,12 +53,12 @@ class Reputation:
             bool: True if updated
         """
 
-        reputationObj = self.get_Reputation(uid)
+        reputation_obj = self.get_Reputation(uid)
 
-        if reputationObj is None:
+        if reputation_obj is None:
             return False
 
-        reputationObj.nickname = newNickname
+        reputation_obj.nickname = new_nickname
 
         return True
 
@@ -89,7 +89,7 @@ class Reputation:
 
         return result
 
-    def get_Reputation(self, uidornickname: str) -> Union[MReputation, None]:
+    def get_Reputation(self, uidornickname: str) -> Optional[MReputation]:
         """Get The User Object model
 
         Args:
@@ -98,16 +98,15 @@ class Reputation:
         Returns:
             UserModel|None: The UserModel Object | None
         """
-        User = None
         for record in self.UID_REPUTATION_DB:
             if record.uid == uidornickname:
-                User = record
+                return record
             elif record.nickname == uidornickname:
-                User = record
+                return record
 
-        return User
+        return None
 
-    def get_uid(self, uidornickname:str) -> Union[str, None]:
+    def get_uid(self, uidornickname: str) -> Optional[str]:
         """Get the UID of the user starting from the UID or the Nickname
 
         Args:
@@ -117,14 +116,14 @@ class Reputation:
             str|None: Return the UID
         """
 
-        reputationObj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_Reputation(uidornickname)
 
-        if reputationObj is None:
+        if reputation_obj is None:
             return None
 
-        return reputationObj.uid
+        return reputation_obj.uid
 
-    def get_nickname(self, uidornickname:str) -> Union[str, None]:
+    def get_nickname(self, uidornickname: str) -> Optional[str]:
         """Get the Nickname starting from UID or the nickname
 
         Args:
@@ -133,12 +132,12 @@ class Reputation:
         Returns:
             str|None: the nickname
         """
-        reputationObj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_Reputation(uidornickname)
 
-        if reputationObj is None:
+        if reputation_obj is None:
             return None
 
-        return reputationObj.nickname
+        return reputation_obj.nickname
 
     def is_exist(self, uidornickname: str) -> bool:
         """Check if the UID or the nickname exist in the reputation DB
@@ -150,9 +149,9 @@ class Reputation:
             bool: True if exist
         """
 
-        reputationObj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_Reputation(uidornickname)
 
-        if reputationObj is None:
-            return False
-        else:
+        if isinstance(reputation_obj, MReputation):
             return True
+        
+        return False

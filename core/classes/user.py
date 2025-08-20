@@ -1,23 +1,21 @@
 from re import sub
-from typing import Union, TYPE_CHECKING
-from dataclasses import asdict
+from typing import Any, Optional, TYPE_CHECKING
+from datetime import datetime
 
 if TYPE_CHECKING:
-    from core.base import Base
+    from core.loader import Loader
     from core.definition import MUser
 
 class User:
 
     UID_DB: list['MUser'] = []
 
-    def __init__(self, baseObj: 'Base') -> None:
+    def __init__(self, loader: 'Loader'):
 
-        self.Logs = baseObj.logs
-        self.Base = baseObj
+        self.Logs = loader.Logs
+        self.Base = loader.Base
 
-        return None
-
-    def insert(self, newUser: 'MUser') -> bool:
+    def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object
 
         Args:
@@ -27,32 +25,32 @@ class User:
             bool: True if inserted
         """
 
-        userObj = self.get_User(newUser.uid)
+        user_obj = self.get_User(new_user.uid)
 
-        if not userObj is None:
+        if not user_obj is None:
             # User already created return False
             return False
 
-        self.UID_DB.append(newUser)
+        self.UID_DB.append(new_user)
 
         return True
 
-    def update_nickname(self, uid: str, newNickname: str) -> bool:
+    def update_nickname(self, uid: str, new_nickname: str) -> bool:
         """Update the nickname starting from the UID
 
         Args:
             uid (str): UID of the user
-            newNickname (str): New nickname
+            new_nickname (str): New nickname
 
         Returns:
             bool: True if updated
         """
-        userObj = self.get_User(uidornickname=uid)
+        user_obj = self.get_User(uidornickname=uid)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
-        userObj.nickname = newNickname
+        user_obj.nickname = new_nickname
 
         return True
 
@@ -67,16 +65,16 @@ class User:
             bool: True if user mode has been updaed
         """
         response = True
-        userObj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_User(uidornickname=uidornickname)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
         action = modes[0]
         new_modes = modes[1:]
 
-        existing_umodes = userObj.umodes
-        umodes = userObj.umodes
+        existing_umodes = user_obj.umodes
+        umodes = user_obj.umodes
 
         if action == '+':
 
@@ -95,7 +93,7 @@ class User:
         final_umodes_liste = [x for x in self.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
         final_umodes = ''.join(final_umodes_liste)
 
-        userObj.umodes = f"+{final_umodes}"
+        user_obj.umodes = f"+{final_umodes}"
 
         return response
 
@@ -109,16 +107,16 @@ class User:
             bool: True if deleted
         """
 
-        userObj = self.get_User(uidornickname=uid)
+        user_obj = self.get_User(uidornickname=uid)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
-        self.UID_DB.remove(userObj)
+        self.UID_DB.remove(user_obj)
 
         return True
 
-    def get_User(self, uidornickname: str) -> Union['MUser', None]:
+    def get_User(self, uidornickname: str) -> Optional['MUser']:
         """Get The User Object model
 
         Args:
@@ -127,16 +125,15 @@ class User:
         Returns:
             UserModel|None: The UserModel Object | None
         """
-        User = None
         for record in self.UID_DB:
             if record.uid == uidornickname:
-                User = record
+                return record
             elif record.nickname == uidornickname:
-                User = record
+                return record
 
-        return User
+        return None
 
-    def get_uid(self, uidornickname:str) -> Union[str, None]:
+    def get_uid(self, uidornickname:str) -> Optional[str]:
         """Get the UID of the user starting from the UID or the Nickname
 
         Args:
@@ -146,14 +143,14 @@ class User:
             str|None: Return the UID
         """
 
-        userObj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_User(uidornickname=uidornickname)
 
-        if userObj is None:
+        if user_obj is None:
             return None
 
-        return userObj.uid
+        return user_obj.uid
 
-    def get_nickname(self, uidornickname:str) -> Union[str, None]:
+    def get_nickname(self, uidornickname:str) -> Optional[str]:
         """Get the Nickname starting from UID or the nickname
 
         Args:
@@ -162,14 +159,14 @@ class User:
         Returns:
             str|None: the nickname
         """
-        userObj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_User(uidornickname=uidornickname)
 
-        if userObj is None:
+        if user_obj is None:
             return None
 
-        return userObj.nickname
+        return user_obj.nickname
 
-    def get_User_AsDict(self, uidornickname: str) -> Union[dict[str, any], None]:
+    def get_user_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
         """Transform User Object to a dictionary
 
         Args:
@@ -178,12 +175,12 @@ class User:
         Returns:
             Union[dict[str, any], None]: User Object as a dictionary or None
         """
-        userObj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_User(uidornickname=uidornickname)
 
-        if userObj is None:
+        if user_obj is None:
             return None
 
-        return asdict(userObj)
+        return user_obj.to_dict()
 
     def is_exist(self, uidornikname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB
@@ -194,14 +191,14 @@ class User:
         Returns:
             bool: True if exist
         """
-        userObj = self.get_User(uidornickname=uidornikname)
+        user_obj = self.get_User(uidornickname=uidornikname)
 
-        if userObj is None:
+        if user_obj is None:
             return False
 
         return True
 
-    def clean_uid(self, uid: str) -> Union[str, None]:
+    def clean_uid(self, uid: str) -> Optional[str]:
         """Clean UID by removing @ / % / + / ~ / * / :
 
         Args:
@@ -218,3 +215,34 @@ class User:
             return None
 
         return parsed_UID
+
+    def get_user_uptime_in_minutes(self, uidornickname: str) -> float:
+        """Retourne depuis quand l'utilisateur est connecté (in minutes).
+
+        Args:
+            uid (str): The uid or le nickname
+
+        Returns:
+            int: How long in minutes has the user been connected?
+        """
+
+        get_user = self.get_User(uidornickname)
+        if get_user is None:
+            return 0
+
+        # Convertir la date enregistrée dans UID_DB en un objet {datetime}
+        connected_time_string = get_user.connexion_datetime
+
+        if isinstance(connected_time_string, datetime):
+            connected_time = connected_time_string
+        else:
+            connected_time = datetime.strptime(connected_time_string, "%Y-%m-%d %H:%M:%S.%f")
+
+        # What time is it ?
+        current_datetime = datetime.now()
+
+        uptime = current_datetime - connected_time
+        convert_to_minutes = uptime.seconds / 60
+        uptime_minutes = round(number=convert_to_minutes, ndigits=2)
+
+        return uptime_minutes
