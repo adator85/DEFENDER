@@ -452,6 +452,39 @@ class Base:
         except AssertionError as ae:
             self.logs.error(f'{ae}')
 
+    def is_thread_alive(self, thread_name: str) -> bool:
+        """Check if the thread is still running! using the is_alive method of Threads.
+
+        Args:
+            thread_name (str): The thread name
+
+        Returns:
+            bool: True if is alive
+        """
+        for thread in self.running_threads:
+            if thread.name.lower() == thread_name.lower():
+                if thread.is_alive():
+                    return True
+                else:
+                    return False
+
+        return False
+
+    def is_thread_exist(self, thread_name: str) -> bool:
+        """Check if the thread exist in the local var (running_threads)
+
+        Args:
+            thread_name (str): The thread name
+
+        Returns:
+            bool: True if the thread exist
+        """
+        for thread in self.running_threads:
+            if thread.name.lower() == thread_name.lower():
+                    return True
+
+        return False
+
     def thread_count(self, thread_name: str) -> int:
         """This method return the number of existing threads 
         currently running or not running

@@ -5,6 +5,7 @@ from core import installation
 #       Requierements :                     #
 #           Python3.10 or higher            #
 #           SQLAlchemy, requests, psutil    #
+#           unrealircd-rpc-py               #
 #           UnrealIRCD 6.2.2 or higher      #
 #############################################
 

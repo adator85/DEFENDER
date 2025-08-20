@@ -1,6 +1,7 @@
 '''
 Main utils library.
 '''
+import gc
 from pathlib import Path
 from re import sub
 from typing import Literal, Optional, Any
@@ -49,6 +50,25 @@ def get_datetime() -> datetime:
     Return the current datetime in a datetime object
     """
     return datetime.now()
+
+def run_python_garbage_collector() -> int:
+    """Run Python garbage collector
+
+    Returns:
+        int: The number of unreachable objects is returned.
+    """
+    return gc.collect()
+
+def get_number_gc_objects(your_object_to_count: Optional[Any] = None) -> int:
+    """Get The number of objects tracked by the collector (excluding the list returned).
+
+    Returns:
+        int: Number of tracked objects by the collector
+    """
+    if your_object_to_count is None:
+        return len(gc.get_objects())
+    
+    return sum(1 for obj in gc.get_objects() if isinstance(obj, your_object_to_count))
 
 def generate_random_string(lenght: int) -> str:
     """Retourn une chaîne aléatoire en fonction de la longueur spécifiée.

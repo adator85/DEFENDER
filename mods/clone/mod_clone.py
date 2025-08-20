@@ -175,9 +175,9 @@ class Clone:
 
                     if len(cmd) == 1:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | nickname]")
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | nickname] #channel")
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | nickname] #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | group_name | nickname]")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group_name | nickname] #channel")
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group_name | nickname] #channel")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list")
                         return None
 
@@ -296,11 +296,31 @@ class Clone:
 
                         case 'list':
                             try:
-                                clone_count = len(self.Clone.UID_CLONE_DB)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f">> Number of connected clones: {clone_count}")
-                                for clone_name in self.Clone.UID_CLONE_DB:
-                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
-                                                             msg=f">> Nickname: {clone_name.nickname} | Username: {clone_name.username} | Realname: {clone_name.realname} | Vhost: {clone_name.vhost} | UID: {clone_name.uid} | Group: {clone_name.group} | Connected: {clone_name.connected}")
+                                # Syntax. /msg defender clone list <group_name>
+                                header = f"  {'Nickname':<12}| {'Real name':<25}| {'Group name':<15}| {'Connected':<35}"
+                                line = "-"*67
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=header)
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  {line}")
+                                group_name = cmd[2] if len(cmd) > 2 else None
+
+                                if group_name is None:
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  Number of connected clones: {len(self.Clone.UID_CLONE_DB)}")
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  {line}")
+                                    for clone_name in self.Clone.UID_CLONE_DB:
+                                        self.Protocol.send_notice(
+                                            nick_from=dnickname, 
+                                            nick_to=fromuser, 
+                                            msg=f"  {clone_name.nickname:<12}| {clone_name.realname:<25}| {clone_name.group:<15}| {clone_name.connected:<35}")
+                                else:
+                                    if not self.Clone.group_exists(group_name):
+                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This Group name doesn't exist!")
+                                        return None
+                                    clones = self.Clone.get_clones_from_groupname(group_name)
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  Number of connected clones: {len(clones)}")
+                                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  {line}")
+                                    for clone in clones:
+                                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, 
+                                                                msg=f"  {clone.nickname:<12}| {clone.realname:<25}| {clone.group:<15}| {clone.connected:<35}")
                             except Exception as err:
                                 self.Logs.error(f'{err}')
 
