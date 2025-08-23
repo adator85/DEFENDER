@@ -144,7 +144,7 @@ class VotekickManager:
         votec = self.get_vote_channel_model(channel_name)
 
         if votec:
-            client_obj = self.uplink.User.get_User(votec.target_user)
+            client_obj = self.uplink.User.get_user(votec.target_user)
             client_to_punish = votec.target_user if client_obj is None else client_obj.nickname
             if nickname in votec.voter_users:
                 self.Logs.debug(f"[VOTEKICK MANAGER] This nickname ({nickname}) has already voted for ({client_to_punish})")

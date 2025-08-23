@@ -273,11 +273,12 @@ class Defender:
         return None
 
     def cmd(self, data: list[str]) -> None:
-        try:
-            if not data or len(data) < 2:
-                return None
 
-            cmd = data.copy() if isinstance(data, list) else list(data).copy()
+        if not data or len(data) < 2:
+            return None
+        cmd = data.copy() if isinstance(data, list) else list(data).copy()
+
+        try:
             index, command = self.Irc.Protocol.get_ircd_protocol_poisition(cmd)
             if index == -1:
                 return None
@@ -398,7 +399,7 @@ class Defender:
                         self.Protocol.send_sapart(nick_to_sapart=jailed_nickname, channel_name=jailed_salon)
                         self.Protocol.send_sajoin(nick_to_sajoin=jailed_nickname, channel_name=welcome_salon)
                         self.Protocol.send2socket(f":{link} REPUTATION {jailed_IP} {self.ModConfig.reputation_score_after_release}")
-                        self.User.get_User(jailed_UID).score_connexion = reputation_seuil + 1
+                        self.User.get_user(jailed_UID).score_connexion = reputation_seuil + 1
                         self.Protocol.send_priv_msg(nick_from=dnickname,
                                                   msg=f"[{color_green} MOT DE PASS CORRECT {color_black}] : You have now the right to enjoy the network !", 
                                                   nick_to=jailed_nickname)
@@ -547,7 +548,7 @@ class Defender:
                                 link = self.Config.SERVEUR_LINK
                                 jailed_salon = self.Config.SALON_JAIL
                                 welcome_salon = self.Config.SALON_LIBERER
-                                client_obj = self.User.get_User(str(cmd[2]))
+                                client_obj = self.User.get_user(str(cmd[2]))
 
                                 if client_obj is None:
                                     p.send_notice(nick_from=dnickname,
@@ -936,7 +937,7 @@ class Defender:
                         return None
 
                     nickoruid = cmd[1]
-                    UserObject = self.User.get_User(nickoruid)
+                    UserObject = self.User.get_user(nickoruid)
 
                     if UserObject is not None:
                         channels: list = [chan.name for chan in self.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.Loader.Utils.clean_uid(uid_in_chan) == UserObject.uid]

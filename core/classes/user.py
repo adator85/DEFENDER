@@ -25,8 +25,7 @@ class User:
             bool: True if inserted
         """
 
-        user_obj = self.get_User(new_user.uid)
-
+        user_obj = self.get_user(new_user.uid)
         if not user_obj is None:
             # User already created return False
             return False
@@ -45,7 +44,7 @@ class User:
         Returns:
             bool: True if updated
         """
-        user_obj = self.get_User(uidornickname=uid)
+        user_obj = self.get_user(uidornickname=uid)
 
         if user_obj is None:
             return False
@@ -65,7 +64,7 @@ class User:
             bool: True if user mode has been updaed
         """
         response = True
-        user_obj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
             return False
@@ -107,7 +106,7 @@ class User:
             bool: True if deleted
         """
 
-        user_obj = self.get_User(uidornickname=uid)
+        user_obj = self.get_user(uidornickname=uid)
 
         if user_obj is None:
             return False
@@ -116,7 +115,7 @@ class User:
 
         return True
 
-    def get_User(self, uidornickname: str) -> Optional['MUser']:
+    def get_user(self, uidornickname: str) -> Optional['MUser']:
         """Get The User Object model
 
         Args:
@@ -143,7 +142,7 @@ class User:
             str|None: Return the UID
         """
 
-        user_obj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
             return None
@@ -159,7 +158,7 @@ class User:
         Returns:
             str|None: the nickname
         """
-        user_obj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
             return None
@@ -175,7 +174,7 @@ class User:
         Returns:
             Union[dict[str, any], None]: User Object as a dictionary or None
         """
-        user_obj = self.get_User(uidornickname=uidornickname)
+        user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
             return None
@@ -191,7 +190,7 @@ class User:
         Returns:
             bool: True if exist
         """
-        user_obj = self.get_User(uidornickname=uidornikname)
+        user_obj = self.get_user(uidornickname=uidornikname)
 
         if user_obj is None:
             return False
@@ -226,7 +225,7 @@ class User:
             int: How long in minutes has the user been connected?
         """
 
-        get_user = self.get_User(uidornickname)
+        get_user = self.get_user(uidornickname)
         if get_user is None:
             return 0
 

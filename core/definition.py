@@ -1,7 +1,7 @@
 from datetime import datetime
 from json import dumps
 from dataclasses import dataclass, field, asdict, fields
-from typing import Literal, Any
+from typing import Literal, Any, Optional
 from os import sep
 
 @dataclass
@@ -246,6 +246,9 @@ class MConfig(MainModel):
     DEBUG_LEVEL:Literal[10, 20, 30, 40, 50] = 20
     """Logs level: DEBUG 10 | INFO 20 | WARNING 30 | ERROR 40 | CRITICAL 50. (default: 20)"""
 
+    DEBUG_HARD: bool = False
+    """Adding filename, function name and the line number to the logs. Default False"""
+
     LOGGING_NAME: str = "defender"
     """The name of the Logging instance"""
 
@@ -326,3 +329,9 @@ class MCommand(MainModel):
     command_name: str = None
     description: str = None
     command_level: int = 0
+
+@dataclass
+class MModule(MainModel):
+    module_name: str = None
+    class_name: str = None
+    class_instance: Optional[Any] = None

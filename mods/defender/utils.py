@@ -213,7 +213,7 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
         return None
 
     # Get User information
-    _User = irc.User.get_User(str(srvmsg[8]))
+    _User = irc.User.get_user(str(srvmsg[8]))
 
     if _User is None:
         irc.Logs.warning(f'This UID: [{srvmsg[8]}] is not available please check why')
@@ -263,7 +263,7 @@ def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
 
     user_trigger = str(srvmsg[1]).replace(':','')
     channel = srvmsg[3]
-    User = irc.User.get_User(user_trigger)
+    User = irc.User.get_user(user_trigger)
 
     if User is None or not irc.Channel.is_valid_channel(channel_to_check=channel):
         return

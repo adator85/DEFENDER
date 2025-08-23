@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING, Optional
-from core.base import Base
 from core.definition import MAdmin
 
 if TYPE_CHECKING:
@@ -24,7 +23,6 @@ class Admin:
 
         for record in self.UID_ADMIN_DB:
             if record.uid == new_admin.uid:
-                # If the admin exist then return False and do not go further
                 self.Logs.debug(f'{record.uid} already exist')
                 return False
 

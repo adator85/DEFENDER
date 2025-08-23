@@ -277,7 +277,7 @@ class Command:
                             return None
 
                         user_uid = self.User.clean_uid(cmd[5])
-                        userObj: MUser = self.User.get_User(user_uid)
+                        userObj: MUser = self.User.get_user(user_uid)
                         channel_name = cmd[4] if self.Channel.is_valid_channel(cmd[4]) else None
                         client_obj = self.Client.get_Client(user_uid)
                         nickname = userObj.nickname if userObj is not None else None
@@ -291,12 +291,13 @@ class Command:
                         if 'r' not in userObj.umodes and 'o' not in userObj.umodes and not self.Client.is_exist(userObj.uid):
                             return None
 
-                        db_data: dict[str, str] = {"nickname": nickname, "channel": channel_name}
-                        db_query = self.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
+                        db_data: dict[str, str] = {"nickname": nickname.lower(), "channel": channel_name.lower()}
+                        db_query = self.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE LOWER(nickname) = :nickname AND LOWER(channel) = :channel", db_data)
                         db_result = db_query.fetchone()
-                        if db_result is not None:
+                        if db_result:
                             id, mode = db_result
                             self.Protocol.send2socket(f":{self.Config.SERVICE_ID} MODE {channel_name} {mode} {userObj.nickname}")
+
                     except KeyError as ke:
                         self.Logs.error(f"Key Error: {err}")
 
@@ -477,15 +478,18 @@ class Command:
                 try:
                     self.mod_utils.set_assign_channel_to_service(self, cmd, fromuser)
                 except IndexError as ie:
+                    self.Logs.debug(f'{ie}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'part' | 'unassign':
                 try:
+                    # Syntax. !part #channel
                     self.mod_utils.set_unassign_channel_to_service(self, cmd, fromuser)
                 except IndexError as ie:
-                    self.Logs.error(f'{ie}')
+                    self.Logs.debug(f'{ie}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -668,7 +672,7 @@ class Command:
                     nickname = str(cmd[1])
                     umode = str(cmd[2])
 
-                    self.Protocol.send_svs_mode(nickname=nickname, user_mode=umode)
+                    self.Protocol.send_svsmode(nickname=nickname, user_mode=umode)
                 except KeyError as ke:
                     self.Logs.error(ke)
                 except Exception as err:
@@ -715,34 +719,64 @@ class Command:
 
             case 'svsjoin':
                 try:
-                    # .svsjoin nickname #channel
-                    nickname = str(cmd[1])
-                    channel = str(cmd[2])
-                    if len(cmd) != 3:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
+                    # SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]
+                    if len(cmd) < 4:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]")
                         return None
 
-                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSJOIN {nickname} {channel}')
-                except KeyError as ke:
+                    nickname = str(cmd[1])
+                    channels = str(cmd[2]).split(',')
+                    keys = str(cmd[3]).split(',')
+
+                    self.Protocol.send_svsjoin(nickname, channels, keys)
+                except IndexError as ke:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]")
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'svspart':
                 try:
-                    # svspart nickname #channel
-                    nickname = str(cmd[1])
-                    channel = str(cmd[2])
-                    if len(cmd) != 3:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
+                    # SVSPART <nick> <channel>[,<channel2>..] [<comment>]
+                    if len(cmd) < 4:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART <nick> <channel>[,<channel2>..] [<comment>]")
                         return None
 
-                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSPART {nickname} {channel}')
-                except KeyError as ke:
+                    nickname = str(cmd[1])
+                    channels = str(cmd[2]).split(',')
+                    reason = ' '.join(cmd[3:])
+
+                    self.Protocol.send_svspart(nickname, channels, reason)
+                except IndexError as ke:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART <nick> <channel>[,<channel2>..] [<comment>]")
                     self.Logs.error(ke)
                 except Exception as err:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART nickname #channel")
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART <nick> <channel>[,<channel2>..] [<comment>]")
+                    self.Logs.warning(f'Unknown Error: {str(err)}')
+
+            case 'svsnick':
+                try:
+                    # .svsnick nickname newnickname
+                    nickname = str(cmd[1])
+                    newnickname = str(cmd[2])
+                    unixtime = self.MainUtils.get_unixtime()
+
+                    if self.User.get_nickname(nickname) is None:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
+                        return None
+
+                    if len(cmd) != 3:
+                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
+                        return None
+
+                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSNICK {nickname} {newnickname} {unixtime}')
+
+                except IndexError as ke:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
+                    self.Logs.error(ke)
+                except Exception as err:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
                     self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'sajoin':
@@ -778,29 +812,6 @@ class Command:
                 except Exception as err:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
                     self.Logs.error(f'Unknown Error: {str(err)}')
-
-            case 'svsnick':
-                try:
-                    # .svsnick nickname newnickname
-                    nickname = str(cmd[1])
-                    newnickname = str(cmd[2])
-                    unixtime = self.MainUtils.get_unixtime()
-
-                    if self.User.get_nickname(nickname) is None:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" This nickname do not exist")
-                        return None
-
-                    if len(cmd) != 3:
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
-                        return None
-
-                    self.Protocol.send2socket(f':{self.Config.SERVEUR_ID} SVSNICK {nickname} {newnickname} {unixtime}')
-
-                except KeyError as ke:
-                    self.Logs.error(ke)
-                except Exception as err:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
-                    self.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kill':
                 try:

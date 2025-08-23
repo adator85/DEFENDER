@@ -5,6 +5,7 @@ from ssl import SSLEOFError, SSLError
 
 if TYPE_CHECKING:
     from core.irc import Irc
+    from core.definition import MClient
 
 class Unrealircd6:
 
@@ -23,7 +24,8 @@ class Unrealircd6:
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
                                'SLOG', 'NICK', 'PART', 'PONG', 
-                               'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO'}
+                               'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
+                               '006', '007', '018'}
 
         self.__Logs.info(f"** Loading protocol [{__name__}]")
 
@@ -43,6 +45,40 @@ class Unrealircd6:
         self.__Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
 
         return (-1, None)
+
+    def parse_server_msg(self, server_msg: list[str]) -> Optional[str]:
+        """Parse the server message and return the command
+
+        Args:
+            server_msg (list[str]): The Original server message >>
+
+        Returns:
+            Union[str, None]: Return the command protocol name
+        """
+        protocol_exception = ['PING', 'SERVER', 'PROTOCTL']
+        increment = 0
+        server_msg_copy = server_msg.copy()
+        first_index = 0
+        second_index = 0
+        for index, element in enumerate(server_msg_copy):
+            # Handle the protocol exceptions ex. ping, server ....
+            if element in protocol_exception and index == 0:
+                return element
+
+            if element.startswith(':'):
+                increment += 1
+                first_index = index + 1 if increment == 1 else first_index
+                second_index = index if increment == 2 else second_index
+
+        second_index = len(server_msg_copy) if second_index == 0 else second_index
+
+        parsed_msg = server_msg_copy[first_index:second_index]
+
+        for cmd in parsed_msg:
+            if cmd in self.known_protocol:
+                return cmd
+
+        return None
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -84,8 +120,8 @@ class Unrealircd6:
         """
         try:
             batch_size      = self.__Config.BATCH_SIZE
-            User_from       = self.__Irc.User.get_User(nick_from)
-            User_to         = self.__Irc.User.get_User(nick_to) if not nick_to is None else None
+            User_from       = self.__Irc.User.get_user(nick_from)
+            User_to         = self.__Irc.User.get_user(nick_to) if not nick_to is None else None
 
             if User_from is None:
                 self.__Logs.error(f"The sender nickname [{nick_from}] do not exist")
@@ -115,8 +151,8 @@ class Unrealircd6:
         """
         try:
             batch_size  = self.__Config.BATCH_SIZE
-            User_from   = self.__Irc.User.get_User(nick_from)
-            User_to     = self.__Irc.User.get_User(nick_to)
+            User_from   = self.__Irc.User.get_user(nick_from)
+            User_to     = self.__Irc.User.get_user(nick_to)
 
             if User_from is None or User_to is None:
                 self.__Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
@@ -128,40 +164,6 @@ class Unrealircd6:
 
         except Exception as err:
             self.__Logs.error(f"General Error: {err}")
-
-    def parse_server_msg(self, server_msg: list[str]) -> Optional[str]:
-        """Parse the server message and return the command
-
-        Args:
-            server_msg (list[str]): The Original server message >>
-
-        Returns:
-            Union[str, None]: Return the command protocol name
-        """
-        protocol_exception = ['PING', 'SERVER', 'PROTOCTL']
-        increment = 0
-        server_msg_copy = server_msg.copy()
-        first_index = 0
-        second_index = 0
-        for index, element in enumerate(server_msg_copy):
-            # Handle the protocol exceptions ex. ping, server ....
-            if element in protocol_exception and index == 0:
-                return element
-
-            if element.startswith(':'):
-                increment += 1
-                first_index = index + 1 if increment == 1 else first_index
-                second_index = index if increment == 2 else second_index
-
-        second_index = len(server_msg_copy) if second_index == 0 else second_index
-
-        parsed_msg = server_msg_copy[first_index:second_index]
-
-        for cmd in parsed_msg:
-            if cmd in self.known_protocol:
-                return cmd
-
-        return None
 
     def send_link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
@@ -217,7 +219,7 @@ class Unrealircd6:
         """
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} NICK {newnickname}")
 
-        userObj = self.__Irc.User.get_User(self.__Config.SERVICE_NICKNAME)
+        userObj = self.__Irc.User.get_user(self.__Config.SERVICE_NICKNAME)
         self.__Irc.User.update_nickname(userObj.uid, newnickname)
         return None
 
@@ -275,7 +277,7 @@ class Unrealircd6:
         """
         try:
 
-            userObj = self.__Irc.User.get_User(uidornickname=nick_to_sapart)
+            userObj = self.__Irc.User.get_user(uidornickname=nick_to_sapart)
             chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
@@ -299,7 +301,7 @@ class Unrealircd6:
         """
         try:
 
-            userObj = self.__Irc.User.get_User(uidornickname=nick_to_sajoin)
+            userObj = self.__Irc.User.get_user(uidornickname=nick_to_sajoin)
             chanObj = self.__Irc.Channel.get_channel(channel_name)
             service_uid = self.__Config.SERVICE_ID
 
@@ -327,24 +329,91 @@ class Unrealircd6:
         except Exception as err:
             self.__Logs.error(f"{__name__} - General Error: {err}")
 
-    def send_svs_mode(self, nickname: str, user_mode: str) -> None:
-        try:
+    def send_svspart(self, nick_to_part: str, channels: list[str], reason: str) -> None:
+        user_obj = self.__Irc.User.get_user(nick_to_part)
 
-            userObj = self.__Irc.User.get_User(uidornickname=nickname)
+        if user_obj is None:
+            self.__Logs.debug(f"[SVSPART] The nickname {nick_to_part} do not exist!")
+            return None
+
+        channels_list = ','.join([channel for channel in channels if self.__Irc.Channel.is_valid_channel(channel)])
+        service_id = self.__Config.SERVICE_ID
+        self.send2socket(f':{service_id} SVSPART {user_obj.nickname} {channels_list} {reason}')
+        return None
+
+    def send_svsjoin(self, nick_to_part: str, channels: list[str], keys: list[str]) -> None:
+        user_obj = self.__Irc.User.get_user(nick_to_part)
+
+        if user_obj is None:
+            self.__Logs.debug(f"[SVSJOIN] The nickname {nick_to_part} do not exist!")
+            return None
+
+        channels_list = ','.join([channel for channel in channels if self.__Irc.Channel.is_valid_channel(channel)])
+        keys_list = ','.join([key for key in keys])
+        service_id = self.__Config.SERVICE_ID
+        self.send2socket(f':{service_id} SVSJOIN {user_obj.nickname} {channels_list} {keys_list}')
+        return None
+
+    def send_svsmode(self, nickname: str, user_mode: str) -> None:
+        try:
+            user_obj = self.__Irc.User.get_user(uidornickname=nickname)
             service_uid = self.__Config.SERVICE_ID
 
-            if userObj is None:
-                # User not exist: leave
+            if user_obj is None:
                 return None
 
             self.send2socket(f':{service_uid} SVSMODE {nickname} {user_mode}')
 
             # Update new mode
-            self.__Irc.User.update_mode(userObj.uid, user_mode)
+            self.__Irc.User.update_mode(user_obj.uid, user_mode)
 
             return None
         except Exception as err:
                 self.__Logs.error(f"{__name__} - General Error: {err}")
+
+    def send_svs2mode(self, nickname: str, user_mode: str) -> None:
+        try:
+            user_obj = self.__Irc.User.get_user(uidornickname=nickname)
+            service_uid = self.__Config.SERVICE_ID
+
+            if user_obj is None:
+                return None
+
+            self.send2socket(f':{service_uid} SVS2MODE {nickname} {user_mode}')
+
+            # Update new mode
+            self.__Irc.User.update_mode(user_obj.uid, user_mode)
+
+            return None
+        except Exception as err:
+                self.__Logs.error(f"{__name__} - General Error: {err}")
+
+    def send_svslogin(self, client_uid: str, user_account: str) -> None:
+        """Log a client into his account.
+
+        Args:
+            client_uid (str): Client UID
+            user_account (str): The account of the user
+        """
+        try:
+            self.send2socket(f":{self.__Irc.Config.SERVEUR_LINK} SVSLOGIN {self.__Settings.MAIN_SERVER_HOSTNAME} {client_uid} {user_account}")
+        except Exception as err:
+            self.__Irc.Logs.error(f'General Error: {err}')
+
+    def send_svslogout(self, client_obj: 'MClient') -> None:
+        """Logout a client from his account
+
+        Args:
+            client_uid (str): The Client UID
+        """
+        try:
+            c_uid = client_obj.uid
+            c_nickname = client_obj.nickname
+            self.send2socket(f":{self.__Irc.Config.SERVEUR_LINK} SVSLOGIN {self.__Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
+            self.send_svs2mode(c_nickname, '-r')
+
+        except Exception as err:
+            self.__Irc.Logs.error(f'General Error: {err}')
 
     def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
@@ -355,7 +424,7 @@ class Unrealircd6:
             uidornickname (str): The UID or the Nickname
             reason (str): The reason for the quit
         """
-        user_obj = self.__Irc.User.get_User(uidornickname=uid)
+        user_obj = self.__Irc.User.get_user(uidornickname=uid)
         reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
 
         if not user_obj is None:
@@ -418,7 +487,7 @@ class Unrealircd6:
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        userObj = self.__Irc.User.get_User(uidornickname)
+        userObj = self.__Irc.User.get_user(uidornickname)
         passwordChannel = password if not password is None else ''
 
         if userObj is None:
@@ -458,7 +527,7 @@ class Unrealircd6:
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        userObj = self.__Irc.User.get_User(uidornickname)
+        userObj = self.__Irc.User.get_user(uidornickname)
 
         if userObj is None:
             self.__Logs.error(f"The user [{uidornickname}] is not valid")
@@ -506,7 +575,7 @@ class Unrealircd6:
             uid_user_to_edit = serverMsg[2]
             umode = serverMsg[3]
 
-            userObj = self.__Irc.User.get_User(uid_user_to_edit)
+            userObj = self.__Irc.User.get_user(uid_user_to_edit)
 
             if userObj is None:
                 return None
@@ -540,7 +609,7 @@ class Unrealircd6:
         try:
             # [':adator_', 'UMODE2', '-iwx']
 
-            userObj  = self.__Irc.User.get_User(str(serverMsg[0]).lstrip(':'))
+            userObj  = self.__Irc.User.get_user(str(serverMsg[0]).lstrip(':'))
             userMode = serverMsg[2]
 
             if userObj is None: # If user is not created
@@ -794,8 +863,8 @@ class Unrealircd6:
                 self.__Config.DEFENDER_INIT = 0
 
                 # Send EOF to other modules
-                for classe_name, classe_object in self.__Irc.loaded_classes.items():
-                    classe_object.cmd(server_msg_copy)
+                for module in self.__Irc.ModuleUtils.model_get_loaded_modules().copy():
+                    module.class_instance.cmd(server_msg_copy)
 
                 return None
         except IndexError as ie:
@@ -907,27 +976,14 @@ class Unrealircd6:
         """
         try:
             srv_msg = serverMsg.copy()
-
             cmd = serverMsg.copy()
             # Supprimer la premiere valeur si MTAGS activé
             if cmd[0].startswith('@'):
                 cmd.pop(0)
 
-            # Hide auth logs
-            if len(cmd) == 7:
-                if cmd[2] == 'PRIVMSG' and cmd[4] == ':auth':
-                    data_copy = cmd.copy()
-                    data_copy[6] = '**********'
-                    self.__Logs.debug(f">> {data_copy}")
-                else:
-                    self.__Logs.debug(f">> {cmd}")
-            else:
-                self.__Logs.debug(f">> {cmd}")
-
             get_uid_or_nickname = str(cmd[0].replace(':',''))
             user_trigger = self.__Irc.User.get_nickname(get_uid_or_nickname)
             dnickname = self.__Config.SERVICE_NICKNAME
-
             pattern = fr'(:\{self.__Config.SERVICE_PREFIX})(.*)$'
             hcmds = search(pattern, ' '.join(cmd)) # va matcher avec tout les caractéres aprés le .
 
@@ -936,7 +992,7 @@ class Unrealircd6:
                 convert_to_string = ' '.join(liste_des_commandes)
                 arg = convert_to_string.split()
                 arg.remove(f':{self.__Config.SERVICE_PREFIX}')
-                if not arg[0].lower() in self.__Irc.module_commands_list:
+                if not self.__Irc.Commands.is_command_exist(arg[0]):
                     self.__Logs.debug(f"This command {arg[0]} is not available")
                     self.send_notice(
                         nick_from=self.__Config.SERVICE_NICKNAME,
@@ -944,6 +1000,15 @@ class Unrealircd6:
                         msg=f"This command [{self.__Config.COLORS.bold}{arg[0]}{self.__Config.COLORS.bold}] is not available"
                     )
                     return None
+
+                # if not arg[0].lower() in self.__Irc.module_commands_list:
+                #     self.__Logs.debug(f"This command {arg[0]} is not available")
+                #     self.send_notice(
+                #         nick_from=self.__Config.SERVICE_NICKNAME,
+                #         nick_to=user_trigger,
+                #         msg=f"This command [{self.__Config.COLORS.bold}{arg[0]}{self.__Config.COLORS.bold}] is not available"
+                #     )
+                #     return None
 
                 cmd_to_send = convert_to_string.replace(':','')
                 self.__Base.log_cmd(user_trigger, cmd_to_send)
@@ -963,21 +1028,25 @@ class Unrealircd6:
                     # Réponse a un CTCP VERSION
                     if arg[0] == '\x01VERSION\x01':
                         self.on_version(srv_msg)
-                        return False
+                        return None
 
                     # Réponse a un TIME
                     if arg[0] == '\x01TIME\x01':
                         self.on_time(srv_msg)
-                        return False
+                        return None
 
                     # Réponse a un PING
                     if arg[0] == '\x01PING':
                         self.on_ping(srv_msg)
-                        return False
+                        return None
 
-                    if not arg[0].lower() in self.__Irc.module_commands_list:
+                    if not self.__Irc.Commands.is_command_exist(arg[0]):
                         self.__Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
-                        return False
+                        return None
+
+                    # if not arg[0].lower() in self.__Irc.module_commands_list:
+                    #     self.__Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
+                    #     return False
 
                     cmd_to_send = convert_to_string.replace(':','')
                     self.__Base.log_cmd(user_trigger, cmd_to_send)
@@ -1010,6 +1079,14 @@ class Unrealircd6:
             return None
         except Exception as err:
             self.__Logs.error(f"{__name__} - General Error: {err}")
+
+    def on_server(self, serverMsg: list[str]) -> None:
+        try:
+            # ['SERVER', 'irc.local.org', '1', ':U6100-Fhn6OoE-001', 'Local', 'Server']
+            sCopy = serverMsg.copy()
+            self.__Irc.Settings.MAIN_SERVER_HOSTNAME = sCopy[1]
+        except Exception as err:
+            self.__Irc.Logs.error(f'General Error: {err}')
 
     def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
@@ -1105,7 +1182,7 @@ class Unrealircd6:
             if '@' in list(serverMsg_copy[0])[0]:
                 serverMsg_copy.pop(0)
 
-            getUser  = self.__Irc.User.get_User(self.__Utils.clean_uid(serverMsg_copy[0]))
+            getUser  = self.__Irc.User.get_user(self.__Utils.clean_uid(serverMsg_copy[0]))
 
             if getUser is None:
                 return None
@@ -1113,7 +1190,7 @@ class Unrealircd6:
             response_351 = f"{self.__Config.SERVICE_NAME.capitalize()}-{self.__Config.CURRENT_VERSION} {self.__Config.SERVICE_HOST} {self.name}"
             self.send2socket(f':{self.__Config.SERVICE_HOST} 351 {getUser.nickname} {response_351}')
 
-            modules = self.__Base.get_all_modules()
+            modules = self.__Irc.ModuleUtils.get_all_available_modules()
             response_005 = ' | '.join(modules)
             self.send2socket(f':{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server')
 
