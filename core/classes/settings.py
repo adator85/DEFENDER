@@ -18,6 +18,7 @@ class Settings:
 
     CONSOLE: bool                       = False
 
+    MAIN_SERVER_HOSTNAME: str           = None
     PROTOCTL_USER_MODES: list[str]      = []
     PROTOCTL_PREFIX: list[str]          = []
 

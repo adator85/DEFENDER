@@ -9,6 +9,7 @@ class Command:
     DB_COMMANDS: list['MCommand'] = []
 
     def __init__(self, loader: 'Loader'):
+        self.Loader = loader
         self.Base = loader.Base
 
     def build(self, new_command_obj: MCommand) -> bool:
@@ -26,7 +27,7 @@ class Command:
             return True
         
         return False
-    
+
     def get_command(self, command_name: str, module_name: str) -> Optional[MCommand]:
 
         for command in self.DB_COMMANDS:
@@ -57,3 +58,26 @@ class Command:
                 new_list.append(cmd)
         
         return new_list
+
+    def is_client_allowed_to_run_command(self, nickname: str, command_name: str) -> bool:
+        admin = self.Loader.Admin.get_admin(nickname)
+        admin_level = admin.level if admin else 0
+        commands = self.get_commands_by_level(admin_level)
+
+        if command_name in [command.command_name for command in commands]:
+            return True
+
+        return False
+
+    def is_command_exist(self, command_name: str) -> bool:
+        """Check if the command name exist
+
+        Args:
+            command_name (str): The command name you want to check
+
+        Returns:
+            bool: True if the command exist
+        """
+        if command_name.lower() in [command.command_name.lower() for command in self.get_ordered_commands()]:
+            return True
+        return False

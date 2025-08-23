@@ -59,8 +59,8 @@ class Inspircd:
         """
         try:
             batch_size      = self.__Config.BATCH_SIZE
-            User_from    = self.__Irc.User.get_User(nick_from)
-            User_to      = self.__Irc.User.get_User(nick_to) if nick_to is None else None
+            User_from    = self.__Irc.User.get_user(nick_from)
+            User_to      = self.__Irc.User.get_user(nick_to) if nick_to is None else None
 
             if User_from is None:
                 self.__Logs.error(f"The sender nickname [{nick_from}] do not exist")
@@ -88,8 +88,8 @@ class Inspircd:
         """
         try:
             batch_size  = self.__Config.BATCH_SIZE
-            User_from   = self.__Irc.User.get_User(nick_from)
-            User_to     = self.__Irc.User.get_User(nick_to)
+            User_from   = self.__Irc.User.get_user(nick_from)
+            User_to     = self.__Irc.User.get_user(nick_to)
 
             if User_from is None or User_to is None:
                 self.__Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
@@ -188,16 +188,12 @@ class Inspircd:
             uidornickname (str): The UID or the Nickname
             reason (str): The reason for the quit
         """
-        user_obj = self.__Irc.User.get_User(uidornickname=uid)
-        clone_obj = self.__Irc.Clone.get_clone(uidornickname=uid)
+        user_obj = self.__Irc.User.get_user(uidornickname=uid)
         reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
 
         if not user_obj is None:
             self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
             self.__Irc.User.delete(user_obj.uid)
-
-        if not clone_obj is None:
-            self.__Irc.Clone.delete(clone_obj.uid)
 
         if not reputationObj is None:
             self.__Irc.Reputation.delete(reputationObj.uid)
@@ -255,7 +251,7 @@ class Inspircd:
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        userObj = self.__Irc.User.get_User(uidornickname)
+        userObj = self.__Irc.User.get_user(uidornickname)
         passwordChannel = password if not password is None else ''
 
         if userObj is None:
@@ -280,7 +276,7 @@ class Inspircd:
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        userObj = self.__Irc.User.get_User(uidornickname)
+        userObj = self.__Irc.User.get_user(uidornickname)
 
         if userObj is None:
             self.__Logs.error(f"The user [{uidornickname}] is not valid")
@@ -311,7 +307,7 @@ class Inspircd:
         try:
             # [':adator_', 'UMODE2', '-iwx']
 
-            userObj  = self.__Irc.User.get_User(str(serverMsg[0]).lstrip(':'))
+            userObj  = self.__Irc.User.get_user(str(serverMsg[0]).lstrip(':'))
             userMode = serverMsg[2]
 
             if userObj is None: # If user is not created
@@ -346,7 +342,6 @@ class Inspircd:
             self.__Irc.Channel.delete_user_from_all_channel(uid_who_quit)
             self.__Irc.User.delete(uid_who_quit)
             self.__Irc.Reputation.delete(uid_who_quit)
-            self.__Irc.Clone.delete(uid_who_quit)
 
             return None
 
@@ -655,7 +650,7 @@ class Inspircd:
         """
         try:
             # ['@label=0073', ':0014E7P06', 'VERSION', 'PyDefender']
-            getUser  = self.__Irc.User.get_User(self.__Utils.clean_uid(serverMsg[1]))
+            getUser  = self.__Irc.User.get_user(self.__Utils.clean_uid(serverMsg[1]))
 
             if getUser is None:
                 return None
@@ -663,7 +658,7 @@ class Inspircd:
             response_351 = f"{self.__Config.SERVICE_NAME.capitalize()}-{self.__Config.CURRENT_VERSION} {self.__Config.SERVICE_HOST} {self.name}"
             self.send2socket(f':{self.__Config.SERVICE_HOST} 351 {getUser.nickname} {response_351}')
 
-            modules = self.__Base.get_all_modules()
+            modules = self.__Irc.ModuleUtils.get_all_available_modules()
             response_005 = ' | '.join(modules)
             self.send2socket(f':{self.__Config.SERVICE_HOST} 005 {getUser.nickname} {response_005} are supported by this server')
 

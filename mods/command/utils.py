@@ -201,6 +201,9 @@ def set_kickban(uplink: 'Command', cmd: list[str], client: str) -> None:
 
 def set_assign_channel_to_service(uplink: 'Command', cmd: list[str], client: str) -> None:
 
+    if len(cmd) < 2:
+        raise IndexError(f"{cmd[0].upper()} is expecting the channel parameter")
+
     command = str(cmd[0])
     dnickname = uplink.Config.SERVICE_NICKNAME
     sent_channel = str(cmd[1]) if uplink.Channel.is_valid_channel(cmd[1]) else None
@@ -216,6 +219,9 @@ def set_assign_channel_to_service(uplink: 'Command', cmd: list[str], client: str
     return None
 
 def set_unassign_channel_to_service(uplink: 'Command', cmd: list[str], client: str) -> None:
+
+    if len(cmd) < 2:
+        raise IndexError(f"{cmd[0].upper()} is expecting the channel parameter")
 
     command = str(cmd[0])
     dnickname = uplink.Config.SERVICE_NICKNAME

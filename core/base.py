@@ -4,10 +4,7 @@ import re
 import json
 import sys
 import time
-import random
 import socket
-import hashlib
-import logging
 import threading
 import ipaddress
 import ast
@@ -17,7 +14,6 @@ from types import ModuleType
 from dataclasses import fields
 from typing import Any, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
-from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
 
@@ -34,7 +30,6 @@ class Base:
         self.Utils = loader.Utils
         self.logs = loader.Logs
 
-        # self.init_log_system()                                  # Demarrer le systeme de log
         self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
 
         # Liste des timers en cours
@@ -141,42 +136,6 @@ class Base:
         except Exception as err:
             self.logs.error(f'General Error: {err}')
 
-    def get_all_modules(self) -> list[str]:
-        """Get list of all main modules
-        using this pattern mod_*.py
-
-        Returns:
-            list[str]: List of module names.
-        """
-        base_path = Path('mods')
-        return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
-
-    def reload_modules_with_dependencies(self, prefix: str = 'mods'):
-        """
-        Reload all modules in sys.modules that start with the given prefix.
-        Useful for reloading a full package during development.
-        """
-        modules_to_reload = []
-
-        # Collect target modules
-        for name, module in sys.modules.items():
-            if (
-                isinstance(module, ModuleType)
-                and module is not None
-                and name.startswith(prefix)
-            ):
-                modules_to_reload.append((name, module))
-
-        # Sort to reload submodules before parent modules
-        for name, module in sorted(modules_to_reload, key=lambda x: x[0], reverse=True):
-            try:
-                if 'mod_' not in name and 'schemas' not in name:
-                    importlib.reload(module)
-                    self.logs.debug(f'[LOAD_MODULE] Module {module} success')
-
-            except Exception as err:
-                self.logs.error(f'[LOAD_MODULE] Module {module} failed [!] - {err}')
-
     def create_log(self, log_message: str) -> None:
         """Enregiste les logs
 
@@ -208,68 +167,6 @@ class Base:
 
         insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
         mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'commande': cmd}
-        self.db_execute_query(insert_cmd_query, mes_donnees)
-
-        return None
-
-    def db_isModuleExist(self, module_name:str) -> bool:
-        """Teste si un module existe déja dans la base de données
-
-        Args:
-            module_name (str): le non du module a chercher dans la base de données
-
-        Returns:
-            bool: True si le module existe déja dans la base de données sinon False
-        """
-        query = f"SELECT id FROM {self.Config.TABLE_MODULE} WHERE module_name = :module_name"
-        mes_donnes = {'module_name': module_name}
-        results = self.db_execute_query(query, mes_donnes)
-
-        if results.fetchall():
-            return True
-        else:
-            return False
-
-    def db_record_module(self, user_cmd: str, module_name: str, isdefault: int = 0) -> None:
-        """Enregistre les modules dans la base de données
-
-        Args:
-            user_cmd (str): The user who performed the command
-            module_name (str): The module name
-            isdefault (int): Is this a default module. Default 0
-        """
-
-        if not self.db_isModuleExist(module_name):
-            self.logs.debug(f"Le module {module_name} n'existe pas alors ont le créer")
-            insert_cmd_query = f"INSERT INTO {self.Config.TABLE_MODULE} (datetime, user, module_name, isdefault) VALUES (:datetime, :user, :module_name, :isdefault)"
-            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'module_name': module_name, 'isdefault': isdefault}
-            self.db_execute_query(insert_cmd_query, mes_donnees)
-        else:
-            self.logs.debug(f"Le module {module_name} existe déja dans la base de données")
-
-        return None
-
-    def db_update_module(self, user_cmd: str, module_name: str) -> None:
-        """Modifie la date et le user qui a rechargé le module
-
-        Args:
-            user_cmd (str): le user qui a rechargé le module
-            module_name (str): le module a rechargé
-        """
-        update_cmd_query = f"UPDATE {self.Config.TABLE_MODULE} SET datetime = :datetime, user = :user WHERE module_name = :module_name"
-        mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'module_name': module_name}
-        self.db_execute_query(update_cmd_query, mes_donnees)
-
-        return None
-
-    def db_delete_module(self, module_name:str) -> None:
-        """Supprime les modules de la base de données
-
-        Args:
-            module_name (str): The module name you want to delete
-        """
-        insert_cmd_query = f"DELETE FROM {self.Config.TABLE_MODULE} WHERE module_name = :module_name"
-        mes_donnees = {'module_name': module_name}
         self.db_execute_query(insert_cmd_query, mes_donnees)
 
         return None
@@ -667,8 +564,8 @@ class Base:
         self.db_execute_query(table_core_config)
 
         if self.install:
-            self.db_record_module('sys', 'mod_command', 1)
-            self.db_record_module('sys', 'mod_defender', 1)
+            self.Loader.ModuleUtils.db_register_module('mod_command', 'sys', True)
+            self.Loader.ModuleUtils.db_register_module('mod_defender', 'sys', True)
             self.install = False
 
         return None

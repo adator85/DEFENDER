@@ -318,7 +318,7 @@ class Votekick:
 
                             nickname_submitted = cmd[2]
                             uid_submitted = self.User.get_uid(nickname_submitted)
-                            user_submitted = self.User.get_User(nickname_submitted)
+                            user_submitted = self.User.get_user(nickname_submitted)
                             ongoing_user = None
 
                             # check if there is an ongoing vote

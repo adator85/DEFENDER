@@ -1,6 +1,5 @@
 import sys
 import socket
-import threading
 import ssl
 import re
 import importlib
@@ -9,6 +8,7 @@ import traceback
 from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import Optional, Union
+from core.classes import rehash
 from core.loader import Loader
 from core.classes.protocol import Protocol
 from core.classes.commands import Command
@@ -74,6 +74,9 @@ class Irc:
         # Use Reputation Instance
         self.Reputation = self.Loader.Reputation
 
+        # Use Module Utils
+        self.ModuleUtils = self.Loader.ModuleUtils
+
         self.autolimit_started: bool = False
         """This variable is to make sure the thread is not running"""
 
@@ -83,18 +86,9 @@ class Irc:
         # Define first IP connexion
         self.first_connexion_ip: str = None
 
-        # Define the dict that will contain all loaded modules
-        self.loaded_classes:dict[str, 'Irc'] = {}
-
         # Load Commands Utils
         self.Commands = self.Loader.Commands
         """Command utils"""
-
-        # Global full module commands that contains level, module name, commands and description
-        self.module_commands: dict[int, dict[str, dict[str, str]]] = {}
-
-        # Global command list contains only the commands
-        self.module_commands_list: list[str] = []
 
         self.build_command(0, 'core', 'help', 'This provide the help')
         self.build_command(0, 'core', 'auth', 'Login to the IRC Service')
@@ -125,9 +119,8 @@ class Irc:
         self.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
         self.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
 
-
         # Define the IrcSocket object
-        self.IrcSocket: Union[socket.socket, SSLSocket] = None
+        self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
 
         self.__create_table()
         self.Base.create_thread(func=self.heartbeat, func_args=(self.beat, ))
@@ -135,7 +128,7 @@ class Irc:
     ##############################################
     #               CONNEXION IRC                #
     ##############################################
-    def init_irc(self, ircInstance:'Irc') -> None:
+    def init_irc(self, ircInstance: 'Irc') -> None:
         """Create a socket and connect to irc server
 
         Args:
@@ -143,7 +136,7 @@ class Irc:
         """
         try:
             self.init_service_user()
-            self.__create_socket()
+            self.Utils.create_socket(ircInstance)
             self.__connect_to_irc(ircInstance)
 
         except AssertionError as ae:
@@ -161,90 +154,23 @@ class Irc:
         ))
         return None
 
-    def __create_socket(self) -> None:
-        """Create a socket to connect SSL or Normal connection
-        """
-        try:
-            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK)
-            connexion_information = (self.Config.SERVEUR_IP, self.Config.SERVEUR_PORT)
-
-            if self.Config.SERVEUR_SSL:
-                # Créer un object ssl
-                ssl_context = self.__ssl_context()
-                ssl_connexion = ssl_context.wrap_socket(soc, server_hostname=self.Config.SERVEUR_HOSTNAME)
-                ssl_connexion.connect(connexion_information)
-                self.IrcSocket:SSLSocket = ssl_connexion
-                self.Config.SSL_VERSION = self.IrcSocket.version()
-                self.Logs.info(f"-- Connexion en mode SSL : Version = {self.Config.SSL_VERSION}")
-            else:
-                soc.connect(connexion_information)
-                self.IrcSocket:socket.socket = soc
-                self.Logs.info("-- Connexion en mode normal")
-
-            return None
-
-        except ssl.SSLEOFError as soe:
-            self.Logs.critical(f"SSLEOFError: {soe} - {soc.fileno()}")
-        except ssl.SSLError as se:
-            self.Logs.critical(f"SSLError: {se} - {soc.fileno()}")
-        except OSError as oe:
-            self.Logs.critical(f"OSError: {oe} - {soc.fileno()}")
-            if 'connection refused' in str(oe).lower():
-                sys.exit(oe)
-            if soc.fileno() == -1:
-                sys.exit(soc.fileno())
-
-        except AttributeError as ae:
-            self.Logs.critical(f"AttributeError: {ae} - {soc.fileno()}")
-
-    def __ssl_context(self) -> ssl.SSLContext:
-
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-
-        self.Logs.debug(f'-- SSLContext initiated with verified mode {ctx.verify_mode}')
-
-        return ctx
-
     def __connect_to_irc(self, ircInstance: 'Irc') -> None:
         try:
-
             self.init_service_user()
-            self.ircObject = ircInstance                        # créer une copie de l'instance Irc
+            self.ircObject = ircInstance              # créer une copie de l'instance Irc
             self.Protocol = Protocol(
                 protocol=self.Config.SERVEUR_PROTOCOL,
                 ircInstance=self.ircObject
                 ).Protocol
-            self.Protocol.send_link()                                # Etablir le link en fonction du protocol choisi
-            self.signal = True                                  # Une variable pour initier la boucle infinie
-            self.__join_saved_channels()                        # Join existing channels
-            self.load_existing_modules()                        # Charger les modules existant dans la base de données
+            self.Protocol.send_link()                 # Etablir le link en fonction du protocol choisi
+            self.signal = True                        # Une variable pour initier la boucle infinie
+            self.join_saved_channels()                # Join existing channels
+            self.ModuleUtils.db_load_all_existing_modules(self)
 
             while self.signal:
                 try:
                     if self.Config.DEFENDER_RESTART == 1:
-                        self.Logs.debug('Restarting Defender ...')
-                        self.IrcSocket.shutdown(socket.SHUT_RDWR)
-                        self.IrcSocket.close()
-
-                        while self.IrcSocket.fileno() != -1:
-                            time.sleep(0.5)
-                            self.Logs.warning('--* Waiting for socket to close ...')
-
-                        # Reload configuration
-                        self.Loader.Logs = self.Loader.LoggingModule.ServiceLogging().get_logger()
-                        self.Logs.debug('Reloading configuration')
-                        self.Config = self.Loader.ConfModule.Configuration(self.Logs).ConfigObject
-                        self.Base = self.Loader.BaseModule.Base(self.Loader)
-                        self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, ircInstance).Protocol
-
-                        self.init_service_user()
-                        self.__create_socket()
-                        self.Protocol.send_link()
-                        self.__join_saved_channels()
-                        self.load_existing_modules()
-                        self.Config.DEFENDER_RESTART = 0
+                        rehash.restart_service(self.ircObject)
 
                     # 4072 max what the socket can grab
                     buffer_size = self.IrcSocket.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
@@ -273,7 +199,7 @@ class Irc:
                 except OSError as oe:
                     self.Logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
                 except (socket.error, ConnectionResetError):
-                    print("Connexion reset")
+                    self.Logs.debug("Connexion reset")
 
             self.IrcSocket.shutdown(socket.SHUT_RDWR)
             self.IrcSocket.close()
@@ -289,15 +215,11 @@ class Irc:
         except AttributeError as atte:
             self.Logs.critical(f"AttributeError: {atte}")
         except Exception as e:
-            self.Logs.critical(f"General Error: {e}")
-            self.Logs.critical(traceback.format_exc())
+            self.Logs.critical(f"General Error: {e}", exc_info=True)
 
-    def __join_saved_channels(self) -> None:
+    def join_saved_channels(self) -> None:
         """## Joining saved channels"""
-        core_table = self.Config.TABLE_CHANNEL
-
-        query = f'''SELECT distinct channel_name FROM {core_table}'''
-        exec_query = self.Base.db_execute_query(query)
+        exec_query = self.Base.db_execute_query(f'SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}')
         result_query = exec_query.fetchall()
 
         if result_query:
@@ -307,7 +229,6 @@ class Irc:
 
     def send_response(self, responses:list[bytes]) -> None:
         try:
-            # print(responses)
             for data in responses:
                 response = data.decode(self.CHARSET[0]).split()
                 self.cmd(response)
@@ -346,9 +267,6 @@ class Irc:
             command_name (str): The command name
             command_description (str): The description of the command
         """
-        self.module_commands.setdefault(level, {}).setdefault(module_name, {}).update({command_name: command_description})
-        self.module_commands_list.append(command_name)
-
         # Build Model.
         self.Commands.build(self.Loader.Definition.MCommand(module_name, command_name, command_description, level))
 
@@ -382,73 +300,10 @@ class Irc:
         
         return None
 
-    def generate_help_menu_bakcup(self, nickname: str) -> None:
-
-        # Check if the nickname is an admin
-        admin_obj = self.Admin.get_admin(nickname)
-        dnickname = self.Config.SERVICE_NICKNAME
-        color_bold = self.Config.COLORS.bold
-        color_nogc = self.Config.COLORS.nogc
-        color_blue = self.Config.COLORS.blue
-        color_black = self.Config.COLORS.black
-        color_underline = self.Config.COLORS.underline
-        current_level = 0
-        count = 0
-        if admin_obj is not None:
-            current_level = admin_obj.level
-
-        self.Protocol.send_notice(nick_from=dnickname,nick_to=nickname, msg=f" ***************** LISTE DES COMMANDES *****************")
-
-        for level, modules in self.module_commands.items():
-            if level > current_level:
-                break
-
-            if count > 0:
-                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=" ")
-
-            self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"{color_blue}{color_bold}Level {level}:{color_nogc}")
-            for module_name, commands in modules.items():
-                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"{color_black}  {color_underline}Module: {module_name}{color_nogc}")
-                for command, description in commands.items():
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"    {command:<20}: {description}")
-
-            count += 1
-
-        self.Protocol.send_notice(nick_from=dnickname,nick_to=nickname,msg=f" ***************** FIN DES COMMANDES *****************")
-        return None
-
-    def is_cmd_allowed(self, nickname: str, command_name: str) -> bool:
-
-        admin_obj = self.Admin.get_admin(nickname)
-        current_level = 0
-
-        if admin_obj is not None:
-            current_level = admin_obj.level
-
-        for level, modules in self.module_commands.items():
-            for module_name, commands in modules.items():
-                for command, description in commands.items():
-                    if command.lower() == command_name.lower() and level <= current_level:
-                        return True
-
-        return False
-
-    def __create_table(self):
+    def __create_table(self) -> None:
         """## Create core tables
         """
         pass
-
-    def load_existing_modules(self) -> None:
-        """Charge les modules qui existe déja dans la base de données
-
-        Returns:
-            None: Aucun retour requis, elle charge puis c'est tout
-        """
-        result = self.Base.db_execute_query(f"SELECT module_name FROM {self.Config.TABLE_MODULE}")
-        for r in result.fetchall():
-            self.load_module('sys', r[0], True)
-
-        return None
 
     def get_defender_uptime(self) -> str:
         """Savoir depuis quand Defender est connecté
@@ -471,276 +326,17 @@ class Irc:
         """
         while self.hb_active:
             time.sleep(beat)
-            service_id = self.Config.SERVICE_ID
-            hsid = self.HSID
             self.Base.execute_periodic_action()
 
-    def create_ping_timer(self, time_to_wait:float, class_name:str, method_name: str, method_args: list=[]) -> None:
-        # 1. Timer créer
-        #   1.1 Créer la fonction a executer
-        #   1.2 Envoyer le ping une fois le timer terminer
-        # 2. Executer la fonction
-        try:
-            if not class_name in self.loaded_classes:
-                self.Logs.error(f"La class [{class_name} n'existe pas !!]")
-                return False
-
-            class_instance = self.loaded_classes[class_name]
-
-            t = threading.Timer(interval=time_to_wait, function=self.__create_tasks, args=(class_instance, method_name, method_args))
-            t.start()
-
-            self.Base.running_timers.append(t)
-
-            self.Logs.debug(f"Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
-
-        except AssertionError as ae:
-            self.Logs.error(f'Assertion Error -> {ae}')
-        except TypeError as te:
-            self.Logs.error(f"Type error -> {te}")
-
-    def __create_tasks(self, obj: object, method_name: str, param:list) -> None:
-        """#### Ajouter les méthodes a éxecuter dans un dictionnaire
-
-        Args:
-            obj (object): Une instance de la classe qui va etre executer
-            method_name (str): Le nom de la méthode a executer
-            param (list): les parametres a faire passer
-
-        Returns:
-            None: aucun retour attendu
-        """
-        self.Base.periodic_func[len(self.Base.periodic_func) + 1] = {
-            'object': obj,
-            'method_name': method_name,
-            'param': param
-            }
-
-        self.Logs.debug(f'Function to execute : {str(self.Base.periodic_func)}')
-        self.send_ping_to_sereur()
-        return None
-
-    def send_ping_to_sereur(self) -> None:
-        """### Envoyer un PING au serveur   
-        """
-        service_id = self.Config.SERVICE_ID
-        hsid = self.HSID
-        self.Protocol.send2socket(f':{service_id} PING :{hsid}')
-
-        return None
-
-    def load_module(self, fromuser:str, module_name:str, init:bool = False) -> bool:
-        try:
-            # module_name : mod_voice
-            module_name = module_name.lower()
-            module_folder = module_name.split('_')[1].lower() # ==> voice
-            class_name = module_name.split('_')[1].capitalize() # ==> Voice
-
-            # Check if the module is already loaded.
-            if 'mods.' + module_folder + '.' + module_name in sys.modules:
-                self.Logs.debug(f"Module [{module_folder}.{module_name}] already loaded!")
-                if class_name in self.loaded_classes:
-                    # Si le module existe dans la variable globale retourne False
-                    self.Logs.debug(f"Module [{module_folder}.{module_name}] exist in the local variable!")
-                    self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Le module {module_name} est déja chargé ! si vous souhaiter le recharge tapez {self.Config.SERVICE_PREFIX}reload {module_name}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-                    return False
-
-                the_module = sys.modules[f'mods.{module_folder}.{module_name}']
-                importlib.reload(the_module)
-                my_class = getattr(the_module, class_name, None)
-                new_instance = my_class(self.ircObject)
-                self.loaded_classes[class_name] = new_instance
-
-                # Créer le module dans la base de données
-                if not init:
-                    self.Base.db_record_module(fromuser, module_name)
-
-                self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} chargé",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-                self.Logs.debug(f"Module [{module_folder}.{module_name}] reloaded!")
-                return True
-
-            # Charger le module
-            loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
-            my_class = getattr(loaded_module, class_name, None)                 # Récuperer le nom de classe
-            create_instance_of_the_class = my_class(self.ircObject)             # Créer une nouvelle instance de la classe
-
-            if not hasattr(create_instance_of_the_class, 'cmd'):
-                self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} ne contient pas de méthode cmd",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-                self.Logs.critical(f"The Module {module_name} has not been loaded because cmd method is not available")
-                self.Base.db_delete_module(module_name)
-                return False
-
-            # Charger la nouvelle class dans la variable globale
-            self.loaded_classes[class_name] = create_instance_of_the_class
-
-            # Enregistrer le module dans la base de données
-            if not init:
-                self.Base.db_record_module(fromuser, module_name)
-
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} chargé",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-
-            self.Logs.debug(f"Module {class_name} has been loaded")
-
-            return True
-
-        except ModuleNotFoundError as moduleNotFound:
-            self.Logs.error(f"MODULE_NOT_FOUND: {moduleNotFound}")
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ {self.Config.COLORS.red}MODULE ERROR{self.Config.COLORS.black} ]: {moduleNotFound}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-            return False
-
-        except Exception as err:
-            self.Logs.error(f"[LOAD MODULE ERROR]: {err}", exc_info=True)
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ {self.Config.COLORS.red}MODULE ERROR{self.Config.COLORS.black} ]: {err}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-            return False
-
-    def unload_module(self, mod_name: str) -> bool:
-        """Unload a module
-
-        Args:
-            mod_name (str): Module name ex mod_defender
-
-        Returns:
-            bool: True if success
-        """
-        try:
-            # Le nom du module. exemple: mod_defender
-            module_name = mod_name.lower()
-            module_folder = module_name.split('_')[1].lower() # ==> defender
-            class_name = module_name.split('_')[1].capitalize() # Nom de la class. exemple: Defender
-
-            if class_name in self.loaded_classes:
-                self.loaded_classes[class_name].unload()
-                del self.loaded_classes[class_name]
-
-                # Delete from the sys.
-                if sys.modules.get(f'{module_folder}.{module_name}'):
-                    del sys.modules[f"{module_folder}.{module_name}"]
-
-                # Supprimer le module de la base de données
-                self.Base.db_delete_module(module_name)
-
-                self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"[ MODULE INFO ] Module {module_name} has been deleted!",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-                self.Logs.debug(f"[ MODULE ] {module_name} has been deleted!")
-                return True
-
-        except Exception as err:
-            self.Logs.error(f"General Error: {err}")
-            return False
-
-    def reload_module(self, from_user: str, mod_name: str) -> bool:
-        try:
-            module_name = mod_name.lower()                       # ==> mod_defender
-            module_folder = module_name.split('_')[1].lower()    # ==> defender
-            class_name = module_name.split('_')[1].capitalize()  # ==> Defender
-
-            if f'mods.{module_folder}.{module_name}' in sys.modules:
-                self.Logs.info('Unload the module ...')
-                self.loaded_classes[class_name].unload()
-                self.Logs.info('Module Already Loaded ... reloading the module ...')
-
-                # Load dependencies
-                self.Base.reload_modules_with_dependencies(f'mods.{module_folder}')
-                the_module = sys.modules[f'mods.{module_folder}.{module_name}']
-                importlib.reload(the_module)
-
-                # Supprimer la class déja instancier
-                if class_name in self.loaded_classes:
-                    del self.loaded_classes[class_name]
-
-                my_class = getattr(the_module, class_name, None)
-                new_instance = my_class(self.ircObject)
-                self.loaded_classes[class_name] = new_instance
-
-                self.Base.db_update_module(from_user, mod_name)
-                self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} rechargé",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-                return False
-            else:
-                self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} n'est pas chargé !",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-
-        except TypeError as te:
-            self.Logs.error(f"A TypeError raised: {te}")
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"A TypeError raised: {te}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-        except AttributeError as ae:
-            self.Logs.error(f"Missing Attribute: {ae}")
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Missing Attribute: {ae}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-        except KeyError as ke:
-            self.Logs.error(f"Key Error: {ke}")
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Key Error: {ke}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-        except Exception as e:
-            self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
-            self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f"Something went wrong with the module: {e}",
-                        channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Base.db_delete_module(module_name)
-
     def insert_db_admin(self, uid:str, level:int) -> None:
-
-        if self.User.get_User(uid) is None:
+        user_obj = self.User.get_user(uid)
+        if user_obj is None:
             return None
-
-        getUser = self.User.get_user_asdict(uid)
-
-        level = int(level)
-
+       
         self.Admin.insert(
             self.Loader.Definition.MAdmin(
-                **getUser,
-                level=level
+                **user_obj.to_dict(),
+                level=int(level)
             )
         )
 
@@ -760,7 +356,7 @@ class Irc:
 
         # > addaccess [nickname] [level] [password]
 
-        get_user = self.User.get_User(nickname)
+        get_user = self.User.get_user(nickname)
         level = self.Base.convert_to_int(level)
         password = password
 
@@ -808,20 +404,6 @@ class Irc:
             self.Logs.info(response)
             return response
 
-    def logs(self, log_msg:str) -> None:
-        """Log to database if you want
-
-        Args:
-            log_msg (str): the message to log
-        """
-        try:
-            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'server_msg': log_msg}
-            self.Base.db_execute_query(f'INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)', mes_donnees)
-
-            return None
-        except Exception as err:
-            self.Logs.error(f"General Error: {err}")
-
     def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.Config.SERVICE_NICKNAME
 
@@ -841,31 +423,20 @@ class Irc:
         """
         try:
             original_response: list[str] = data.copy()
-            interm_response: list[str] = data.copy()
-            """This the original without first value"""
-            interm_response.pop(0)
 
-            if len(original_response) == 0 or len(original_response) == 1:
+            if len(original_response) < 2:
                 self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
-                return False
+                return None
 
-            if len(original_response) == 7:
-                if original_response[2] == 'PRIVMSG' and original_response[4] == ':auth':
-                    data_copy = original_response.copy()
-                    data_copy[6] = '**********'
-                    self.Logs.debug(f">> {data_copy}")
-                else:
-                    self.Logs.debug(f">> {original_response}")
-            else:
-                self.Logs.debug(f">> {original_response}")
-
+            self.Logs.debug(self.Utils.hide_sensitive_data(original_response))
             parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
-
             match parsed_protocol:
 
                 case 'PING':
                     self.Protocol.on_server_ping(serverMsg=original_response)
-                    return None
+
+                case 'SERVER':
+                    self.Protocol.on_server(serverMsg=original_response)
 
                 case 'SJOIN':
                     self.Protocol.on_sjoin(serverMsg=original_response)
@@ -876,10 +447,9 @@ class Irc:
                 case 'UID':
                     try:
                         self.Protocol.on_uid(serverMsg=original_response)
-
-                        for classe_name, classe_object in self.loaded_classes.items():
-                            classe_object.cmd(original_response)
-
+                        for module in self.ModuleUtils.model_get_loaded_modules().copy():
+                            module.class_instance.cmd(original_response)
+                        return None
                     except Exception as err:
                         self.Logs.error(f'General Error: {err}')
 
@@ -913,38 +483,38 @@ class Irc:
                     self.Protocol.on_reputation(serverMsg=original_response)
 
                 case 'SLOG': # TODO
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case 'MD': # TODO
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case 'PRIVMSG':
                     self.Protocol.on_privmsg(serverMsg=original_response)
 
                 case 'PONG': # TODO
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case 'MODE': # TODO
                     #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6...', ':001', 'MODE', '#a', '+nt', '1723207536']
                     #['@unrealircd.org/userhost=adator@localhost;...', ':001LQ0L0C', 'MODE', '#services', '-l']
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case '320': # TODO
                     #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case '318': # TODO
                     #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
-                    self.Logs.debug(f"** handle {parsed_protocol}")
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case None:
-                    self.Logs.debug(f"** TO BE HANDLE {original_response}")
+                    self.Logs.debug(f"[!] TO HANDLE: {original_response}")
 
             if len(original_response) > 2:
                 if original_response[2] != 'UID':
                     # Envoyer la commande aux classes dynamiquement chargées
-                    for classe_name, classe_object in self.loaded_classes.items():
-                        classe_object.cmd(original_response)
+                    for module in self.ModuleUtils.model_get_loaded_modules().copy():
+                        module.class_instance.cmd(original_response)
 
         except IndexError as ie:
             self.Logs.error(f"IndexError: {ie}")
@@ -976,14 +546,13 @@ class Irc:
         else:
             return False
 
-        is_command_allowed = self.is_cmd_allowed(fromuser, command)
-        if not is_command_allowed:
+        if not self.Commands.is_client_allowed_to_run_command(fromuser, command):
             command = 'notallowed'
 
         # Envoyer la commande aux classes dynamiquement chargées
         if command != 'notallowed':
-            for classe_name, classe_object in self.loaded_classes.items():
-                classe_object.hcmds(user, channel, cmd, fullcmd)
+            for module in self.ModuleUtils.DB_MODULES:
+                module.class_instance.hcmds(user, channel, cmd, fullcmd)
 
         match command:
 
@@ -1116,13 +685,13 @@ class Irc:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Your current nickname is different from the nickname you want to log in with")
                     return False
 
-                if not user_to_log is None:
+                if user_to_log:
                     mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
                     query = f"SELECT id, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
                     result = self.Base.db_execute_query(query, mes_donnees)
                     user_from_db = result.fetchone()
 
-                    if not user_from_db is None:
+                    if user_from_db:
                         uid_user = self.User.get_uid(user_to_log)
                         self.insert_db_admin(uid_user, user_from_db[1])
                         self.Protocol.send_priv_msg(nick_from=dnickname, 
@@ -1270,7 +839,7 @@ class Irc:
                         self.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
 
             case 'register':
-                # Register PASSWORD EMAIL
+                # Syntax. Register PASSWORD EMAIL
                 try:
 
                     if len(cmd) < 3:
@@ -1292,7 +861,7 @@ class Irc:
                         )
                         return None
 
-                    user_obj = self.User.get_User(fromuser)
+                    user_obj = self.User.get_user(fromuser)
 
                     if user_obj is None:
                         self.Logs.error(f"Nickname ({fromuser}) doesn't exist, it is impossible to register this nickname")
@@ -1347,7 +916,7 @@ class Irc:
 
                     account = str(cmd[1]) # account
                     encrypted_password = self.Loader.Utils.hash_password(cmd[2])
-                    user_obj = self.User.get_User(fromuser)
+                    user_obj = self.User.get_user(fromuser)
                     client_obj = self.Client.get_Client(user_obj.uid)
 
                     if client_obj is not None:
@@ -1356,22 +925,15 @@ class Irc:
 
                     db_query = f"SELECT account FROM {self.Config.TABLE_CLIENT} WHERE account = :account AND password = :password"
                     db_param = {'account': account, 'password': encrypted_password}
-                    exec_query = self.Base.db_execute_query(
-                        db_query,
-                        db_param
-                    )
+                    exec_query = self.Base.db_execute_query(db_query, db_param)
                     result_query = exec_query.fetchone()
                     if result_query:
                         account = result_query[0]
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are now logged in")
-                        client = self.Loader.Definition.MClient(
-                            uid=user_obj.uid, account=account, nickname=fromuser,
-                            username=user_obj.username, realname=user_obj.realname, hostname=user_obj.hostname, umodes=user_obj.umodes, vhost=user_obj.vhost,
-                            isWebirc=user_obj.isWebirc, isWebsocket=user_obj.isWebsocket, remote_ip=user_obj.remote_ip, score_connexion=user_obj.score_connexion,
-                            geoip=user_obj.geoip, connexion_datetime=user_obj.connexion_datetime
-                        )
+                        client = self.Loader.Definition.MClient(**user_obj.to_dict(), account=account)
                         self.Client.insert(client)
-                        self.Protocol.send_svs_mode(nickname=fromuser, user_mode='+r')
+                        self.Protocol.send_svslogin(user_obj.uid, account)
+                        self.Protocol.send_svs2mode(nickname=fromuser, user_mode='+r')
                     else:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Wrong password or account")
 
@@ -1395,7 +957,7 @@ class Irc:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
                         return None
 
-                    user_obj = self.User.get_User(fromuser)
+                    user_obj = self.User.get_user(fromuser)
                     if user_obj is None:
                         self.Logs.error(f"The User [{fromuser}] is not available in the database")
                         return None
@@ -1406,7 +968,8 @@ class Irc:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Nothing to logout. please login first")
                         return None
 
-                    self.Protocol.send_svs_mode(nickname=fromuser, user_mode='-r')
+                    self.Protocol.send_svslogout(client_obj)
+                    # self.Protocol.send_svsmode(nickname=fromuser, user_mode='-r')
                     self.Client.delete(user_obj.uid)
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You have been logged out successfully")
 
@@ -1421,12 +984,14 @@ class Irc:
                 # Syntax. !help [module_name]
                 module_name = str(cmd[1]) if len(cmd) == 2 else None
                 self.generate_help_menu(nickname=fromuser, module=module_name)
+                return None
                 
             case 'load':
                 try:
                     # Load a module ex: .load mod_defender
                     mod_name = str(cmd[1])
-                    self.load_module(fromuser, mod_name)
+                    self.ModuleUtils.load_one_module(self, mod_name, fromuser)
+                    return None
                 except KeyError as ke:
                     self.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
                 except Exception as err:
@@ -1435,16 +1000,20 @@ class Irc:
             case 'unload':
                 # unload mod_defender
                 try:
-                    module_name = str(cmd[1]).lower()                              # Le nom du module. exemple: mod_defender
-                    self.unload_module(module_name)
+                    # The module name. exemple: mod_defender
+                    module_name = str(cmd[1]).lower()
+                    self.ModuleUtils.unload_one_module(self, module_name, False)
+                    return None
                 except Exception as err:
                     self.Logs.error(f"General Error: {err}")
 
             case 'reload':
                 # reload mod_defender
                 try:
-                    module_name = str(cmd[1]).lower()   # ==> mod_defender
-                    self.reload_module(from_user=fromuser, mod_name=module_name)
+                    # ==> mod_defender
+                    module_name = str(cmd[1]).lower()
+                    self.ModuleUtils.reload_one_module(self, module_name, fromuser)
+                    return None
                 except Exception as e:
                     self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
                     self.Protocol.send_priv_msg(
@@ -1452,19 +1021,20 @@ class Irc:
                         msg=f"Something went wrong with the module: {e}",
                         channel=dchanlog
                     )
-                    self.Base.db_delete_module(module_name)
+                    self.ModuleUtils.db_delete_module(module_name)
 
             case 'quit':
                 try:
-
                     final_reason = ' '.join(cmd[1:])
-
                     self.hb_active = False
                     self.Base.shutdown()
                     self.Base.execute_periodic_action()
 
                     for chan_name in self.Channel.UID_CHANNEL_DB:
                         self.Protocol.send_mode_chan(chan_name.name, '-l')
+                    
+                    for client in self.Client.CLIENT_DB:
+                        self.Protocol.send_svslogout(client)
 
                     self.Protocol.send_notice(
                         nick_from=dnickname,
@@ -1480,109 +1050,19 @@ class Irc:
                     self.Logs.error(f'{ie}')
 
             case 'restart':
-                reason = []
-                for i in range(1, len(cmd)):
-                    reason.append(cmd[i])
-                final_reason = ' '.join(reason)
-
-                self.Protocol.send_notice(
-                    nick_from=dnickname,
-                    nick_to=fromuser,
-                    msg=f"Redémarrage du service {dnickname}"
-                )
-
-                for class_name in self.loaded_classes:
-                    self.loaded_classes[class_name].unload()
-
-                self.User.UID_DB.clear()                # Clear User Object
-                self.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-                self.Base.garbage_collector_thread()
-
-                self.Protocol.send_squit(server_id=self.Config.SERVEUR_ID, server_link=self.Config.SERVEUR_LINK, reason=final_reason)
-                self.Logs.info(f'Redémarrage du server {dnickname}')
-                self.loaded_classes.clear()
+                final_reason = ' '.join(cmd[1:])
+                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{dnickname.capitalize()} is going to restart!")
                 self.Config.DEFENDER_RESTART = 1                 # Set restart status to 1 saying that the service will restart
                 self.Config.DEFENDER_INIT = 1                    # set init to 1 saying that the service will be re initiated
-                self.Loader.ServiceLogging.remove_logger()
 
             case 'rehash':
-                self.Loader.ServiceLogging.remove_logger()
-                self.Loader.ServiceLogging = self.Loader.LoggingModule.ServiceLogging()
-                self.Loader.Logs = self.Loader.ServiceLogging.get_logger()
-
-                need_a_restart = ["SERVEUR_ID"]
-                restart_flag = False
-                Config_bakcup = self.Config.to_dict().copy()
-                serveur_id = self.Config.SERVEUR_ID
-                service_nickname = self.Config.SERVICE_NICKNAME
-                hsid = self.Config.HSID
-                ssl_version = self.Config.SSL_VERSION
-                defender_init = self.Config.DEFENDER_INIT
-                defender_restart = self.Config.DEFENDER_RESTART
-                current_version = self.Config.CURRENT_VERSION
-                latest_version = self.Config.LATEST_VERSION
-
-                mods = ["core.definition", "core.config", "core.base", "core.classes.protocols.unreal6", "core.classes.protocol"]
-
-                mod_unreal6 = sys.modules['core.classes.protocols.unreal6']
-                mod_protocol = sys.modules['core.classes.protocol']
-                mod_base = sys.modules['core.base']
-                mod_config = sys.modules['core.classes.config']
-                mod_definition = sys.modules['core.definition']
-
-                importlib.reload(mod_definition)
-                importlib.reload(mod_config)
-                self.Config = self.Loader.ConfModule.Configuration(self.Loader.Logs).ConfigObject
-                self.Config.HSID = hsid
-                self.Config.DEFENDER_INIT = defender_init
-                self.Config.DEFENDER_RESTART = defender_restart
-                self.Config.SSL_VERSION = ssl_version
-                self.Config.CURRENT_VERSION = current_version
-                self.Config.LATEST_VERSION = latest_version
-                importlib.reload(mod_base)
-
-                conf_bkp_dict: dict = Config_bakcup
-                config_dict: dict = self.Config.to_dict()
-
-                for key, value in conf_bkp_dict.items():
-                    if config_dict[key] != value and key != 'COLORS':
-                        self.Protocol.send_priv_msg(
-                            nick_from=self.Config.SERVICE_NICKNAME,
-                            msg=f'[{key}]: {value} ==> {config_dict[key]}', 
-                            channel=self.Config.SERVICE_CHANLOG
-                            )
-                        if key in need_a_restart:
-                            restart_flag = True
-
-                if service_nickname != self.Config.SERVICE_NICKNAME:
-                    self.Protocol.send_set_nick(self.Config.SERVICE_NICKNAME)
-
-                if restart_flag:
-                    self.Config.SERVEUR_ID = serveur_id
-                    self.Protocol.send_priv_msg(nick_from=self.Config.SERVICE_NICKNAME, msg='You need to restart defender !', channel=self.Config.SERVICE_CHANLOG)
-
-                self.Base = self.Loader.BaseModule.Base(self.Loader)
-
-                importlib.reload(mod_unreal6)
-                importlib.reload(mod_protocol)
-
-                self.Protocol = Protocol(self.Config.SERVEUR_PROTOCOL, self.ircObject).Protocol
-
-                for mod in mods:
-                    self.Protocol.send_priv_msg(
-                        nick_from=self.Config.SERVICE_NICKNAME,
-                        msg=f'> Module [{mod}] reloaded', 
-                        channel=self.Config.SERVICE_CHANLOG
-                        )
-                for mod in self.Base.get_all_modules():
-                    self.reload_module(fromuser, mod)
+                rehash.rehash_service(self.ircObject, fromuser)
+                return None
 
             case 'show_modules':
-
-                self.Logs.debug(self.loaded_classes)
-                all_modules  = self.Base.get_all_modules()
+                self.Logs.debug('List of modules: ' + ', '.join([module.module_name for module in self.ModuleUtils.model_get_loaded_modules()]))
+                all_modules  = self.ModuleUtils.get_all_available_modules()
                 loaded = False
-
                 results = self.Base.db_execute_query(f'SELECT datetime, user, module_name FROM {self.Config.TABLE_MODULE}')
                 results = results.fetchall()
 
@@ -1608,32 +1088,31 @@ class Irc:
                         )
 
             case 'show_timers':
-
                 if self.Base.running_timers:
                     for the_timer in self.Base.running_timers:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=f">> {the_timer.getName()} - {the_timer.is_alive()}"
+                            msg=f">> {the_timer.name} - {the_timer.is_alive()}"
                         )
                 else:
                     self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg="Aucun timers en cours d'execution"
+                            msg="There is no timers that are running!"
                         )
+                return None
 
             case 'show_threads':
-
                 for thread in self.Base.running_threads:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f">> {thread.getName()} ({thread.is_alive()})"
+                        msg=f">> {thread.name} ({thread.is_alive()})"
                     )
+                return None
 
             case 'show_channels':
-
                 for chan in self.Channel.UID_CHANNEL_DB:
                     list_nicknames: list = []
                     for uid in chan.uids:
@@ -1646,6 +1125,7 @@ class Irc:
                         nick_to=fromuser,
                         msg=f"Channel: {chan.name} - Users: {list_nicknames}"
                     )
+                return None
 
             case 'show_users':
                 count_users = len(self.User.UID_DB)
@@ -1656,6 +1136,7 @@ class Irc:
                         nick_to=fromuser,
                         msg=f"UID : {db_user.uid} - isWebirc: {db_user.isWebirc} - isWebSocket: {db_user.isWebsocket} - Nickname: {db_user.nickname} - Connection: {db_user.connexion_datetime}"
                     )
+                return None
 
             case 'show_clients':
                 count_users = len(self.Client.CLIENT_DB)
@@ -1666,26 +1147,25 @@ class Irc:
                         nick_to=fromuser,
                         msg=f"UID : {db_client.uid} - isWebirc: {db_client.isWebirc} - isWebSocket: {db_client.isWebsocket} - Nickname: {db_client.nickname} - Account: {db_client.account} - Connection: {db_client.connexion_datetime}"
                     )
+                return None
 
             case 'show_admins':
-
                 for db_admin in self.Admin.UID_ADMIN_DB:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Level: {db_admin.level} - Connection: {db_admin.connexion_datetime}"
                     )
+                return None
 
             case 'show_configuration':
-
-                config_dict = self.Config.__dict__
-
-                for key, value in config_dict.items():
+                for key, value in self.Config.to_dict().items():
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f'{key} = {value}'
                         )
+                return None
 
             case 'uptime':
                 uptime = self.get_defender_uptime()
@@ -1694,24 +1174,24 @@ class Irc:
                     nick_to=fromuser,
                     msg=f"{uptime}"
                 )
+                return None
 
             case 'copyright':
                 self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
-                    msg=f"# Defender V.{self.Config.CURRENT_VERSION} Developped by adator® #"
+                    msg=f">> Defender V.{self.Config.CURRENT_VERSION} Developped by adator®."
                 )
+                return None
 
             case 'checkversion':
-
-                self.Base.create_thread(
-                    self.thread_check_for_new_version,
-                    (fromuser, )
-                )
+                self.Base.create_thread(self.thread_check_for_new_version, (fromuser, ))
+                return None
 
             case 'raw':
                 raw_command = ' '.join(cmd[1:])
                 self.Protocol.send_raw(raw_command)
+                return None
 
             case _:
                 pass
