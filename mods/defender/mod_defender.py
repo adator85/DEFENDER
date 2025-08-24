@@ -188,12 +188,6 @@ class Defender:
         """Cette methode sera executée a chaque désactivation ou 
         rechargement de module
         """
-        self.Settings.set_cache('ABUSEIPDB', self.Schemas.DB_ABUSEIPDB_USERS)
-        self.Settings.set_cache('FREEIPAPI', self.Schemas.DB_FREEIPAPI_USERS)
-        self.Settings.set_cache('CLOUDFILT', self.Schemas.DB_CLOUDFILT_USERS)
-        self.Settings.set_cache('PSUTIL', self.Schemas.DB_PSUTIL_USERS)
-        self.Settings.set_cache('LOCALSCAN', self.Schemas.DB_LOCALSCAN_USERS)
-
         self.Schemas.DB_ABUSEIPDB_USERS = []
         self.Schemas.DB_FREEIPAPI_USERS = []
         self.Schemas.DB_CLOUDFILT_USERS = []

@@ -2,16 +2,17 @@ import sys
 import socket
 import ssl
 import re
-import importlib
 import time
-import traceback
 from ssl import SSLSocket
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes import rehash
 from core.loader import Loader
 from core.classes.protocol import Protocol
 from core.classes.commands import Command
+
+if TYPE_CHECKING:
+    from core.definition import MSasl
 
 class Irc:
     _instance = None
@@ -77,6 +78,9 @@ class Irc:
         # Use Module Utils
         self.ModuleUtils = self.Loader.ModuleUtils
 
+        # Use Main Sasl module
+        self.Sasl = self.Loader.Sasl
+
         self.autolimit_started: bool = False
         """This variable is to make sure the thread is not running"""
 
@@ -111,11 +115,14 @@ class Irc:
         self.build_command(2, 'core', 'show_clients', 'Display a list of connected clients')
         self.build_command(2, 'core', 'show_admins', 'Display a list of administrators')
         self.build_command(2, 'core', 'show_configuration', 'Display the current configuration settings')
+        self.build_command(2, 'core', 'show_cache', 'Display the current cache')
+        self.build_command(2, 'core', 'clear_cache', 'Clear the cache!')
         self.build_command(3, 'core', 'quit', 'Disconnect the bot or user from the server.')
         self.build_command(3, 'core', 'restart', 'Restart the bot or service.')
         self.build_command(3, 'core', 'addaccess', 'Add a user or entity to an access list with specific permissions.')
         self.build_command(3, 'core', 'editaccess', 'Modify permissions for an existing user or entity in the access list.')
         self.build_command(3, 'core', 'delaccess', 'Remove a user or entity from the access list.')
+        self.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
         self.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
         self.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
 
@@ -300,6 +307,51 @@ class Irc:
         
         return None
 
+    def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
+        s = sasl_model
+        if sasl_model:
+            def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
+                if fingerprint:
+                    mes_donnees = {'fingerprint': fingerprint}
+                    query = f"SELECT user, level FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
+                else:
+                    mes_donnees = {'user': username, 'password': self.Utils.hash_password(password)}
+                    query = f"SELECT user, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+
+                result = self.Base.db_execute_query(query, mes_donnees)
+                user_from_db = result.fetchone()
+                if user_from_db:
+                    return {'user': user_from_db[0], 'level': user_from_db[1]}
+                else:
+                    return None
+
+            if s.message_type == 'C' and s.mechanisme == 'PLAIN':
+                # Connection via PLAIN
+                admin_info = db_get_admin_info(username=s.username, password=s.password)
+                if admin_info is not None:
+                    s.auth_success = True
+                    s.level = admin_info.get('level', 0)
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                else:
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+
+            elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
+                # Connection using fingerprints
+                admin_info = db_get_admin_info(fingerprint=s.fingerprint)
+                
+                if admin_info is not None:
+                    s.auth_success = True
+                    s.level = admin_info.get('level', 0)
+                    s.username = admin_info.get('user', None)
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                else:
+                    # "904 <nick> :SASL authentication failed"
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+
     def __create_table(self) -> None:
         """## Create core tables
         """
@@ -328,7 +380,7 @@ class Irc:
             time.sleep(beat)
             self.Base.execute_periodic_action()
 
-    def insert_db_admin(self, uid:str, level:int) -> None:
+    def insert_db_admin(self, uid: str, account: str, level: int) -> None:
         user_obj = self.User.get_user(uid)
         if user_obj is None:
             return None
@@ -336,6 +388,7 @@ class Irc:
         self.Admin.insert(
             self.Loader.Definition.MAdmin(
                 **user_obj.to_dict(),
+                account=account,
                 level=int(level)
             )
         )
@@ -428,7 +481,7 @@ class Irc:
                 self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
                 return None
 
-            self.Logs.debug(self.Utils.hide_sensitive_data(original_response))
+            self.Logs.debug(f">> {self.Utils.hide_sensitive_data(original_response)}")
             parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
             match parsed_protocol:
 
@@ -449,6 +502,30 @@ class Irc:
                         self.Protocol.on_uid(serverMsg=original_response)
                         for module in self.ModuleUtils.model_get_loaded_modules().copy():
                             module.class_instance.cmd(original_response)
+
+                        # SASL authentication
+                        # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
+                        dnickname = self.Config.SERVICE_NICKNAME
+                        dchanlog = self.Config.SERVICE_CHANLOG
+                        uid = original_response[8]
+                        nickname = original_response[3]
+                        sasl_obj = self.Sasl.get_sasl_obj(uid)
+                        if sasl_obj:
+                            if sasl_obj.auth_success:
+                                self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level)
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                  msg=f"[ {self.Config.COLORS.green}SASL AUTH{self.Config.COLORS.nogc} ] - {nickname} ({sasl_obj.username}) est désormais connecté a {dnickname}",
+                                                  channel=dchanlog)
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"Connexion a {dnickname} réussie!")
+                            else:
+                                self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                        msg=f"[ {self.Config.COLORS.red}SASL AUTH{self.Config.COLORS.nogc} ] - {nickname} a tapé un mauvais mot de pass pour le username ({sasl_obj.username})",
+                                                        channel=dchanlog)
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"Mot de passe incorrecte")
+
+                            # Delete sasl object!
+                            self.Sasl.delete_sasl_client(uid)
+
                         return None
                     except Exception as err:
                         self.Logs.error(f'General Error: {err}')
@@ -481,6 +558,13 @@ class Irc:
 
                 case 'REPUTATION':
                     self.Protocol.on_reputation(serverMsg=original_response)
+
+                case 'SMOD':
+                    self.Protocol.on_smod(original_response)
+
+                case 'SASL':
+                    sasl_response = self.Protocol.on_sasl(original_response, self.Sasl)
+                    self.on_sasl_authentication_process(sasl_response)
 
                 case 'SLOG': # TODO
                     self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
@@ -537,6 +621,10 @@ class Irc:
         fromuser = self.User.get_nickname(user)                                   # Nickname qui a lancé la commande
         uid = self.User.get_uid(fromuser)                                         # Récuperer le uid de l'utilisateur
 
+        RED = self.Config.COLORS.red
+        GREEN = self.Config.COLORS.green
+        NOGC = self.Config.COLORS.nogc
+
         # Defender information
         dnickname = self.Config.SERVICE_NICKNAME                                  # Defender nickname
         dchanlog = self.Config.SERVICE_CHANLOG                                    # Defender chan log
@@ -560,7 +648,7 @@ class Irc:
                 try:
                     current_command = cmd[0]
                     self.Protocol.send_priv_msg(
-                        msg=f'[ {self.Config.COLORS.red}{current_command}{self.Config.COLORS.black} ] - Accès Refusé à {self.User.get_nickname(fromuser)}',
+                        msg=f'[ {RED}{current_command}{NOGC} ] - Accès Refusé à {self.User.get_nickname(fromuser)}',
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -581,7 +669,7 @@ class Irc:
                 self.delete_db_admin(uid_to_deauth)
 
                 self.Protocol.send_priv_msg(
-                        msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais déconnecter de {dnickname}",
+                        msg=f"[ {RED}{str(current_command).upper()}{NOGC} ] - {self.User.get_nickname(fromuser)} est désormais déconnecter de {dnickname}",
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -645,7 +733,7 @@ class Irc:
 
                 if cmd_owner == config_owner and cmd_password == config_password:
                     self.Base.db_create_first_admin()
-                    self.insert_db_admin(current_uid, 5)
+                    self.insert_db_admin(current_uid, cmd_owner, 5)
                     self.Protocol.send_priv_msg(
                         msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
                         nick_from=dnickname,
@@ -671,41 +759,50 @@ class Irc:
                         )
 
             case 'auth':
-                # ['auth', 'adator', 'password']
-                if len(cmd) != 3:
+                # Syntax. !auth nickname password
+                if len(cmd) < 3:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} [nickname] [password]")
                     return None
 
                 current_command = cmd[0]
-                user_to_log = self.User.get_nickname(cmd[1])
+                user_to_log = cmd[1]
                 password = cmd[2]
+                current_client = self.User.get_user(fromuser)
+                admin_obj = self.Admin.get_admin(fromuser)
 
-                if fromuser != user_to_log:
-                    # If the current nickname is different from the nickname you want to log in with
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Your current nickname is different from the nickname you want to log in with")
-                    return False
+                if current_client is None:
+                    # This case should never happen
+                    self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - Nickname {fromuser} is trying to connect to defender wrongly",
+                                                channel=dchanlog)
+                    return None
+                
+                if admin_obj:
+                    self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - You are already connected to {dnickname}",
+                                                channel=dchanlog)
+                    return None
 
-                if user_to_log:
-                    mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
-                    query = f"SELECT id, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
-                    result = self.Base.db_execute_query(query, mes_donnees)
-                    user_from_db = result.fetchone()
+                mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
+                query = f"SELECT id, user, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+                result = self.Base.db_execute_query(query, mes_donnees)
+                user_from_db = result.fetchone()
 
-                    if user_from_db:
-                        uid_user = self.User.get_uid(user_to_log)
-                        self.insert_db_admin(uid_user, user_from_db[1])
-                        self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                  msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.nogc} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
-                                                  channel=dchanlog)
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Connexion a {dnickname} réussie!")
-                    else:
-                        self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                  msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.nogc} - {self.User.get_nickname(fromuser)} a tapé un mauvais mot de pass",
-                                                  channel=dchanlog)
-                        self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Mot de passe incorrecte")
-
+                if user_from_db:
+                    account = user_from_db[1]
+                    level = user_from_db[2]
+                    self.insert_db_admin(current_client.uid, account, level)
+                    self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - {current_client.nickname} ({account}) est désormais connecté a {dnickname}",
+                                                channel=dchanlog)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Connexion a {dnickname} réussie!")
+                    return None
                 else:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"L'utilisateur {user_to_log} n'existe pas")
+                    self.Protocol.send_priv_msg(nick_from=dnickname, 
+                                                msg=f"[ {RED}{str(current_command).upper()}{NOGC} ] - {current_client.nickname} a tapé un mauvais mot de pass",
+                                                channel=dchanlog)
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Mot de passe incorrecte")
+                    return None
 
             case 'addaccess':
                 try:
@@ -837,6 +934,21 @@ class Irc:
                     else:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
                         self.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
+
+            case 'cert':
+                # Syntax !cert
+                try:
+                    admin_obj = self.Admin.get_admin(fromuser)
+                    if admin_obj:
+                        query = f'UPDATE {self.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user = :user'
+                        r = self.Base.db_execute_query(query, {'fingerprint': admin_obj.fingerprint, 'user': admin_obj.account})
+                        if r.rowcount > 0:
+                            self.Protocol.send_notice(dnickname, fromuser, f'[ {GREEN}CERT{NOGC} ] Your new fingerprint has been attached to your account. {admin_obj.fingerprint}')
+                        else:
+                            self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] Impossible to add your fingerprint.{admin_obj.fingerprint}')
+
+                except Exception as e:
+                    self.Logs.error(e)
 
             case 'register':
                 # Syntax. Register PASSWORD EMAIL
@@ -1077,14 +1189,14 @@ class Irc:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=f"{module} - {self.Config.COLORS.green}Loaded{self.Config.COLORS.nogc} by {loaded_user} on {loaded_datetime}"
+                            msg=f"{module} - {GREEN}Loaded{NOGC} by {loaded_user} on {loaded_datetime}"
                         )
                         loaded = False
                     else:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=f"{module} - {self.Config.COLORS.red}Not Loaded{self.Config.COLORS.nogc}"
+                            msg=f"{module} - {RED}Not Loaded{NOGC}"
                         )
 
             case 'show_timers':
@@ -1154,7 +1266,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Level: {db_admin.level} - Connection: {db_admin.connexion_datetime}"
+                        msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Account: {db_admin.account} - Level: {db_admin.level} - Connection: {db_admin.connexion_datetime}"
                     )
                 return None
 
@@ -1165,6 +1277,23 @@ class Irc:
                         nick_to=fromuser,
                         msg=f'{key} = {value}'
                         )
+                return None
+
+            case 'show_cache':
+                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The cache is currently contains {self.Settings.get_cache_size()} value(s).")
+                for key, value in self.Settings.show_cache().items():
+                    self.Protocol.send_notice(
+                        nick_from=dnickname,
+                        nick_to=fromuser,
+                        msg=f"Key : {key} - Value: {value}"
+                    )
+                return None
+            
+            case 'clear_cache':
+                cache_size = self.Settings.get_cache_size()
+                if cache_size > 0:
+                    self.Settings.clear_cache()
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{cache_size} value(s) has been cleared from the cache.")
                 return None
 
             case 'uptime':

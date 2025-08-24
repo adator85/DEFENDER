@@ -1,5 +1,5 @@
 from logging import Logger
-from core.classes import user, admin, client, channel, reputation, settings
+from core.classes import user, admin, client, channel, reputation, settings, sasl
 import core.logs as logs
 import core.definition as df
 import core.utils as utils
@@ -49,5 +49,7 @@ class Loader:
         self.Commands: commands_mod.Command     = commands_mod.Command(self)
 
         self.ModuleUtils: module_mod.Module     = module_mod.Module(self)
+
+        self.Sasl: sasl.Sasl                    = sasl.Sasl(self)
 
         self.Logs.debug("LOADER Success!")

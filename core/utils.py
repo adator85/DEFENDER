@@ -4,9 +4,10 @@ Main utils library.
 import gc
 import ssl
 import socket
+import sys
 from pathlib import Path
 from re import match, sub
-import sys
+from base64 import b64decode
 from typing import Literal, Optional, Any, TYPE_CHECKING
 from datetime import datetime, timedelta, timezone
 from time import time

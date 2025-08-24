@@ -287,7 +287,7 @@ class Module:
         Returns:
             list[MModule]: A list of module model object
         """
-        self.__Logs.debug(f"[MODEL MODULE LOADED MODULES] {len(self.DB_MODULES)} modules found!")
+        # self.__Logs.debug(f"[MODEL MODULE LOADED MODULES] {len(self.DB_MODULES)} modules found!")
         return self.DB_MODULES
 
     def model_insert_module(self, module_model: MModule) -> bool:
