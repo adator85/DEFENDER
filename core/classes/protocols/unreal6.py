@@ -1,3 +1,4 @@
+from base64 import b64decode
 from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
@@ -5,7 +6,8 @@ from ssl import SSLEOFError, SSLError
 
 if TYPE_CHECKING:
     from core.irc import Irc
-    from core.definition import MClient
+    from core.classes.sasl import Sasl
+    from core.definition import MClient, MSasl
 
 class Unrealircd6:
 
@@ -23,7 +25,7 @@ class Unrealircd6:
         self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
-                               'SLOG', 'NICK', 'PART', 'PONG', 
+                               'SLOG', 'NICK', 'PART', 'PONG', 'SASL',
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
                                '006', '007', '018'}
 
@@ -398,7 +400,7 @@ class Unrealircd6:
         try:
             self.send2socket(f":{self.__Irc.Config.SERVEUR_LINK} SVSLOGIN {self.__Settings.MAIN_SERVER_HOSTNAME} {client_uid} {user_account}")
         except Exception as err:
-            self.__Irc.Logs.error(f'General Error: {err}')
+            self.__Logs.error(f'General Error: {err}')
 
     def send_svslogout(self, client_obj: 'MClient') -> None:
         """Logout a client from his account
@@ -413,7 +415,7 @@ class Unrealircd6:
             self.send_svs2mode(c_nickname, '-r')
 
         except Exception as err:
-            self.__Irc.Logs.error(f'General Error: {err}')
+            self.__Logs.error(f'General Error: {err}')
 
     def send_quit(self, uid: str, reason: str, print_log: True) -> None:
         """Send quit message
@@ -898,10 +900,10 @@ class Unrealircd6:
 
             # Possibilité de déclancher les bans a ce niveau.
         except IndexError as ie:
-            self.Logs.error(f'Index Error {__name__}: {ie}')
+            self.__Logs.error(f'Index Error {__name__}: {ie}')
         except ValueError as ve:
             self.__Irc.first_score = 0
-            self.Logs.error(f'Value Error {__name__}: {ve}')
+            self.__Logs.error(f'Value Error {__name__}: {ve}')
         except Exception as err:
             self.__Logs.error(f"{__name__} - General Error: {err}")
 
@@ -938,6 +940,11 @@ class Unrealircd6:
             pattern = r'^.*geoip=cc=(\S{2}).*$'
             geoip_match = match(pattern, serverMsg[0])
 
+            # Extract Fingerprint information
+            pattern = r'^.*certfp=([^;]+).*$'
+            fp_match = match(pattern, serverMsg[0])
+            fingerprint = fp_match.group(1) if fp_match else None
+
             if geoip_match:
                 geoip = geoip_match.group(1)
             else:
@@ -954,6 +961,7 @@ class Unrealircd6:
                     hostname=hostname,
                     umodes=umodes,
                     vhost=vhost,
+                    fingerprint=fingerprint,
                     isWebirc=isWebirc,
                     isWebsocket=isWebsocket,
                     remote_ip=remote_ip,
@@ -1086,7 +1094,7 @@ class Unrealircd6:
             sCopy = serverMsg.copy()
             self.__Irc.Settings.MAIN_SERVER_HOSTNAME = sCopy[1]
         except Exception as err:
-            self.__Irc.Logs.error(f'General Error: {err}')
+            self.__Logs.error(f'General Error: {err}')
 
     def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
@@ -1201,3 +1209,95 @@ class Unrealircd6:
 
         except Exception as err:
             self.__Logs.error(f"{__name__} - General Error: {err}")
+
+    def on_smod(self, serverMsg: list[str]) -> None:
+        """Handle SMOD message coming from the server
+
+        Args:
+            serverMsg (list[str]): Original server message
+        """
+        try:
+            # [':001', 'SMOD', ':L:history_backend_mem:2.0', 'L:channeldb:1.0', 'L:tkldb:1.10', 'L:staff:3.8', 'L:ircops:3.71', ...]
+            sCopy = serverMsg.copy()
+            modules = [m.lstrip(':') for m in sCopy[2:]]
+
+            for smod in modules:
+                smod_split = smod.split(':')
+                sModObj = self.__Irc.Loader.Definition.MSModule(type=smod_split[0], name=smod_split[1], version=smod_split[2])
+                self.__Settings.SMOD_MODULES.append(sModObj)
+
+        except Exception as err:
+            self.__Logs.error(f'General Error: {err}')
+
+    def on_sasl(self, serverMsg: list[str], psasl: 'Sasl') -> Optional['MSasl']:
+        """Handle SASL coming from a server
+
+        Args:
+            serverMsg (list[str]): Original server message
+            psasl (Sasl): The SASL process object
+        """
+        try:
+            # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'H', '172.18.128.1', '172.18.128.1']
+            # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'S', 'PLAIN']
+            # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '0014ZZH1F', 'S', 'EXTERNAL', 'zzzzzzzkey']
+            # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
+            # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
+
+            sasl_enabled = False
+            for smod in self.__Settings.SMOD_MODULES:
+                if smod.name == 'sasl':
+                    sasl_enabled = True
+                    break
+
+            if not sasl_enabled:
+                return None
+
+            sCopy = serverMsg.copy()
+            client_uid = sCopy[3] if len(sCopy) >= 6 else None
+            sasl_obj = None
+            sasl_message_type = sCopy[4] if len(sCopy) >= 6 else None
+            psasl.insert_sasl_client(self.__Irc.Loader.Definition.MSasl(client_uid=client_uid))
+            sasl_obj = psasl.get_sasl_obj(client_uid)
+
+            if sasl_obj is None:
+                return None
+
+            match sasl_message_type:
+                case 'H':
+                    sasl_obj.remote_ip = str(sCopy[5])
+                    sasl_obj.message_type = sasl_message_type
+                    return sasl_obj
+
+                case 'S':
+                    sasl_obj.message_type = sasl_message_type
+                    if str(sCopy[5]) in ['PLAIN', 'EXTERNAL']:
+                        sasl_obj.mechanisme = str(sCopy[5])
+
+                    if sasl_obj.mechanisme == "PLAIN":
+                        self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
+                    elif sasl_obj.mechanisme == "EXTERNAL":
+                        if str(sCopy[5]) == "+":
+                            return None
+
+                        sasl_obj.fingerprint = str(sCopy[6])
+                        self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
+
+                    return sasl_obj
+
+                case 'C':
+                    if sasl_obj.mechanisme == "PLAIN":
+                        credentials = sCopy[5]
+                        decoded_credentials = b64decode(credentials).decode()
+                        user, username, password = decoded_credentials.split('\0')
+
+                        sasl_obj.message_type = sasl_message_type
+                        sasl_obj.username = username
+                        sasl_obj.password = password
+
+                        return sasl_obj
+                    elif sasl_obj.mechanisme == "EXTERNAL":
+                        sasl_obj.message_type = sasl_message_type
+                        return sasl_obj
+
+        except Exception as err:
+            self.__Logs.error(f'General Error: {err}', exc_info=True)

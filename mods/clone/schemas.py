@@ -19,4 +19,4 @@ class MClone(MainModel):
     remote_ip: str = '127.0.0.1'
     group: str = 'Default'
 
-DB_CLONES: list[MClone] = []
+# DB_CLONES: list[MClone] = []

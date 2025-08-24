@@ -537,6 +537,7 @@ class Base:
             hostname TEXT,
             vhost TEXT,
             password TEXT,
+            fingerprint TEXT,
             level INTEGER
             )
         '''

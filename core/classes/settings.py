@@ -3,6 +3,7 @@
 from threading import Timer, Thread, RLock
 from socket import socket
 from typing import Any, Optional
+from core.definition import MSModule
 
 class Settings:
     """This Class will never be reloaded. 
@@ -22,6 +23,9 @@ class Settings:
     PROTOCTL_USER_MODES: list[str]      = []
     PROTOCTL_PREFIX: list[str]          = []
 
+    SMOD_MODULES: list[MSModule]        = []
+    """List contains all Server modules"""
+
     __CACHE: dict[str, Any]             = {}
     """Use set_cache or get_cache instead"""
 
@@ -40,11 +44,16 @@ class Settings:
     
     def get_cache(self, key) -> Optional[Any]:
         """It returns the value associated to the key and finally it removes the entry"""
-        if self.__CACHE.get(key):
+        if self.__CACHE.get(key, None) is not None:
             return self.__CACHE.pop(key)
 
         return None
 
     def get_cache_size(self) -> int:
         return len(self.__CACHE)
-        
+
+    def clear_cache(self) -> None:
+        self.__CACHE.clear()
+    
+    def show_cache(self) -> dict[str, Any]:
+        return self.__CACHE.copy()

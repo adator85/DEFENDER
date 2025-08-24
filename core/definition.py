@@ -30,6 +30,7 @@ class MClient(MainModel):
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    fingerprint: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -48,6 +49,7 @@ class MUser(MainModel):
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    fingerprint: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -60,12 +62,14 @@ class MAdmin(MainModel):
     """Model Admin"""
 
     uid: str = None
+    account: str = None
     nickname: str = None
     username: str = None
     realname: str = None
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    fingerprint: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -84,6 +88,7 @@ class MReputation(MainModel):
     hostname: str = None
     umodes: str = None
     vhost: str = None
+    fingerprint: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -335,3 +340,24 @@ class MModule(MainModel):
     module_name: str = None
     class_name: str = None
     class_instance: Optional[Any] = None
+
+@dataclass
+class MSModule:
+    """Server Modules model"""
+    name: str = None
+    version: str = None
+    type: str = None
+
+@dataclass
+class MSasl(MainModel):
+    """Sasl model"""
+
+    remote_ip: Optional[str] = None
+    mechanisme: Optional[str] = None
+    message_type: Optional[str] = None
+    client_uid: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    fingerprint: Optional[str] = None
+    auth_success: bool = False
+    level: int = 0
