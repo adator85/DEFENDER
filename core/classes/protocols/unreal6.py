@@ -647,6 +647,7 @@ class Unrealircd6:
             self.__Irc.User.delete(uid_who_quit)
             self.__Irc.Client.delete(uid_who_quit)
             self.__Irc.Reputation.delete(uid_who_quit)
+            self.__Irc.Admin.delete(uid_who_quit)
 
             return None
 
