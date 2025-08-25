@@ -10,10 +10,15 @@ class User:
 
     UID_DB: list['MUser'] = []
 
+    @property
+    def get_current_user(self) -> 'MUser':
+        return self.current_user
+
     def __init__(self, loader: 'Loader'):
 
         self.Logs = loader.Logs
         self.Base = loader.Base
+        self.current_user: Optional['MUser'] = None
 
     def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object
@@ -126,8 +131,10 @@ class User:
         """
         for record in self.UID_DB:
             if record.uid == uidornickname:
+                self.current_user = record
                 return record
             elif record.nickname == uidornickname:
+                self.current_user = record
                 return record
 
         return None
@@ -147,6 +154,7 @@ class User:
         if user_obj is None:
             return None
 
+        self.current_user = user_obj
         return user_obj.uid
 
     def get_nickname(self, uidornickname:str) -> Optional[str]:
@@ -163,6 +171,7 @@ class User:
         if user_obj is None:
             return None
 
+        self.current_user = user_obj
         return user_obj.nickname
 
     def get_user_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:

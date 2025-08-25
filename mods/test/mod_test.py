@@ -114,7 +114,7 @@ class Test():
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
     def unload(self) -> None:
-
+        self.Irc.Commands.drop_command_by_module(self.module_name)
         return None
 
     def cmd(self, data:list) -> None:

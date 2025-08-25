@@ -2,6 +2,7 @@
 Main utils library.
 '''
 import gc
+import glob
 import ssl
 import socket
 import sys
@@ -13,9 +14,56 @@ from datetime import datetime, timedelta, timezone
 from time import time
 from random import choice
 from hashlib import md5, sha3_512
+from core.classes.settings import global_settings
 
 if TYPE_CHECKING:
     from core.irc import Irc
+
+def tr(message: str, *args) -> str:
+    """Translation Engine system
+    ```python
+    example:
+        _('Hello my firstname is %s and my lastname is %s', firstname, lastname)
+    ```
+    Args:
+        message (str): The message to translate
+        *args (any) : Whatever the variable you want to pass
+
+    Returns:
+        str: The translated message
+    """
+    count_args = len(args) # Count number of args sent
+    count_placeholder = message.count('%s') # Count number of placeholder in the message
+    is_args_available = True if args else False
+    g = global_settings
+    try:
+        # Access to user object ==> global_instance.get_user_option
+        client_language = global_settings.global_user.current_user.geoip if global_settings.global_user.current_user else 'en'
+        client_language = client_language if client_language else 'en'
+
+        if count_args != count_placeholder:
+            global_settings.global_logger.error(f"Translation: Original message: {message} | Args: {count_args} - Placeholder: {count_placeholder}")
+            return message
+        
+        if g.global_lang is None:
+            return message % args if is_args_available else message
+
+        if g.global_lang.lower() == 'en':
+            return message % args if is_args_available else message
+
+        for trads in global_settings.global_translation[global_settings.global_lang.lower()]:
+            if sub(r"\s+", "", message) == sub(r"\s+", "", trads[0]):
+                return trads[1] % args if is_args_available else trads[1]
+
+        return message % args if is_args_available else message
+
+    except KeyError as ke:
+        g.global_logger.error(f"Key Error: {ke}")
+        return message % args if is_args_available else message
+
+    except Exception as err:
+        global_settings.global_logger.error(f"General Error: {err} / {message}")
+        return message
 
 def convert_to_int(value: Any) -> Optional[int]:
     """Convert a value to int

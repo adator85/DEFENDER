@@ -191,6 +191,9 @@ class MConfig(MainModel):
     SERVICE_ID: str = field(init=False)
     """The service unique ID"""
 
+    LANG: str = "EN"
+    """The default language of Defender. default: EN"""
+
     OWNER: str = "admin"
     """The nickname of the admin of the service"""
 

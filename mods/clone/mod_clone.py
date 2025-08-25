@@ -131,6 +131,8 @@ class Clone:
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -k {self.Config.CLONE_CHANNEL_PASSWORD}")
         self.Protocol.send_part_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
+        self.Irc.Commands.drop_command_by_module(self.module_name)
+
         return None
 
     def cmd(self, data:list) -> None:

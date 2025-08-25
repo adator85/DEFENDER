@@ -1,8 +1,8 @@
-import traceback
+from typing import TYPE_CHECKING
 import mods.defender.schemas as schemas
 import mods.defender.utils as utils
 import mods.defender.threads as thds
-from typing import TYPE_CHECKING
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -202,6 +202,8 @@ class Defender:
         self.reputationTimer_isRunning:bool = False
         self.autolimit_isRunning: bool = False
 
+        self.Irc.Commands.drop_command_by_module(self.module_name)
+
         return None
 
     def insert_db_trusted(self, uid: str, nickname:str) -> None:
@@ -320,8 +322,7 @@ class Defender:
         except IndexError as ie:
             self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
         except Exception as err:
-            self.Logs.error(f"General Error: {err}")
-            traceback.print_exc()
+            self.Logs.error(f"General Error: {err}", exc_info=True)
 
     def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
 

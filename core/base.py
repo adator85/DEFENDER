@@ -564,6 +564,9 @@ class Base:
         self.db_execute_query(table_core_channel)
         self.db_execute_query(table_core_config)
 
+        # Patch database
+        self.db_patch(self.Config.TABLE_ADMIN, "language", "TEXT")
+
         if self.install:
             self.Loader.ModuleUtils.db_register_module('mod_command', 'sys', True)
             self.Loader.ModuleUtils.db_register_module('mod_defender', 'sys', True)
@@ -583,6 +586,25 @@ class Base:
             self.cursor.commit()
 
             return response
+
+    def db_is_column_exist(self, table_name: str, column_name: str) -> bool:
+        q = self.db_execute_query(f"PRAGMA table_info({table_name})")
+        existing_columns = [col[1] for col in q.fetchall()]
+
+        if column_name in existing_columns:
+            return True
+        else:
+            return False
+
+    def db_patch(self, table_name: str, column_name: str, column_type: str) -> bool:
+        if not self.db_is_column_exist(table_name, column_name):
+            patch = f"ALTER TABLE {self.Config.TABLE_ADMIN} ADD COLUMN {column_name} {column_type}"
+            self.db_execute_query(patch)
+            self.logs.debug(f"The patch has been applied")
+            self.logs.debug(f"Table name: {table_name}, Column name: {column_name}, Column type: {column_type}")
+            return True
+        else:
+            return False
 
     def db_close(self) -> None:
 

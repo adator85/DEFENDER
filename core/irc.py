@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes import rehash
 from core.loader import Loader
 from core.classes.protocol import Protocol
-from core.classes.commands import Command
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.definition import MSasl
@@ -476,6 +476,9 @@ class Irc:
         """
         try:
             original_response: list[str] = data.copy()
+            RED = self.Config.COLORS.red
+            GREEN = self.Config.COLORS.green
+            NOGC = self.Config.COLORS.nogc
 
             if len(original_response) < 2:
                 self.Logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
@@ -514,14 +517,14 @@ class Irc:
                             if sasl_obj.auth_success:
                                 self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level)
                                 self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                  msg=f"[ {self.Config.COLORS.green}SASL AUTH{self.Config.COLORS.nogc} ] - {nickname} ({sasl_obj.username}) est désormais connecté a {dnickname}",
+                                                  msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, sasl_obj.username, dnickname),
                                                   channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"Connexion a {dnickname} réussie!")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
                             else:
                                 self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                        msg=f"[ {self.Config.COLORS.red}SASL AUTH{self.Config.COLORS.nogc} ] - {nickname} a tapé un mauvais mot de pass pour le username ({sasl_obj.username})",
+                                                        msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s", RED, NOGC, nickname, sasl_obj.username),
                                                         channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=f"Mot de passe incorrecte")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
 
                             # Delete sasl object!
                             self.Sasl.delete_sasl_client(uid)
@@ -646,9 +649,9 @@ class Irc:
 
             case 'notallowed':
                 try:
-                    current_command = cmd[0]
+                    current_command = str(cmd[0])
                     self.Protocol.send_priv_msg(
-                        msg=f'[ {RED}{current_command}{NOGC} ] - Accès Refusé à {self.User.get_nickname(fromuser)}',
+                        msg=tr('[ %s%s%s ] - Access denied to %s', RED, current_command.upper(), NOGC, fromuser),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -656,7 +659,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f'Accès Refusé'
+                        msg=tr('Access denied!')
                         )
 
                 except IndexError as ie:
@@ -664,12 +667,12 @@ class Irc:
 
             case 'deauth':
 
-                current_command = cmd[0]
+                current_command = str(cmd[0]).upper()
                 uid_to_deauth = self.User.get_uid(fromuser)
                 self.delete_db_admin(uid_to_deauth)
 
                 self.Protocol.send_priv_msg(
-                        msg=f"[ {RED}{str(current_command).upper()}{NOGC} ] - {self.User.get_nickname(fromuser)} est désormais déconnecter de {dnickname}",
+                        msg=tr("[ %s%s%s ] - %s has been disconnected from %s", RED, current_command, NOGC, fromuser, dnickname),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -688,7 +691,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"You can't use this command anymore ! Please use [{self.Config.SERVICE_PREFIX}auth] instead"
+                        msg=tr("You can't use this command anymore ! Please use [%sauth] instead", self.Config.SERVICE_PREFIX)
                         )
                     return False
 

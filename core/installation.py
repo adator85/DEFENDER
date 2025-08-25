@@ -16,12 +16,12 @@ class Install:
         service_cmd_daemon_reload: list
         defender_main_executable: str
         python_min_version: str
-        python_current_version_tuple: tuple[str, str, str]
-        python_current_version: str
+        python_current_version_tuple: tuple[int, int, int]
+        python_current_version: tuple[int, int, int]
         defender_install_folder: str
         venv_folder: str
         venv_cmd_installation: list
-        venv_cmd_requirements: list
+        venv_cmd_requirements: list[str]
         venv_pip_executable: str
         venv_python_executable: str
 
@@ -70,24 +70,24 @@ class Install:
                 service_cmd_executable=['systemctl', '--user', 'start', 'defender'],
                 service_cmd_daemon_reload=['systemctl', '--user', 'daemon-reload'],
                 defender_main_executable=defender_main_executable,
-                python_min_version='3.10',
-                python_current_version_tuple=python_version_tuple(),
+                python_min_version=(3, 10, 0),
+                python_current_version_tuple=tuple(map(int, python_version_tuple())),
                 python_current_version=python_version(),
                 defender_install_folder=defender_install_folder,
                 venv_folder=venv_folder,
                 venv_cmd_installation=['python3', '-m', 'venv', venv_folder],
-                venv_cmd_requirements=['sqlalchemy','psutil','requests','faker','unrealircd_rpc_py'],
+                venv_cmd_requirements=['sqlalchemy','psutil','requests','faker','pyyaml','unrealircd_rpc_py'],
                 venv_pip_executable=f'{os.path.join(defender_install_folder, venv_folder, "bin")}{os.sep}pip',
                 venv_python_executable=f'{os.path.join(defender_install_folder, venv_folder, "bin")}{os.sep}python'
             )
 
         if not self.check_python_version():
             # If the Python version is not good then Exit
-            exit("/!\\ Python version error /!\\")
+            exit("[!] Python version error [!]")
 
         if not os.path.exists(os.path.join(self.config.defender_install_folder, 'config', 'configuration.json')):
             # If configuration file do not exist
-            exit("/!\\ Configuration file (core/configuration.json) doesn't exist! please create it /!\\")
+            exit("[!] Configuration file (core/configuration.json) doesn't exist! please create it [!]")
 
         # Exclude Windows OS from the installation
         if os.name == 'nt':
@@ -98,7 +98,7 @@ class Install:
             return False
 
         if self.is_root():
-            exit(f'/!\\ I highly not recommend running Defender as root /!\\')
+            exit(f'[!] I highly not recommend running Defender as root [!]')
             self.skip_install = True
             return False
 
@@ -108,7 +108,7 @@ class Install:
             print('> User without privileges ==> OK')
             return False
         elif os.geteuid() == 0:
-            print('/!\\ Do not use root to install Defender /!\\')
+            print('[!] Do not use root to install Defender [!]')
             exit("Do not use root to install Defender")
             return True
 
@@ -117,13 +117,13 @@ class Install:
         full_service_file_path = os.path.join(self.config.unix_systemd_folder, self.config.service_file_name)
 
         if not os.path.exists(full_service_file_path):
-            print(f'/!\\ Service file does not exist /!\\')
+            print(f'[!] Service file does not exist [!]')
             return True
 
         # Check if virtual env exist
         if not os.path.exists(f'{os.path.join(self.config.defender_install_folder, self.config.venv_folder)}'):
             self.run_subprocess(self.config.venv_cmd_installation)
-            print(f'/!\\ Virtual env does not exist run the install /!\\')
+            print(f'[!] Virtual env does not exist run the install [!]')
             return True
 
     def run_subprocess(self, command:list) -> None:
@@ -173,25 +173,19 @@ class Install:
             print(f"> Checking for dependencies versions ==> WAIT")
             for package in self.DB_PACKAGES:
                 newVersion = False
-                required_version = package.version
-                installed_version = None
+                _required_version = package.version
+                _installed_version: str = None
 
                 output = check_output([self.config.venv_pip_executable, 'show', package.name])
                 for line in output.decode().splitlines():
                     if line.startswith('Version:'):
-                        installed_version = line.split(':')[1].strip()
+                        _installed_version = line.split(':')[1].strip()
                         break
 
-                required_major, required_minor, required_patch = required_version.split('.')
-                installed_major, installed_minor, installed_patch = installed_version.split('.')
+                required_version = tuple(map(int, _required_version.split('.')))
+                installed_version = tuple(map(int, _installed_version.split('.')))
 
-                if required_major > installed_major:
-                    print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
-                    newVersion = True
-                elif required_major == installed_major and required_minor > installed_minor:
-                    print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
-                    newVersion = True
-                elif required_major == installed_major and required_minor == installed_minor and required_patch > installed_patch:
+                if required_version > installed_version:
                     print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
                     newVersion = True
 
@@ -202,7 +196,7 @@ class Install:
             return newVersion
 
         except CalledProcessError:
-            print(f"/!\\ Package {package.name} not installed /!\\")
+            print(f"[!] Package {package.name} not installed [!]")
         except Exception as err:
             print(f"General Error: {err}")
 
@@ -212,23 +206,11 @@ class Install:
         Returns:
             bool: True si la version de python est autorisé sinon False
         """
-        # Current system version
-        sys_major, sys_minor, sys_patch = self.config.python_current_version_tuple
-
-        # min python version required
-        python_required_version = self.config.python_min_version.split('.')
-        min_major, min_minor = tuple((python_required_version[0], python_required_version[1]))
-
-        if int(sys_major) < int(min_major):
-            print(f"## Your python version must be greather than or equal to {self.config.python_min_version} ##")
-            return False
-
-        elif (int(sys_major) <= int(min_major)) and (int(sys_minor) < int(min_minor)):
+        if self.config.python_current_version_tuple < self.config.python_min_version:
             print(f"## Your python version must be greather than or equal to {self.config.python_min_version} ##")
             return False
 
         print(f"> Version of python : {self.config.python_current_version} ==> OK")
-
         return True
 
     def check_package(self, package_name) -> bool:
@@ -255,6 +237,7 @@ class Install:
             do_install = True
 
         for module in self.config.venv_cmd_requirements:
+            module = module.replace('pyyaml', 'yaml')
             if not self.check_package(module):
                 do_install = True
 
@@ -284,7 +267,7 @@ class Install:
         full_service_file_path = os.path.join(self.config.unix_systemd_folder, self.config.service_file_name)
 
         if os.path.exists(full_service_file_path):
-            print(f'/!\\ Service file already exist /!\\')
+            print(f'[!] Service file already exist [!]')
             self.run_subprocess(self.config.service_cmd_executable)
             return None
 

@@ -1,9 +1,13 @@
 '''This class should never be reloaded.
 '''
+from logging import Logger
 from threading import Timer, Thread, RLock
 from socket import socket
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from core.definition import MSModule
+
+if TYPE_CHECKING:
+    from core.classes.user import User
 
 class Settings:
     """This Class will never be reloaded. 
@@ -28,6 +32,17 @@ class Settings:
 
     __CACHE: dict[str, Any]             = {}
     """Use set_cache or get_cache instead"""
+
+    __TRANSLATION: dict[str, list[list[str]]] = dict()
+    """Translation Varibale"""
+
+    __LANG: str                             = "EN"
+
+    __INSTANCE_OF_USER_UTILS: Optional['User'] = None
+    """Instance of the User Utils class"""
+
+    __LOGGER: Optional[Logger] = None
+    """Instance of the logger"""
 
     def set_cache(self, key: str, value_to_cache: Any):
         """When you want to store a variable 
@@ -57,3 +72,37 @@ class Settings:
     
     def show_cache(self) -> dict[str, Any]:
         return self.__CACHE.copy()
+    
+    @property
+    def global_translation(self) -> dict[str, list[list[str]]]:
+        return self.__TRANSLATION
+
+    @global_translation.setter
+    def global_translation(self, translation_var: dict) -> None:
+        self.__TRANSLATION = translation_var
+
+    @property
+    def global_lang(self) -> str:
+        return self.__LANG
+    
+    @global_lang.setter
+    def global_lang(self, lang: str) -> None:
+        self.__LANG = lang
+
+    @property
+    def global_user(self) -> 'User':
+        return self.__INSTANCE_OF_USER_UTILS
+
+    @global_user.setter
+    def global_user(self, user_utils_instance: 'User') -> None:
+        self.__INSTANCE_OF_USER_UTILS = user_utils_instance
+
+    @property
+    def global_logger(self) -> Logger:
+        return self.__LOGGER
+
+    @global_logger.setter
+    def global_logger(self, logger: Logger) -> None:
+        self.__LOGGER = logger
+
+global_settings = Settings()
