@@ -626,7 +626,8 @@ class Irc:
         """
 
         fromuser = self.User.get_nickname(user)                                   # Nickname qui a lancé la commande
-        uid = self.User.get_uid(fromuser)                                         # Récuperer le uid de l'utilisateur
+        uid = self.User.get_uid(user)                                         # Récuperer le uid de l'utilisateur
+        self.Settings.current_admin = self.Admin.get_admin(user)              # set Current admin if any.
 
         RED = self.Config.COLORS.red
         GREEN = self.Config.COLORS.green
@@ -1197,14 +1198,14 @@ class Irc:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=f"{module} - {GREEN}Loaded{NOGC} by {loaded_user} on {loaded_datetime}"
+                            msg=tr('%s - %sLoaded%s by %s on %s', module, GREEN, NOGC, loaded_user, loaded_datetime)
                         )
                         loaded = False
                     else:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=f"{module} - {RED}Not Loaded{NOGC}"
+                            msg=tr('%s - %sNot Loaded%s', module, GREEN, NOGC)
                         )
 
             case 'show_timers':

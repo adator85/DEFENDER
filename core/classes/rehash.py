@@ -69,7 +69,7 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
             msg=f'[REHASH] Module [{mod}] reloaded', 
             channel=uplink.Config.SERVICE_CHANLOG
             )
-
+    uplink.Utils = sys.modules['core.utils']
     uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
     uplink.Config.HSID = config_model_bakcup.HSID
     uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT

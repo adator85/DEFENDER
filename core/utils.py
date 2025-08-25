@@ -2,7 +2,6 @@
 Main utils library.
 '''
 import gc
-import glob
 import ssl
 import socket
 import sys
@@ -38,20 +37,22 @@ def tr(message: str, *args) -> str:
     g = global_settings
     try:
         # Access to user object ==> global_instance.get_user_option
-        client_language = global_settings.global_user.current_user.geoip if global_settings.global_user.current_user else 'en'
-        client_language = client_language if client_language else 'en'
+        client_language = g.current_admin.language if g.current_admin else g.global_lang
+
+        if g.current_admin:
+            print("Current Admin", g.current_admin.nickname, "Current language", client_language, "Global language", g.global_lang)
 
         if count_args != count_placeholder:
-            global_settings.global_logger.error(f"Translation: Original message: {message} | Args: {count_args} - Placeholder: {count_placeholder}")
+            g.global_logger.error(f"Translation: Original message: {message} | Args: {count_args} - Placeholder: {count_placeholder}")
             return message
         
         if g.global_lang is None:
             return message % args if is_args_available else message
 
-        if g.global_lang.lower() == 'en':
+        if client_language.lower() == 'en':
             return message % args if is_args_available else message
-
-        for trads in global_settings.global_translation[global_settings.global_lang.lower()]:
+        
+        for trads in g.global_translation[client_language.lower()]:
             if sub(r"\s+", "", message) == sub(r"\s+", "", trads[0]):
                 return trads[1] % args if is_args_available else trads[1]
 
