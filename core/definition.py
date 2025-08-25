@@ -76,6 +76,7 @@ class MAdmin(MainModel):
     score_connexion: int = 0
     geoip: str = None
     connexion_datetime: datetime = field(default=datetime.now())
+    language: str = "EN"
     level: int = 0
 
 @dataclass
@@ -362,5 +363,6 @@ class MSasl(MainModel):
     username: Optional[str] = None
     password: Optional[str] = None
     fingerprint: Optional[str] = None
+    language: str = "EN"
     auth_success: bool = False
     level: int = 0

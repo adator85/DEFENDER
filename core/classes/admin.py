@@ -153,3 +153,19 @@ class Admin:
                 return record.nickname
 
         return None
+    
+    def get_language(self, uidornickname: str) -> Optional[str]:
+        """Get the language of the admin
+
+        Args:
+            uidornickname (str): The user ID or the Nickname of the admin
+
+        Returns:
+            Optional[str]: The language selected by the admin.
+        """
+        admin = self.get_admin(uidornickname)
+
+        if admin is None:
+            return None
+
+        return admin.language

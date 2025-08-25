@@ -53,7 +53,7 @@ Pour Les prochains lancement de defender vous devez utiliser la commande suivant
     $ cd IRC_DEFENDER_MODULES
     $ python3 -m venv .pyenv
     $ source .pyenv/bin/activate
-    (pyenv)$ pip install sqlalchemy, psutil, requests, faker, unrealircd_rpc_py
+    (pyenv)$ pip install sqlalchemy, psutil, requests, faker, unrealircd_rpc_py, pyyaml
 
     # Créer un service nommé "defender.service" 
     # pour votre service et placer le dans "/PATH/TO/USER/.config/systemd/user/"

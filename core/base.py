@@ -296,13 +296,14 @@ class Base:
                            'password': password, 
                            'hostname': '*', 
                            'vhost': '*', 
+                           'language': 'EN',
                            'level': 5
                            }
             self.db_execute_query(f"""
                                   INSERT INTO {self.Config.TABLE_ADMIN} 
-                                  (createdOn, user, password, hostname, vhost, level) 
+                                  (createdOn, user, password, hostname, vhost, language, level) 
                                   VALUES 
-                                  (:createdOn, :user, :password, :hostname, :vhost, :level)"""
+                                  (:createdOn, :user, :password, :hostname, :vhost, :language, :level)"""
                                   , mes_donnees)
 
         return None

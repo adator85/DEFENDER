@@ -313,15 +313,15 @@ class Irc:
             def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
                 if fingerprint:
                     mes_donnees = {'fingerprint': fingerprint}
-                    query = f"SELECT user, level FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
+                    query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
                 else:
                     mes_donnees = {'user': username, 'password': self.Utils.hash_password(password)}
-                    query = f"SELECT user, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+                    query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
 
                 result = self.Base.db_execute_query(query, mes_donnees)
                 user_from_db = result.fetchone()
                 if user_from_db:
-                    return {'user': user_from_db[0], 'level': user_from_db[1]}
+                    return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
                 else:
                     return None
 
@@ -331,6 +331,7 @@ class Irc:
                 if admin_info is not None:
                     s.auth_success = True
                     s.level = admin_info.get('level', 0)
+                    s.language = admin_info.get('language', 'EN')
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
                 else:
@@ -345,6 +346,7 @@ class Irc:
                     s.auth_success = True
                     s.level = admin_info.get('level', 0)
                     s.username = admin_info.get('user', None)
+                    s.language = admin_info.get('language', 'EN')
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
                 else:
@@ -380,14 +382,16 @@ class Irc:
             time.sleep(beat)
             self.Base.execute_periodic_action()
 
-    def insert_db_admin(self, uid: str, account: str, level: int) -> None:
+    def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
         user_obj = self.User.get_user(uid)
+
         if user_obj is None:
             return None
-       
+        
         self.Admin.insert(
             self.Loader.Definition.MAdmin(
                 **user_obj.to_dict(),
+                language=language,
                 account=account,
                 level=int(level)
             )
@@ -515,7 +519,7 @@ class Irc:
                         sasl_obj = self.Sasl.get_sasl_obj(uid)
                         if sasl_obj:
                             if sasl_obj.auth_success:
-                                self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level)
+                                self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
                                 self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                   msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, sasl_obj.username, dnickname),
                                                   channel=dchanlog)
@@ -736,7 +740,7 @@ class Irc:
 
                 if cmd_owner == config_owner and cmd_password == config_password:
                     self.Base.db_create_first_admin()
-                    self.insert_db_admin(current_uid, cmd_owner, 5)
+                    self.insert_db_admin(current_uid, cmd_owner, 5, self.Config.LANG)
                     self.Protocol.send_priv_msg(
                         msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
                         nick_from=dnickname,
@@ -787,14 +791,15 @@ class Irc:
                     return None
 
                 mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
-                query = f"SELECT id, user, level FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+                query = f"SELECT id, user, level, language FROM {self.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
                 result = self.Base.db_execute_query(query, mes_donnees)
                 user_from_db = result.fetchone()
 
                 if user_from_db:
-                    account = user_from_db[1]
-                    level = user_from_db[2]
-                    self.insert_db_admin(current_client.uid, account, level)
+                    account = str(user_from_db[1])
+                    level = int(user_from_db[2])
+                    language = str(user_from_db[3])
+                    self.insert_db_admin(current_client.uid, account, level, language)
                     self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                 msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - {current_client.nickname} ({account}) est désormais connecté a {dnickname}",
                                                 channel=dchanlog)
@@ -1269,7 +1274,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Account: {db_admin.account} - Level: {db_admin.level} - Connection: {db_admin.connexion_datetime}"
+                        msg=f"UID : {db_admin.uid} - Nickname: {db_admin.nickname} - Account: {db_admin.account} - Level: {db_admin.level} - Language: {db_admin.language} - Connection: {db_admin.connexion_datetime}"
                     )
                 return None
 
