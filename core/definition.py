@@ -31,6 +31,7 @@ class MClient(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -50,6 +51,7 @@ class MUser(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -70,6 +72,7 @@ class MAdmin(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None

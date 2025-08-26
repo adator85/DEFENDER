@@ -6,3 +6,8 @@ traduction:
     trad: "%s - %sChargé%s par %s le %s"
   - orig: "%s - %sNot Loaded%s"
     trad: "%s - %sNon chargé%s"
+  - orig: "Successfuly connected to %s"
+    trad: "Connecter a %s avec succés"
+  - orig: "[ %sINFORMATION%s ] >> %s is ready!"
+    trad: "[ %sINFORMATION%s ] >> %s est prêt!"
+

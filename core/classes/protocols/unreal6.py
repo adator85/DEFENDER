@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from ssl import SSLEOFError, SSLError
 
+from core.utils import tr
+
 if TYPE_CHECKING:
     from core.irc import Irc
     from core.classes.sasl import Sasl
@@ -25,7 +27,7 @@ class Unrealircd6:
         self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
                                'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
-                               'SLOG', 'NICK', 'PART', 'PONG', 'SASL',
+                               'SLOG', 'NICK', 'PART', 'PONG', 'SASL', 'PING',
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
                                '006', '007', '018'}
 
@@ -567,6 +569,7 @@ class Unrealircd6:
 
     def on_svs2mode(self, serverMsg: list[str]) -> None:
         """Handle svs2mode coming from a server
+        >>> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
 
         Args:
             serverMsg (list[str]): Original server message
@@ -604,6 +607,7 @@ class Unrealircd6:
 
     def on_umode2(self, serverMsg: list[str]) -> None:
         """Handle umode2 coming from a server
+        >>> [':adator_', 'UMODE2', '-i']
 
         Args:
             serverMsg (list[str]): Original server message
@@ -860,7 +864,7 @@ class Unrealircd6:
                 # Initialisation terminé aprés le premier PING
                 self.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
-                    msg=f"[{self.__Config.COLORS.green}INFORMATION{self.__Config.COLORS.nogc}] >> Defender is ready",
+                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self.__Config.COLORS.green, self.__Config.COLORS.nogc, self.__Config.SERVICE_NICKNAME),
                     channel=self.__Config.SERVICE_CHANLOG
                 )
                 self.__Config.DEFENDER_INIT = 0
@@ -946,6 +950,11 @@ class Unrealircd6:
             fp_match = match(pattern, serverMsg[0])
             fingerprint = fp_match.group(1) if fp_match else None
 
+            # Extract tls_cipher information
+            pattern = r'^.*tls_cipher=([^;]+).*$'
+            tlsc_match = match(pattern, serverMsg[0])
+            tls_cipher = tlsc_match.group(1) if tlsc_match else None
+
             if geoip_match:
                 geoip = geoip_match.group(1)
             else:
@@ -963,6 +972,7 @@ class Unrealircd6:
                     umodes=umodes,
                     vhost=vhost,
                     fingerprint=fingerprint,
+                    tls_cipher=tls_cipher,
                     isWebirc=isWebirc,
                     isWebsocket=isWebsocket,
                     remote_ip=remote_ip,
@@ -971,6 +981,21 @@ class Unrealircd6:
                     connexion_datetime=datetime.now()
                 )
             )
+
+            # Auto Auth admin via fingerprint
+            dnickname = self.__Config.SERVICE_NICKNAME
+            dchanlog  = self.__Config.SERVICE_CHANLOG
+            GREEN = self.__Config.COLORS.green
+            NOGC = self.__Config.COLORS.nogc
+
+            if self.__Irc.Admin.db_auth_admin_via_fingerprint(fingerprint, uid):
+                admin = self.__Irc.Admin.get_admin(uid)
+                account = admin.account if admin else ''
+                self.send_priv_msg(nick_from=dnickname, 
+                                                  msg=tr("[ %sSASL AUTO AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, account, dnickname),
+                                                  channel=dchanlog)
+                self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
+
             return None
         except IndexError as ie:
             self.__Logs.error(f"{__name__} - Index Error: {ie}")
@@ -1302,3 +1327,33 @@ class Unrealircd6:
 
         except Exception as err:
             self.__Logs.error(f'General Error: {err}', exc_info=True)
+
+    def on_md(self, serverMsg: list[str]) -> None:
+        """Handle MD responses
+        [':001', 'MD', 'client', '001MYIZ03', 'certfp', ':d1235648...']
+        Args:
+            serverMsg (list[str]): The server reply
+        """
+        try:
+            scopy = serverMsg.copy()
+            available_vars = ['creationtime', 'certfp', 'tls_cipher']
+
+            uid = str(scopy[3])
+            var = str(scopy[4]).lower()
+            value = str(scopy[5]).replace(':', '')
+
+            user_obj = self.__Irc.User.get_user(uid)
+            if user_obj is None:
+                return None
+            
+            match var:
+                case 'certfp':
+                    user_obj.fingerprint = value
+                case 'tls_cipher':
+                    user_obj.tls_cipher = value
+                case _:
+                    return None
+
+            ...
+        except Exception as e:
+            self.__Logs.error(f"General Error: {e}")

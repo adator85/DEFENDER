@@ -489,7 +489,8 @@ class Irc:
                 return None
 
             self.Logs.debug(f">> {self.Utils.hide_sensitive_data(original_response)}")
-            parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
+            # parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
+            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response)
             match parsed_protocol:
 
                 case 'PING':
@@ -544,7 +545,6 @@ class Irc:
                     self.Protocol.on_protoctl(serverMsg=original_response)
 
                 case 'SVS2MODE':
-                    # >> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
                     self.Protocol.on_svs2mode(serverMsg=original_response)
 
                 case 'SQUIT':
@@ -557,7 +557,6 @@ class Irc:
                     self.Protocol.on_version_msg(serverMsg=original_response)
 
                 case 'UMODE2':
-                    # [':adator_', 'UMODE2', '-i']
                     self.Protocol.on_umode2(serverMsg=original_response)
 
                 case 'NICK':
@@ -573,14 +572,14 @@ class Irc:
                     sasl_response = self.Protocol.on_sasl(original_response, self.Sasl)
                     self.on_sasl_authentication_process(sasl_response)
 
-                case 'SLOG': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case 'MD': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
+                case 'MD':
+                    self.Protocol.on_md(serverMsg=original_response)
 
                 case 'PRIVMSG':
                     self.Protocol.on_privmsg(serverMsg=original_response)
+
+                case 'SLOG': # TODO
+                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
 
                 case 'PONG': # TODO
                     self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
