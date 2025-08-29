@@ -39,9 +39,6 @@ def tr(message: str, *args) -> str:
         # Access to user object ==> global_instance.get_user_option
         client_language = g.current_admin.language if g.current_admin else g.global_lang
 
-        if g.current_admin:
-            print("Current Admin", g.current_admin.nickname, "Current language", client_language, "Global language", g.global_lang)
-
         if count_args != count_placeholder:
             g.global_logger.error(f"Translation: Original message: {message} | Args: {count_args} - Placeholder: {count_placeholder}")
             return message
