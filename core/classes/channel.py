@@ -211,15 +211,6 @@ class Channel:
 
         return None
 
-    def get_channel_asdict(self, channel_name: str) -> Optional[dict[str, Any]]:
-
-        channel_obj: Optional['MChannel'] = self.get_channel(channel_name)
-
-        if channel_obj is None:
-            return None
-        
-        return channel_obj.to_dict()
-
     def is_valid_channel(self, channel_to_check: str) -> bool:
         """Check if the string has the # caractere and return True if this is a valid channel
 
@@ -276,7 +267,7 @@ class Channel:
                         mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'channel_name': channel_name, 'module_name': module_name}
                         insert = self.Base.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
                         if insert.rowcount:
-                            self.Logs.debug(f'New channel added: channel={channel_name} / module_name={module_name}')
+                            self.Logs.debug(f'Channel added to DB: channel={channel_name} / module_name={module_name}')
                             return True
                     else:
                         return False
@@ -286,7 +277,7 @@ class Channel:
                     response = self.Base.db_execute_query(f"DELETE FROM {core_table} WHERE channel_name = :channel_name AND module_name = :module_name", mes_donnes)
 
                     if response.rowcount > 0:
-                        self.Logs.debug(f'Channel deleted: channel={channel_name} / module: {module_name}')
+                        self.Logs.debug(f'Channel deleted from DB: channel={channel_name} / module: {module_name}')
                         return True
                     else:
                         return False

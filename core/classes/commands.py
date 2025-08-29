@@ -11,6 +11,7 @@ class Command:
     def __init__(self, loader: 'Loader'):
         self.Loader = loader
         self.Base = loader.Base
+        self.Logs = loader.Logs
 
     def build(self, new_command_obj: MCommand) -> bool:
 
@@ -44,6 +45,27 @@ class Command:
             return True
         
         return False
+
+    def drop_command_by_module(self, module_name: str) -> bool:
+        """Drop all command by module
+
+        Args:
+            module_name (str): The module name
+
+        Returns:
+            bool: True
+        """
+        tmp_model: list[MCommand] = []
+
+        for command in self.DB_COMMANDS:
+            if command.module_name.lower() == module_name.lower():
+                tmp_model.append(command)
+
+        for c in tmp_model:
+            self.DB_COMMANDS.remove(c)
+
+        self.Logs.debug(f"[COMMAND] Drop command for module {module_name}")
+        return True       
 
     def get_ordered_commands(self) -> list[MCommand]:
         return sorted(self.DB_COMMANDS, key=lambda c: (c.command_level, c.module_name))

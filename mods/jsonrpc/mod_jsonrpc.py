@@ -220,6 +220,7 @@ class Jsonrpc():
                     )
         self.Base.create_thread(func=self.Threads.thread_unsubscribe, func_args=(self, ), run_once=True)
         self.update_configuration('jsonrpc', 0)
+        self.Irc.Commands.drop_command_by_module(self.module_name)
         self.Logs.debug(f"Unloading {self.module_name}")
         return None
 

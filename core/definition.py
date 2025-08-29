@@ -31,6 +31,7 @@ class MClient(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -50,6 +51,7 @@ class MUser(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -70,12 +72,14 @@ class MAdmin(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
     score_connexion: int = 0
     geoip: str = None
     connexion_datetime: datetime = field(default=datetime.now())
+    language: str = "EN"
     level: int = 0
 
 @dataclass
@@ -190,6 +194,9 @@ class MConfig(MainModel):
 
     SERVICE_ID: str = field(init=False)
     """The service unique ID"""
+
+    LANG: str = "EN"
+    """The default language of Defender. default: EN"""
 
     OWNER: str = "admin"
     """The nickname of the admin of the service"""
@@ -359,5 +366,6 @@ class MSasl(MainModel):
     username: Optional[str] = None
     password: Optional[str] = None
     fingerprint: Optional[str] = None
+    language: str = "EN"
     auth_success: bool = False
     level: int = 0

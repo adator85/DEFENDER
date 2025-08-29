@@ -131,6 +131,8 @@ class Clone:
         self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -k {self.Config.CLONE_CHANNEL_PASSWORD}")
         self.Protocol.send_part_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
+        self.Irc.Commands.drop_command_by_module(self.module_name)
+
         return None
 
     def cmd(self, data:list) -> None:
@@ -200,7 +202,7 @@ class Clone:
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group]")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group] [freq]")
                                 self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Exemple /msg {dnickname} clone connect 6 Ambiance")
 
                         case 'kill':
@@ -230,8 +232,7 @@ class Clone:
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill all")
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill clone_nickname")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | group name | nickname]")
 
                         case 'join':
                             try:
@@ -260,8 +261,7 @@ class Clone:
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join all #channel")
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join clone_nickname #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
 
                         case 'part':
                             try:
@@ -291,8 +291,7 @@ class Clone:
 
                             except Exception as err:
                                 self.Logs.error(f'{err}')
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part all #channel")
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part clone_nickname #channel")
+                                self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group name | nickname] #channel")
 
                         case 'list':
                             try:

@@ -10,6 +10,11 @@ class Admin:
 
     def __init__(self, loader: 'Loader') -> None:
         self.Logs = loader.Logs
+        self.Base = loader.Base
+        self.Setting = loader.Settings
+        self.Config = loader.Config
+        self.User = loader.User
+        self.Definition = loader.Definition
 
     def insert(self, new_admin: MAdmin) -> bool:
         """Insert a new admin object model
@@ -153,3 +158,46 @@ class Admin:
                 return record.nickname
 
         return None
+    
+    def get_language(self, uidornickname: str) -> Optional[str]:
+        """Get the language of the admin
+
+        Args:
+            uidornickname (str): The user ID or the Nickname of the admin
+
+        Returns:
+            Optional[str]: The language selected by the admin.
+        """
+        admin = self.get_admin(uidornickname)
+
+        if admin is None:
+            return None
+
+        return admin.language
+
+    def db_auth_admin_via_fingerprint(self, fp: str, uidornickname: str) -> bool:
+        """Check the fingerprint
+
+        Args:
+            fp (str): The unique fingerprint of the user
+            uidornickname (str): The UID or the Nickname of the user
+
+        Returns:
+            bool: True if found
+        """
+        query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
+        data = {'fp': fp}
+        exe = self.Base.db_execute_query(query, data)
+        result = exe.fetchone()
+        if result:
+            account = result[0]
+            level = result[1]
+            language = result[2]
+            user_obj = self.User.get_user(uidornickname)
+            if user_obj:
+                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(),account=account, level=level, language=language)
+                if self.insert(admin_obj):
+                    self.Setting.current_admin = admin_obj
+                    return True
+        
+        return False            

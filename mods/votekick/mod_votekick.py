@@ -126,6 +126,8 @@ class Votekick:
             self.VoteKickManager.VOTE_CHANNEL_DB = []
             self.Logs.debug(f'Delete memory DB VOTE_CHANNEL_DB: {self.VoteKickManager.VOTE_CHANNEL_DB}')
 
+            self.Irc.Commands.drop_command_by_module(self.module_name)
+
             return None
         except UnboundLocalError as ne:
             self.Logs.error(f'{ne}')

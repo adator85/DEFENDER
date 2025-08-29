@@ -1,0 +1,6 @@
+traduction:
+  # Message help
+  - orig: "You are now logged in"
+    trad: "Vous étes désomais identifier"
+  - orig: "NSUser ==> nsuid: %s | cuid: %s | Account: %s | Nickname: %s | email: %s"
+    trad: "NSUser ==> nsuid: %s | cuid: %s | Compte: %s | Pseudo: %s | email: %s"
