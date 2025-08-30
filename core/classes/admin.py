@@ -201,3 +201,22 @@ class Admin:
                     return True
         
         return False            
+
+    def db_is_admin_exist(self, admin_nickname: str) -> bool:
+        """Verify if the admin exist in the database!
+
+        Args:
+            admin_nickname (str): The nickname admin to check.
+
+        Returns:
+            bool: True if the admin exist otherwise False.
+        """
+
+        mes_donnees = {'admin': admin_nickname}
+        query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user = :admin"
+        r = self.Base.db_execute_query(query_search_user, mes_donnees)
+        exist_user = r.fetchone()
+        if exist_user:
+            return True
+        else:
+            return False

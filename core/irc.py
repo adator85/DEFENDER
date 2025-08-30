@@ -409,57 +409,58 @@ class Irc:
 
         return None
 
-    def create_defender_user(self, nickname: str, level: int, password: str) -> str:
+    def create_defender_user(self, sender: str,  new_admin: str, new_level: int, new_password: str) -> bool:
+        """Create a new admin user for defender
+
+        Args:
+            sender (str): The current admin sending the request
+            new_admin (str): The new admin to create
+            new_level (int): The level of the admin
+            new_password (str): The clear password
+
+        Returns:
+            bool: True if created.
+        """
 
         # > addaccess [nickname] [level] [password]
+        dnick = self.Config.SERVICE_NICKNAME
+        p = self.Protocol
 
-        get_user = self.User.get_user(nickname)
-        level = self.Base.convert_to_int(level)
-        password = password
+        get_user = self.User.get_user(new_admin)
+        level = self.Base.convert_to_int(new_level)
+        password = new_password
 
         if get_user is None:
-            response = f'This nickname {nickname} does not exist, it is not possible to create this user'
-            self.Logs.warning(response)
-            return response
+            response = tr("The nickname (%s) is not currently connected! please create a new admin when the nickname is connected to the network!", new_admin)
+            p.send_notice(dnick, sender, response)
+            self.Logs.debug(f"New admin {new_admin} sent by {sender} is not connected")
+            return False
 
-        if level is None:
-            response = f'The level [{level}] must be a number from 1 to 4'
-            self.Logs.warning(response)
-            return response
-
-        if level > 4:
-            response = "Impossible d'ajouter un niveau > 4"
-            self.Logs.warning(response)
-            return response
+        if level is None or level > 4 or level == 0:
+            p.send_notice(dnick, sender, tr("The level (%s) must be a number from 1 to 4", level))
+            self.Logs.debug(f"Level must a number between 1 to 4 (sent by {sender})")
+            return False
 
         nickname = get_user.nickname
-        response = ''
-
         hostname = get_user.hostname
         vhost = get_user.vhost
         spassword = self.Loader.Utils.hash_password(password)
 
-        mes_donnees = {'admin': nickname}
-        query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user=:admin"
-        r = self.Base.db_execute_query(query_search_user, mes_donnees)
-        exist_user = r.fetchone()
-
-        # On verifie si le user exist dans la base
-        if not exist_user:
-            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level}
+        # Check if the user already exist
+        if not self.Admin.db_is_admin_exist(nickname):
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level, 'language': 'EN'}
             self.Base.db_execute_query(f'''INSERT INTO {self.Config.TABLE_ADMIN} 
-                    (createdOn, user, password, hostname, vhost, level) VALUES
-                    (:datetime, :user, :password, :hostname, :vhost, :level)
+                    (createdOn, user, password, hostname, vhost, level, language) VALUES
+                    (:datetime, :user, :password, :hostname, :vhost, :level, :language)
                     ''', mes_donnees)
-            response = f"{nickname} ajouté en tant qu'administrateur de niveau {level}"
-            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Logs.info(response)
-            return response
+
+            p.send_notice(dnick, sender, tr("New admin (%s) has been added with level %s", nickname, level))
+            self.Logs.info(f"A new admin ({nickname}) has been created by {sender}!")
+            return True
         else:
-            response = f'{nickname} Existe déjà dans les users enregistrés'
-            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Logs.info(response)
-            return response
+            p.send_notice(dnick, sender, tr("The nickname (%s) Already exist!", nickname))
+            self.Logs.info(f"The nickname {nickname} already exist! (sent by {sender})")
+            return False
 
     def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.Config.SERVICE_NICKNAME
@@ -681,6 +682,9 @@ class Irc:
                         channel=dchanlog
                         )
 
+                self.Protocol.send_notice(dnickname, fromuser, tr("You have been successfully disconnected from %s", dnickname))
+                return None
+
             case 'firstauth':
                 # firstauth OWNER_NICKNAME OWNER_PASSWORD
                 current_nickname = self.User.get_nickname(fromuser)
@@ -818,15 +822,14 @@ class Irc:
                     if len(cmd) < 4:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} addaccess [nickname] [level] [password]")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
+                        return None
 
-                    newnickname = cmd[1]
-                    newlevel = self.Base.int_if_possible(cmd[2])
-                    password = cmd[3]
+                    new_admin = str(cmd[1])
+                    level = self.Base.int_if_possible(cmd[2])
+                    password = str(cmd[3])
 
-                    response = self.create_defender_user(newnickname, newlevel, password)
-
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{response}")
-                    self.Logs.info(response)
+                    self.create_defender_user(fromuser, new_admin, level, password)
+                    return None
 
                 except IndexError as ie:
                     self.Logs.error(f'_hcmd addaccess: {ie}')
