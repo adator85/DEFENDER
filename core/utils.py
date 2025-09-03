@@ -36,7 +36,7 @@ def tr(message: str, *args) -> str:
     is_args_available = True if args else False
     g = global_settings
     try:
-        # Access to user object ==> global_instance.get_user_option
+        # Access to admin object
         client_language = g.current_admin.language if g.current_admin else g.global_lang
 
         if count_args != count_placeholder:
@@ -56,7 +56,7 @@ def tr(message: str, *args) -> str:
         return message % args if is_args_available else message
 
     except KeyError as ke:
-        g.global_logger.error(f"Key Error: {ke}")
+        g.global_logger.error(f"KeyError: {ke}")
         return message % args if is_args_available else message
 
     except Exception as err:
@@ -142,6 +142,8 @@ def create_socket(uplink: 'Irc') -> None:
     except OSError as oe:
         uplink.Logs.critical(f"[OS Error]: {oe}")
         if 'connection refused' in str(oe).lower():
+            sys.exit(oe)
+        if oe.errno == 10053:
             sys.exit(oe)
     except AttributeError as ae:
         uplink.Logs.critical(f"AttributeError: {ae}")

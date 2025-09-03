@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from ssl import SSLEOFError, SSLError
 
+from core.classes.protocols.interface import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from core.classes.sasl import Sasl
     from core.definition import MClient, MSasl
 
-class Unrealircd6:
+class Unrealircd6(IProtocol):
 
     def  __init__(self, ircInstance: 'Irc'):
         self.name = 'UnrealIRCD-6'
@@ -200,6 +201,7 @@ class Unrealircd6:
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
         self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
         self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
+        self.send2socket("EOS")
         self.send2socket(f":{server_id} {nickname} :Reserved for services")
         self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
         self.send_sjoin(chan)
@@ -1035,15 +1037,6 @@ class Unrealircd6:
                     )
                     return None
 
-                # if not arg[0].lower() in self.__Irc.module_commands_list:
-                #     self.__Logs.debug(f"This command {arg[0]} is not available")
-                #     self.send_notice(
-                #         nick_from=self.__Config.SERVICE_NICKNAME,
-                #         nick_to=user_trigger,
-                #         msg=f"This command [{self.__Config.COLORS.bold}{arg[0]}{self.__Config.COLORS.bold}] is not available"
-                #     )
-                #     return None
-
                 cmd_to_send = convert_to_string.replace(':','')
                 self.__Base.log_cmd(user_trigger, cmd_to_send)
 
@@ -1106,7 +1099,6 @@ class Unrealircd6:
             serverMsg (list[str]): List of str coming from the server
         """
         try:
-            # 
             pong = str(serverMsg[1]).replace(':','')
             self.send2socket(f"PONG :{pong}", print_log=False)
 
@@ -1115,6 +1107,11 @@ class Unrealircd6:
             self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_server(self, serverMsg: list[str]) -> None:
+        """_summary_
+
+        Args:
+            serverMsg (list[str]): _description_
+        """
         try:
             # ['SERVER', 'irc.local.org', '1', ':U6100-Fhn6OoE-001', 'Local', 'Server']
             sCopy = serverMsg.copy()
@@ -1177,7 +1174,7 @@ class Unrealircd6:
         Args:
             serverMsg (list[str]): List of str coming from the server
         """
-        # ['@unrealircd.org/userhost=StatServ@stats.deb.biz.st;draft/bot;bot;msgid=ehfAq3m2yjMjhgWEfi1UCS;time=2024-10-26T13:49:06.299Z', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
+        # ['@unrealircd.org/...', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
         # Réponse a un CTCP VERSION
         try:
 
@@ -1186,6 +1183,7 @@ class Unrealircd6:
             arg = serverMsg[4].replace(':', '')
 
             if nickname is None:
+                self.__Logs.debug(serverMsg)
                 return None
 
             if arg == '\x01PING':
@@ -1199,6 +1197,7 @@ class Unrealircd6:
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"
                 )
+                self.__Logs.debug(serverMsg)
 
             return None
         except Exception as err:

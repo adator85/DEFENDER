@@ -683,14 +683,13 @@ class Base:
             return False
 
     def decode_ip(self, ip_b64encoded: str) -> Optional[str]:
-
-        binary_ip = b64decode(ip_b64encoded)
         try:
+            binary_ip = b64decode(ip_b64encoded)
             decoded_ip = ipaddress.ip_address(binary_ip)
 
             return decoded_ip.exploded
         except ValueError as ve:
-            self.logs.critical(f'This remote ip is not valid : {ve}')
+            self.logs.critical(f'This remote ip ({ip_b64encoded}) is not valid : {ve}')
             return None
 
     def encode_ip(self, remote_ip_address: str) -> Optional[str]:

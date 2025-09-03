@@ -7,12 +7,12 @@ from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes import rehash
-from core.loader import Loader
-from core.classes.protocol import Protocol
+from core.classes.protocols.interface import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
     from core.definition import MSasl
+    from core.loader import Loader
 
 class Irc:
     _instance = None
@@ -24,7 +24,7 @@ class Irc:
 
         return cls._instance
 
-    def __init__(self, loader: Loader) -> 'Irc':
+    def __init__(self, loader: 'Loader'):
 
         # Loader class
         self.Loader = loader
@@ -135,7 +135,7 @@ class Irc:
     ##############################################
     #               CONNEXION IRC                #
     ##############################################
-    def init_irc(self, ircInstance: 'Irc') -> None:
+    def init_irc(self) -> None:
         """Create a socket and connect to irc server
 
         Args:
@@ -143,8 +143,8 @@ class Irc:
         """
         try:
             self.init_service_user()
-            self.Utils.create_socket(ircInstance)
-            self.__connect_to_irc(ircInstance)
+            self.Utils.create_socket(self)
+            self.__connect_to_irc()
 
         except AssertionError as ae:
             self.Logs.critical(f'Assertion error: {ae}')
@@ -161,23 +161,20 @@ class Irc:
         ))
         return None
 
-    def __connect_to_irc(self, ircInstance: 'Irc') -> None:
+    def __connect_to_irc(self) -> None:
         try:
             self.init_service_user()
-            self.ircObject = ircInstance              # créer une copie de l'instance Irc
-            self.Protocol = Protocol(
-                protocol=self.Config.SERVEUR_PROTOCOL,
-                ircInstance=self.ircObject
-                ).Protocol
+            self.Protocol: 'IProtocol' = self.Loader.PFactory.get()
             self.Protocol.send_link()                 # Etablir le link en fonction du protocol choisi
             self.signal = True                        # Une variable pour initier la boucle infinie
             self.join_saved_channels()                # Join existing channels
-            self.ModuleUtils.db_load_all_existing_modules(self)
+            time.sleep(3)
+            # self.ModuleUtils.db_load_all_existing_modules(self)
 
             while self.signal:
                 try:
                     if self.Config.DEFENDER_RESTART == 1:
-                        rehash.restart_service(self.ircObject)
+                        rehash.restart_service(self)
 
                     # 4072 max what the socket can grab
                     buffer_size = self.IrcSocket.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
@@ -202,9 +199,11 @@ class Irc:
                     self.Logs.error(f"SSLEOFError __connect_to_irc: {soe} - {data}")
                 except ssl.SSLError as se:
                     self.Logs.error(f"SSLError __connect_to_irc: {se} - {data}")
-                    sys.exit(1)
+                    sys.exit(-1)
                 except OSError as oe:
-                    self.Logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
+                    self.Logs.error(f"SSLError __connect_to_irc: {oe} {oe.errno}")
+                    if oe.errno == 10053:
+                        sys.exit(-1)
                 except (socket.error, ConnectionResetError):
                     self.Logs.debug("Connexion reset")
 
@@ -790,8 +789,9 @@ class Irc:
                 
                 if admin_obj:
                     self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - You are already connected to {dnickname}",
+                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - {fromuser} is already connected to {dnickname}",
                                                 channel=dchanlog)
+                    self.Protocol.send_notice(dnickname, fromuser, tr("You are already connected to %s", dnickname))
                     return None
 
                 mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
@@ -1179,7 +1179,7 @@ class Irc:
                 self.Config.DEFENDER_INIT = 1                    # set init to 1 saying that the service will be re initiated
 
             case 'rehash':
-                rehash.rehash_service(self.ircObject, fromuser)
+                rehash.rehash_service(self, fromuser)
                 return None
 
             case 'show_modules':

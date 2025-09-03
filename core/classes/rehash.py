@@ -3,7 +3,6 @@ import sys
 import time
 from typing import TYPE_CHECKING
 import socket
-from core.classes.protocol import Protocol
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -15,9 +14,10 @@ REHASH_MODULES = [
     'core.classes.config',
     'core.base',
     'core.classes.commands',
+    'core.classes.protocols.interface',
+    'core.classes.protocols.factory',
     'core.classes.protocols.unreal6',
-    'core.classes.protocols.inspircd',
-    'core.classes.protocol'
+    'core.classes.protocols.inspircd'
 ]
 
 
@@ -36,7 +36,7 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
     # Reload configuration
     uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
     uplink.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
-    uplink.Protocol = Protocol(uplink.Config.SERVEUR_PROTOCOL, uplink.ircObject).Protocol
+    uplink.Protocol = uplink.Loader.PFactory.get()
     uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
 
     uplink.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason="Defender Power off")
@@ -106,7 +106,7 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
     uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('db_commands')
 
     uplink.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
-    uplink.Protocol = Protocol(uplink.Config.SERVEUR_PROTOCOL, uplink.ircObject).Protocol
+    uplink.Protocol = uplink.Loader.PFactory.get()
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():

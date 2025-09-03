@@ -1,6 +1,7 @@
 from re import match, findall
 from datetime import datetime
-from typing import TYPE_CHECKING
+import sys
+from typing import TYPE_CHECKING, Optional
 from ssl import SSLEOFError, SSLError
 
 if TYPE_CHECKING:
@@ -17,7 +18,31 @@ class Inspircd:
         self.__Utils = ircInstance.Loader.Utils
         self.__Logs = ircInstance.Loader.Logs
 
+        self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
+                               'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
+                               'VERSION', 'REPUTATION', 'SVS2MODE', 
+                               'SLOG', 'NICK', 'PART', 'PONG', 'SASL', 'PING',
+                               'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
+                               '006', '007', '018'}
+
         self.__Logs.info(f"** Loading protocol [{__name__}]")
+
+    def get_ircd_protocol_poisition(self, cmd: list[str]) -> tuple[int, Optional[str]]:
+        """Get the position of known commands
+
+        Args:
+            cmd (list[str]): The server response
+
+        Returns:
+            tuple[int, Optional[str]]: The position and the command.
+        """
+        for index, token in enumerate(cmd):
+            if token.upper() in self.known_protocol:
+                return index, token.upper()
+        
+        self.__Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
+
+        return (-1, None)
 
     def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -45,6 +70,8 @@ class Inspircd:
             self.__Logs.error(f"SSLError: {se} - {message}")
         except OSError as oe:
             self.__Logs.error(f"OSError: {oe} - {message}")
+            if oe.errno == 10053:
+                sys.exit(oe)
         except AttributeError as ae:
             self.__Logs.critical(f"Attribute Error: {ae}")
 
@@ -175,7 +202,8 @@ class Inspircd:
             self.__Logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Utils.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
+        # self.send2socket(f":{self.__Config.SERVEUR_ID} SJOIN {self.__Utils.get_unixtime()} {channel} + :{self.__Config.SERVICE_ID}")
+        self.send2socket(f":{self.__Config.SERVICE_ID} FJOIN {channel} 68")
 
         # Add defender to the channel uids list
         self.__Irc.Channel.insert(self.__Irc.Loader.Definition.MChannel(name=channel, uids=[self.__Config.SERVICE_ID]))
@@ -481,32 +509,29 @@ class Inspircd:
 
     def on_uid(self, serverMsg: list[str]) -> None:
         """Handle uid message coming from the server
-
+        [:<sid>] UID    <uid>       <ts>           <nick>     <real-host>     <displayed-host> <real-user> <displayed-user> <ip>            <signon>      <modes> [<mode-parameters>]+ :<real>
+        [':97K', 'UID', '97KAAAAAB', '1756928055', 'adator_', '172.18.128.1', '172.18.128.1',  '...',      '...',           '172.18.128.1', '1756928055', '+', ':...']
         Args:
             serverMsg (list[str]): Original server message
         """
-        # ['@s2s-md/geoip=cc=GB|cd=United\\sKingdom|asn=16276|asname=OVH\\sSAS;s2s-md/tls_cipher=TLSv1.3-TLS_CHACHA20_POLY1305_SHA256;s2s-md/creationtime=1721564601', 
-        # ':001', 'UID', 'albatros', '0', '1721564597', 'albatros', 'vps-91b2f28b.vps.ovh.net', 
-        # '001HB8G04', '0', '+iwxz', 'Clk-A62F1D18.vps.ovh.net', 'Clk-A62F1D18.vps.ovh.net', 'MyZBwg==', ':...']
         try:
-
             isWebirc = True if 'webirc' in serverMsg[0] else False
             isWebsocket = True if 'websocket' in serverMsg[0] else False
 
-            uid = str(serverMsg[8])
-            nickname = str(serverMsg[3])
-            username = str(serverMsg[6])
-            hostname = str(serverMsg[7])
-            umodes = str(serverMsg[10])
-            vhost = str(serverMsg[11])
+            uid = str(serverMsg[2])
+            nickname = str(serverMsg[4])
+            username = str(serverMsg[7])
+            hostname = str(serverMsg[5])
+            umodes = str(serverMsg[11])
+            vhost = str(serverMsg[6])
 
             if not 'S' in umodes:
-                remote_ip = self.__Base.decode_ip(str(serverMsg[13]))
+                remote_ip = self.__Base.decode_ip(str(serverMsg[9]))
             else:
                 remote_ip = '127.0.0.1'
 
             # extract realname
-            realname = ' '.join(serverMsg[14:]).lstrip(':')
+            realname = ' '.join(serverMsg[12:]).lstrip(':')
 
             # Extract Geoip information
             pattern = r'^.*geoip=cc=(\S{2}).*$'
@@ -540,7 +565,7 @@ class Inspircd:
         except IndexError as ie:
             self.__Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self.__Logs.error(f"{__name__} - General Error: {err}")
+            self.__Logs.error(f"{__name__} - General Error: {err}", exc_info=True)
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server
@@ -559,6 +584,17 @@ class Inspircd:
             return None
         except Exception as err:
             self.__Logs.error(f"{__name__} - General Error: {err}")
+
+    def on_server(self, serverMsg: list[str]) -> None:
+        """_summary_
+
+        Args:
+            serverMsg (list[str]): _description_
+        """
+        try:
+            ...
+        except Exception as err:
+            self.__Logs.error(f'General Error: {err}')
 
     def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
