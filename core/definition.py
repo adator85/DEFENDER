@@ -93,6 +93,7 @@ class MReputation(MainModel):
     umodes: str = None
     vhost: str = None
     fingerprint: str = None
+    tls_cipher: str = None
     isWebirc: bool = False
     isWebsocket: bool = False
     remote_ip: str = None
@@ -369,3 +370,13 @@ class MSasl(MainModel):
     language: str = "EN"
     auth_success: bool = False
     level: int = 0
+
+@dataclass
+class MRegister:
+    command_name: str
+    func: Any
+
+@dataclass
+class MIrcdCommand:
+    command_name: str
+    func: Any

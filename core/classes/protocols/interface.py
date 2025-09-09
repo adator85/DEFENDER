@@ -3,19 +3,29 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.classes.sasl import Sasl
-    from core.definition import MClient, MSasl
+    from core.definition import MClient, MSasl, MRegister
+    from core.classes.protocols.command_handler import CommandHandler
 
 class IProtocol(ABC):
 
+    DB_REGISTER: list['MRegister'] = []
+    Handler: Optional['CommandHandler'] = None
+
     @abstractmethod
-    def get_ircd_protocol_poisition(self, cmd: list[str]) -> tuple[int, Optional[str]]:
+    def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
         """Get the position of known commands
 
         Args:
             cmd (list[str]): The server response
+            log (bool): If true it will log in the logger
 
         Returns:
             tuple[int, Optional[str]]: The position and the command.
+        """
+
+    @abstractmethod
+    def register_command(self):
+        """Register all commands that you need to handle
         """
 
     @abstractmethod
@@ -72,6 +82,17 @@ class IProtocol(ABC):
         \n This method will also update the User object
         Args:
             newnickname (str): New nickname of the server
+        """
+
+    @abstractmethod
+    def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+        """Set a mode to channel or to a nickname or for a user in a channel
+
+        Args:
+            modes (str): The selected mode
+            nickname (Optional[str]): The nickname
+            channel_name (Optional[str]): The channel name
+            params (Optional[str]): Parameters like password.
         """
 
     @abstractmethod
@@ -256,15 +277,72 @@ class IProtocol(ABC):
 
     @abstractmethod
     def send_raw(self, raw_command: str) -> None:
-        """_summary_
+        """Send raw message to the server
 
         Args:
-            raw_command (str): _description_
+            raw_command (str): The raw command you want to send.
         """
 
-    #####################
-    #   HANDLE EVENTS   #
-    #####################
+    # ------------------------------------------------------------------------
+    #                           COMMON IRC PARSER
+    # ------------------------------------------------------------------------
+
+    @abstractmethod
+    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse UID and return dictionary.
+
+        Args:
+            serverMsg (list[str]): The UID IRCD message
+        
+        Returns:
+            dict[str, str]: The response as dictionary.
+        """
+
+    @abstractmethod
+    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse quit and return dictionary.
+        >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The response as dictionary.
+        """
+
+    @abstractmethod
+    def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse nick changes and return dictionary.
+        >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
+
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The response as dictionary.
+        """
+
+    @abstractmethod
+    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse PRIVMSG message.
+        >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
+
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The response as dictionary.
+            ```python 
+            response = {
+                "uid": '97KAAAAAE',
+                "channel": '#welcome',
+                "message": 'This is my public message'
+            }
+            ```
+        """
+
+    # ------------------------------------------------------------------------
+    #                           EVENT HANDLER
+    # ------------------------------------------------------------------------
 
     @abstractmethod
     def on_svs2mode(self, serverMsg: list[str]) -> None:
@@ -436,6 +514,17 @@ class IProtocol(ABC):
         Args:
             serverMsg (list[str]): Original server message
             psasl (Sasl): The SASL process object
+        """
+
+    @abstractmethod
+    def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
+        """Finalize sasl authentication
+
+        Args:
+            sasl_model (MSasl): The sasl dataclass model
+
+        Returns:
+            bool: True if success
         """
 
     @abstractmethod

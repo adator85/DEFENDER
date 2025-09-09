@@ -8,7 +8,6 @@ from core.definition import MSModule, MAdmin
 
 if TYPE_CHECKING:
     from core.classes.user import User
-    from core.classes.admin import Admin
 
 class Settings:
     """This Class will never be reloaded. 
@@ -25,7 +24,11 @@ class Settings:
     CONSOLE: bool                               = False
 
     MAIN_SERVER_HOSTNAME: str                   = None
+    MAIN_SERVER_ID: str                         = None
+    PROTOCTL_PREFIX_MODES_SIGNES : dict[str, str] = {}
+    PROTOCTL_PREFIX_SIGNES_MODES : dict[str, str] = {}
     PROTOCTL_USER_MODES: list[str]              = []
+    PROTOCTL_CHANNEL_MODES: list[str]           = []
     PROTOCTL_PREFIX: list[str]                  = []
 
     SMOD_MODULES: list[MSModule]                = []
@@ -42,7 +45,7 @@ class Settings:
     __INSTANCE_OF_USER_UTILS: Optional['User']  = None
     """Instance of the User Utils class"""
 
-    __CURRENT_ADMIN: Optional['MAdmin']          = None
+    __CURRENT_ADMIN: Optional['MAdmin']         = None
     """The Current Admin Object Model"""
 
     __LOGGER: Optional[Logger]                  = None
@@ -79,6 +82,7 @@ class Settings:
     
     @property
     def global_translation(self) -> dict[str, list[list[str]]]:
+        """Get/set global translation variable"""
         return self.__TRANSLATION
 
     @global_translation.setter
@@ -87,6 +91,7 @@ class Settings:
 
     @property
     def global_lang(self) -> str:
+        """Global default language."""
         return self.__LANG
     
     @global_lang.setter
@@ -103,6 +108,7 @@ class Settings:
 
     @property
     def current_admin(self) -> MAdmin:
+        """Current admin data model."""
         return self.__CURRENT_ADMIN
 
     @current_admin.setter
@@ -111,6 +117,7 @@ class Settings:
 
     @property
     def global_logger(self) -> Logger:
+        """Global logger Instance"""
         return self.__LOGGER
 
     @global_logger.setter

@@ -53,7 +53,7 @@ class Reputation:
             bool: True if updated
         """
 
-        reputation_obj = self.get_Reputation(uid)
+        reputation_obj = self.get_reputation(uid)
 
         if reputation_obj is None:
             return False
@@ -89,7 +89,7 @@ class Reputation:
 
         return result
 
-    def get_Reputation(self, uidornickname: str) -> Optional[MReputation]:
+    def get_reputation(self, uidornickname: str) -> Optional[MReputation]:
         """Get The User Object model
 
         Args:
@@ -116,7 +116,7 @@ class Reputation:
             str|None: Return the UID
         """
 
-        reputation_obj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_reputation(uidornickname)
 
         if reputation_obj is None:
             return None
@@ -132,7 +132,7 @@ class Reputation:
         Returns:
             str|None: the nickname
         """
-        reputation_obj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_reputation(uidornickname)
 
         if reputation_obj is None:
             return None
@@ -149,7 +149,7 @@ class Reputation:
             bool: True if exist
         """
 
-        reputation_obj = self.get_Reputation(uidornickname)
+        reputation_obj = self.get_reputation(uidornickname)
 
         if isinstance(reputation_obj, MReputation):
             return True

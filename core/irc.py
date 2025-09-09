@@ -165,10 +165,10 @@ class Irc:
         try:
             self.init_service_user()
             self.Protocol: 'IProtocol' = self.Loader.PFactory.get()
+            self.Protocol.register_command()
             self.Protocol.send_link()                 # Etablir le link en fonction du protocol choisi
             self.signal = True                        # Une variable pour initier la boucle infinie
-            self.join_saved_channels()                # Join existing channels
-            time.sleep(3)
+            # self.join_saved_channels()                # Join existing channels
             # self.ModuleUtils.db_load_all_existing_modules(self)
 
             while self.signal:
@@ -219,7 +219,7 @@ class Irc:
         except ssl.SSLEOFError as soe:
             self.Logs.error(f"SSLEOFError: {soe}")
         except AttributeError as atte:
-            self.Logs.critical(f"AttributeError: {atte}")
+            self.Logs.critical(f"AttributeError: {atte}", exc_info=True)
         except Exception as e:
             self.Logs.critical(f"General Error: {e}", exc_info=True)
 
@@ -260,9 +260,9 @@ class Irc:
         # This is only to reference the method
         return None
 
-    ##############################################
+    # --------------------------------------------
     #             FIN CONNEXION IRC              #
-    ##############################################
+    # --------------------------------------------
 
     def build_command(self, level: int, module_name: str, command_name: str, command_description: str) -> None:
         """This method build the commands variable
@@ -489,116 +489,12 @@ class Irc:
                 return None
 
             self.Logs.debug(f">> {self.Utils.hide_sensitive_data(original_response)}")
-            # parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
-            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response)
-            match parsed_protocol:
 
-                case 'PING':
-                    self.Protocol.on_server_ping(serverMsg=original_response)
+            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response, log=True)
 
-                case 'SERVER':
-                    self.Protocol.on_server(serverMsg=original_response)
-
-                case 'SJOIN':
-                    self.Protocol.on_sjoin(serverMsg=original_response)
-
-                case 'EOS':
-                    self.Protocol.on_eos(serverMsg=original_response)
-
-                case 'UID':
-                    try:
-                        self.Protocol.on_uid(serverMsg=original_response)
-                        for module in self.ModuleUtils.model_get_loaded_modules().copy():
-                            module.class_instance.cmd(original_response)
-
-                        # SASL authentication
-                        # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
-                        dnickname = self.Config.SERVICE_NICKNAME
-                        dchanlog = self.Config.SERVICE_CHANLOG
-                        uid = original_response[8]
-                        nickname = original_response[3]
-                        sasl_obj = self.Sasl.get_sasl_obj(uid)
-                        if sasl_obj:
-                            if sasl_obj.auth_success:
-                                self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
-                                self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                  msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, sasl_obj.username, dnickname),
-                                                  channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
-                            else:
-                                self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                        msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s", RED, NOGC, nickname, sasl_obj.username),
-                                                        channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
-
-                            # Delete sasl object!
-                            self.Sasl.delete_sasl_client(uid)
-
-                        return None
-                    except Exception as err:
-                        self.Logs.error(f'General Error: {err}')
-
-                case 'QUIT':
-                    self.Protocol.on_quit(serverMsg=original_response)
-
-                case 'PROTOCTL':
-                    self.Protocol.on_protoctl(serverMsg=original_response)
-
-                case 'SVS2MODE':
-                    self.Protocol.on_svs2mode(serverMsg=original_response)
-
-                case 'SQUIT':
-                    self.Protocol.on_squit(serverMsg=original_response)
-
-                case 'PART':
-                    self.Protocol.on_part(serverMsg=original_response)
-
-                case 'VERSION':
-                    self.Protocol.on_version_msg(serverMsg=original_response)
-
-                case 'UMODE2':
-                    self.Protocol.on_umode2(serverMsg=original_response)
-
-                case 'NICK':
-                    self.Protocol.on_nick(serverMsg=original_response)
-
-                case 'REPUTATION':
-                    self.Protocol.on_reputation(serverMsg=original_response)
-
-                case 'SMOD':
-                    self.Protocol.on_smod(original_response)
-
-                case 'SASL':
-                    sasl_response = self.Protocol.on_sasl(original_response, self.Sasl)
-                    self.on_sasl_authentication_process(sasl_response)
-
-                case 'MD':
-                    self.Protocol.on_md(serverMsg=original_response)
-
-                case 'PRIVMSG':
-                    self.Protocol.on_privmsg(serverMsg=original_response)
-
-                case 'SLOG': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case 'PONG': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case 'MODE': # TODO
-                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6...', ':001', 'MODE', '#a', '+nt', '1723207536']
-                    #['@unrealircd.org/userhost=adator@localhost;...', ':001LQ0L0C', 'MODE', '#services', '-l']
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case '320': # TODO
-                    #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case '318': # TODO
-                    #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case None:
-                    self.Logs.debug(f"[!] TO HANDLE: {original_response}")
+            for parsed in self.Protocol.Handler.get_ircd_commands():
+                if parsed.command_name.upper() == parsed_protocol:
+                    parsed.func(original_response)
 
             if len(original_response) > 2:
                 if original_response[2] != 'UID':
@@ -1154,7 +1050,8 @@ class Irc:
                     self.Base.execute_periodic_action()
 
                     for chan_name in self.Channel.UID_CHANNEL_DB:
-                        self.Protocol.send_mode_chan(chan_name.name, '-l')
+                        # self.Protocol.send_mode_chan(chan_name.name, '-l')
+                        self.Protocol.send_set_mode('-l', channel_name=chan_name.name)
                     
                     for client in self.Client.CLIENT_DB:
                         self.Protocol.send_svslogout(client)
@@ -1207,7 +1104,7 @@ class Irc:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=tr('%s - %sNot Loaded%s', module, GREEN, NOGC)
+                            msg=tr('%s - %sNot Loaded%s', module, RED, NOGC)
                         )
 
             case 'show_timers':

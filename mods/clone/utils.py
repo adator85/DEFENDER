@@ -174,17 +174,17 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
     return True
 
-def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]):
+def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
     
-    uid_sender = uplink.Irc.Utils.clean_uid(srvmsg[1])
+    parser = uplink.Protocol.parse_privmsg(srvmsg)
+    uid_sender = uplink.Irc.Utils.clean_uid(parser.get('uid_sender', None))
     senderObj = uplink.User.get_user(uid_sender)
 
-    if senderObj.hostname in uplink.Config.CLONE_LOG_HOST_EXEMPT:
-        return
-
-    if not senderObj is None:
-        senderMsg = ' '.join(srvmsg[4:])
-        clone_obj = uplink.Clone.get_clone(srvmsg[3])
+    if senderObj is not None:
+        if senderObj.hostname in uplink.Config.CLONE_LOG_HOST_EXEMPT:
+            return
+        senderMsg = parser.get('message', None)
+        clone_obj = uplink.Clone.get_clone(parser.get('uid_reciever', None))
 
         if clone_obj is None:
             return
@@ -196,3 +196,5 @@ def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]):
                 msg=final_message,
                 channel=uplink.Config.CLONE_CHANNEL
             )
+    
+    return None

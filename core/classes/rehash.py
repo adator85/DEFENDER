@@ -33,14 +33,8 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
     uplink.Client.CLIENT_DB.clear()           # Clear Client object
     uplink.Base.garbage_collector_thread()
 
-    # Reload configuration
-    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
-    uplink.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
-    uplink.Protocol = uplink.Loader.PFactory.get()
     uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
-
     uplink.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason="Defender Power off")
-
     uplink.Logs.debug('Restarting Defender ...')
     uplink.IrcSocket.shutdown(socket.SHUT_RDWR)
     uplink.IrcSocket.close()
@@ -49,11 +43,19 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
         time.sleep(0.5)
         uplink.Logs.warning('-- Waiting for socket to close ...')
 
+    # Reload configuration
+    uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
+    uplink.Loader.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
+
+    for mod in REHASH_MODULES:
+        importlib.reload(sys.modules[mod])
+
+    uplink.Protocol = uplink.Loader.PFactory.get()
+    uplink.Protocol.register_command()
+
     uplink.init_service_user()
     uplink.Utils.create_socket(uplink)
     uplink.Protocol.send_link()
-    uplink.join_saved_channels()
-    uplink.ModuleUtils.db_load_all_existing_modules(uplink)
     uplink.Config.DEFENDER_RESTART = 0
 
 def rehash_service(uplink: 'Irc', nickname: str) -> None:
@@ -70,13 +72,13 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
             channel=uplink.Config.SERVICE_CHANLOG
             )
     uplink.Utils = sys.modules['core.utils']
-    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
-    uplink.Config.HSID = config_model_bakcup.HSID
-    uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
-    uplink.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
-    uplink.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
-    uplink.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
-    uplink.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
+    uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
+    uplink.Loader.Config.HSID = config_model_bakcup.HSID
+    uplink.Loader.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
+    uplink.Loader.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
+    uplink.Loader.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
+    uplink.Loader.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
+    uplink.Loader.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
 
     conf_bkp_dict: dict = config_model_bakcup.to_dict()
     config_dict: dict = uplink.Config.to_dict()
@@ -105,8 +107,9 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
     uplink.Commands = uplink.Loader.CommandModule.Command(uplink.Loader)
     uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('db_commands')
 
-    uplink.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
+    uplink.Loader.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
     uplink.Protocol = uplink.Loader.PFactory.get()
+    uplink.Protocol.register_command()
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():

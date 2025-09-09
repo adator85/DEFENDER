@@ -1,7 +1,7 @@
 from core import installation
 
 #############################################
-#       @Version : 6.2                      #
+#       @Version : 6.3                      #
 #       Requierements :                     #
 #           Python3.10 or higher            #
 #           SQLAlchemy, requests, psutil    #
