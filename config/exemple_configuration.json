@@ -43,6 +43,6 @@
     "WHITELISTED_IP": ["127.0.0.1"],
     "GLINE_DURATION": "30",
 
-    "DEBUG_LEVEL": 20
-
+    "DEBUG_LEVEL": 20,
+    "DEBUG_HARD": true
 }

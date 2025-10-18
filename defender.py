@@ -11,7 +11,7 @@ from core import installation
 
 try:
 
-    # installation.Install()
+    installation.Install()
 
     from core.loader import Loader
     loader = Loader()
