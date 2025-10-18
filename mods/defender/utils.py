@@ -87,7 +87,7 @@ def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
         return
 
     if confmodel.reputation == 1:
-        get_reputation = irc.Reputation.get_Reputation(parsed_UID)
+        get_reputation = irc.Reputation.get_reputation(parsed_UID)
 
         if parsed_chan != gconfig.SALON_JAIL:
             p.send2socket(f":{gconfig.SERVICE_ID} MODE {parsed_chan} +b ~security-group:unknown-users")
@@ -138,18 +138,20 @@ def handle_on_slog(uplink: 'Defender', srvmsg: list[str]):
     return None
 
 def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
-    """_summary_
+    """Handle nickname changes.
     >>> srvmsg = ['@unrealircd.org...', ':001MZQ0RB', 'NICK', 'newnickname', '1754663712']
+    >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
     Args:
         irc_instance (Irc): The Irc instance
         srvmsg (list[str]): The Server MSG
         confmodel (ModConfModel): The Module Configuration
     """
-    uid = uplink.Loader.Utils.clean_uid(str(srvmsg[1]))
     p = uplink.Protocol
+    parser = p.parse_nick(srvmsg)
+    uid = uplink.Loader.Utils.clean_uid(parser.get('uid', None))
     confmodel = uplink.ModConfig
 
-    get_reputation = uplink.Reputation.get_Reputation(uid)
+    get_reputation = uplink.Reputation.get_reputation(uid)
     jail_salon = uplink.Config.SALON_JAIL
     service_id = uplink.Config.SERVICE_ID
 
@@ -159,7 +161,7 @@ def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
 
     # Update the new nickname
     oldnick = get_reputation.nickname
-    newnickname = srvmsg[3]
+    newnickname = parser.get('newnickname', None)
     get_reputation.nickname = newnickname
 
     # If ban in all channel is ON then unban old nickname an ban the new nickname
@@ -170,20 +172,21 @@ def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
                 p.send2socket(f":{service_id} MODE {chan.name} +b {newnickname}!*@*")
 
 def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
-    """_summary_
+    """Handle on quit message
     >>> srvmsg = ['@unrealircd.org...', ':001MZQ0RB', 'QUIT', ':Quit:', 'quit message']
     Args:
         uplink (Irc): The Defender Module instance
         srvmsg (list[str]): The Server MSG
     """
     p = uplink.Protocol
+    parser = p.parse_quit(srvmsg)
     confmodel = uplink.ModConfig
 
     ban_all_chan = uplink.Base.int_if_possible(confmodel.reputation_ban_all_chan)
-    final_UID = uplink.Loader.Utils.clean_uid(str(srvmsg[1]))
+    final_UID = uplink.Loader.Utils.clean_uid(str(parser.get('uid', None)))
     jail_salon = uplink.Config.SALON_JAIL
     service_id = uplink.Config.SERVICE_ID
-    get_user_reputation = uplink.Reputation.get_Reputation(final_UID)
+    get_user_reputation = uplink.Reputation.get_reputation(final_UID)
 
     if get_user_reputation is not None:
         final_nickname = get_user_reputation.nickname
@@ -204,6 +207,7 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
         uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
     """
+    parser_uid = uplink.Protocol.parse_uid(srvmsg)
     gconfig = uplink.Config
     irc = uplink.Irc
     confmodel = uplink.ModConfig
@@ -213,10 +217,10 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
         return None
 
     # Get User information
-    _User = irc.User.get_user(str(srvmsg[8]))
+    _User = irc.User.get_user(parser_uid.get('uid', None))
 
     if _User is None:
-        irc.Logs.warning(f'This UID: [{srvmsg[8]}] is not available please check why')
+        irc.Logs.warning(f'This UID: [{parser_uid.get("uid", None)}] is not available please check why')
         return
 
     # If user is not service or IrcOp then scan them
@@ -249,7 +253,8 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
 ####################
 # ACTION FUNCTIONS #
 ####################
-
+# [:<sid>] UID <uid> <ts> <nick> <real-host> <displayed-host> <real-user> <ip> <signon> <modes> [<mode-parameters>]+ :<real>
+# [:<sid>] UID nickname hopcount timestamp username hostname uid servicestamp umodes virthost cloakedhost ip :gecos
 def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
 
     confmodel = uplink.ModConfig
@@ -318,7 +323,7 @@ def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
     p = uplink.Protocol
     confmodel = uplink.ModConfig
 
-    get_reputation = irc.Reputation.get_Reputation(jailed_uid)
+    get_reputation = irc.Reputation.get_reputation(jailed_uid)
 
     if get_reputation is None:
         irc.Logs.warning(f'UID {jailed_uid} has not been found')
@@ -404,7 +409,7 @@ def action_apply_reputation_santions(uplink: 'Defender') -> None:
         # Suppression des éléments dans {UID_DB} et {REPUTATION_DB}
         for chan in irc.Channel.UID_CHANNEL_DB:
             if chan.name != salon_jail and ban_all_chan == 1:
-                get_user_reputation = irc.Reputation.get_Reputation(uid)
+                get_user_reputation = irc.Reputation.get_reputation(uid)
                 p.send2socket(f":{service_id} MODE {chan.name} -b {get_user_reputation.nickname}!*@*")
 
         # Lorsqu'un utilisateur quitte, il doit être supprimé de {UID_DB}.

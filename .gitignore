@@ -1,10 +1,12 @@
 .pyenv/
+.vscode/
 .venv/
 .idea/
 db/
 logs/
 __pycache__/
 configuration.json
+configuration_inspircd.json
 configuration_unreal6.json
 *.log
 test.py

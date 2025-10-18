@@ -78,11 +78,11 @@ class Clone:
         self.__load_module_configuration()
 
         self.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.send_join_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
+        self.Protocol.send_sjoin(self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+o', nickname=self.Config.SERVICE_NICKNAME, channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+nts', channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+k', channel_name=self.Config.CLONE_CHANNEL, params=self.Config.CLONE_CHANNEL_PASSWORD)
 
-        self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.CLONE_CHANNEL} +o {self.Config.SERVICE_NICKNAME}")
-        self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +nts")
-        self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} +k {self.Config.CLONE_CHANNEL_PASSWORD}")
 
     def __create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -127,8 +127,8 @@ class Clone:
         self.Settings.set_cache('UID_CLONE_DB', self.Clone.UID_CLONE_DB)
 
         self.Channel.db_query_channel(action='del', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -nts")
-        self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} MODE {self.Config.CLONE_CHANNEL} -k {self.Config.CLONE_CHANNEL_PASSWORD}")
+        self.Protocol.send_set_mode('-nts', channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('-k', channel_name=self.Config.CLONE_CHANNEL)
         self.Protocol.send_part_chan(self.Config.SERVICE_NICKNAME, self.Config.CLONE_CHANNEL)
 
         self.Irc.Commands.drop_command_by_module(self.module_name)
@@ -148,7 +148,8 @@ class Clone:
             match command:
 
                 case 'PRIVMSG':
-                    return self.Utils.handle_on_privmsg(self, cmd)
+                    self.Utils.handle_on_privmsg(self, cmd)
+                    return None
 
                 case 'QUIT':
                     return None

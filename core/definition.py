@@ -370,3 +370,13 @@ class MSasl(MainModel):
     language: str = "EN"
     auth_success: bool = False
     level: int = 0
+
+@dataclass
+class MRegister:
+    command_name: str
+    func: Any
+
+@dataclass
+class MIrcdCommand:
+    command_name: str
+    func: Any

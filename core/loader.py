@@ -8,6 +8,8 @@ import core.base as base_mod
 import core.module as module_mod
 import core.classes.commands as commands_mod
 import core.classes.config as conf_mod
+import core.irc as irc
+import core.classes.protocols.factory as factory
 
 class Loader:
 
@@ -62,5 +64,9 @@ class Loader:
         self.ModuleUtils: module_mod.Module         = module_mod.Module(self)
 
         self.Sasl: sasl.Sasl                        = sasl.Sasl(self)
+
+        self.Irc: irc.Irc                           = irc.Irc(self)
+
+        self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self.Irc)
 
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))

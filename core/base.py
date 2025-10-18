@@ -600,7 +600,9 @@ class Base:
     def db_patch(self, table_name: str, column_name: str, column_type: str) -> bool:
         if not self.db_is_column_exist(table_name, column_name):
             patch = f"ALTER TABLE {self.Config.TABLE_ADMIN} ADD COLUMN {column_name} {column_type}"
+            update_row = f"UPDATE {self.Config.TABLE_ADMIN} SET language = 'EN' WHERE language is null"
             self.db_execute_query(patch)
+            self.db_execute_query(update_row)
             self.logs.debug(f"The patch has been applied")
             self.logs.debug(f"Table name: {table_name}, Column name: {column_name}, Column type: {column_type}")
             return True
@@ -681,14 +683,13 @@ class Base:
             return False
 
     def decode_ip(self, ip_b64encoded: str) -> Optional[str]:
-
-        binary_ip = b64decode(ip_b64encoded)
         try:
+            binary_ip = b64decode(ip_b64encoded)
             decoded_ip = ipaddress.ip_address(binary_ip)
 
             return decoded_ip.exploded
         except ValueError as ve:
-            self.logs.critical(f'This remote ip is not valid : {ve}')
+            self.logs.critical(f'This remote ip ({ip_b64encoded}) is not valid : {ve}')
             return None
 
     def encode_ip(self, remote_ip_address: str) -> Optional[str]:

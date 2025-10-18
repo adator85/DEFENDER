@@ -10,7 +10,11 @@ class Client:
     CLIENT_DB: list['MClient'] = []
 
     def __init__(self, loader: 'Loader'):
+        """
 
+        Args:
+            loader (Loader): The Loader instance.
+        """
         self.Logs = loader.Logs
         self.Base = loader.Base
 
@@ -34,12 +38,12 @@ class Client:
 
         return True
 
-    def update_nickname(self, uid: str, newNickname: str) -> bool:
+    def update_nickname(self, uid: str, new_nickname: str) -> bool:
         """Update the nickname starting from the UID
 
         Args:
             uid (str): UID of the user
-            newNickname (str): New nickname
+            new_nickname (str): New nickname
 
         Returns:
             bool: True if updated
@@ -49,7 +53,7 @@ class Client:
         if user_obj is None:
             return False
 
-        user_obj.nickname = newNickname
+        user_obj.nickname = new_nickname
 
         return True
 
@@ -181,7 +185,7 @@ class Client:
 
         return client_obj.to_dict()
 
-    def is_exist(self, uidornikname: str) -> bool:
+    def is_exist(self, uidornickname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB
 
         Args:
@@ -190,7 +194,7 @@ class Client:
         Returns:
             bool: True if exist
         """
-        user_obj = self.get_Client(uidornickname=uidornikname)
+        user_obj = self.get_Client(uidornickname=uidornickname)
 
         if user_obj is None:
             return False
@@ -231,9 +235,9 @@ class Client:
         """
 
         pattern = fr'[:|@|%|\+|~|\*]*'
-        parsed_UID = sub(pattern, '', uid)
+        parsed_uid = sub(pattern, '', uid)
 
-        if not parsed_UID:
+        if not parsed_uid:
             return None
 
-        return parsed_UID
+        return parsed_uid

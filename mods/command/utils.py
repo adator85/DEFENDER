@@ -134,17 +134,20 @@ def set_operation(uplink: 'Command', cmd: list[str], channel_name: Optional[str]
         return False
 
     if len(cmd) == 1:
-        uplink.Protocol.send2socket(f":{dnickname} MODE {channel_name} {mode} {client}")
+        # uplink.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {client}")
+        uplink.Protocol.send_set_mode(mode, nickname=client, channel_name=channel_name)
         return None
 
     # deop nickname
     if len(cmd) == 2:
         nickname = cmd[1]
-        uplink.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {nickname}")
+        # uplink.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {nickname}")
+        uplink.Protocol.send_set_mode(mode, nickname=nickname, channel_name=channel_name)
         return None
 
     nickname = cmd[2]
-    uplink.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {nickname}")
+    # uplink.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {nickname}")
+    uplink.Protocol.send_set_mode(mode, nickname=nickname, channel_name=channel_name)
     return None
 
 def set_ban(uplink: 'Command', cmd: list[str], action: Literal['+', '-'], client: str) -> None:

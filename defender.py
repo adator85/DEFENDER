@@ -1,7 +1,7 @@
 from core import installation
 
 #############################################
-#       @Version : 6.2                      #
+#       @Version : 6.3                      #
 #       Requierements :                     #
 #           Python3.10 or higher            #
 #           SQLAlchemy, requests, psutil    #
@@ -11,14 +11,17 @@ from core import installation
 
 try:
 
-    installation.Install()
+    # installation.Install()
 
     from core.loader import Loader
-    from core.irc import Irc
-    ircInstance = Irc(Loader())
-    ircInstance.init_irc(ircInstance)
+    loader = Loader()
+    loader.Irc.init_irc()
+    # from core.irc import Irc
+    # ircInstance = Irc(Loader())
+    # ircInstance.init_irc(ircInstance)
 
 except AssertionError as ae:
     print(f'Assertion Error -> {ae}')
 except KeyboardInterrupt as k:
-    ircInstance.Base.execute_periodic_action()
+    # ircInstance.Base.execute_periodic_action()
+    ...

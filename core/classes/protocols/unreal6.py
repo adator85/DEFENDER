@@ -1,9 +1,11 @@
 from base64 import b64decode
 from re import match, findall, search
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
 
+from core.classes.protocols.command_handler import CommandHandler
+from core.classes.protocols.interface import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -11,7 +13,7 @@ if TYPE_CHECKING:
     from core.classes.sasl import Sasl
     from core.definition import MClient, MSasl
 
-class Unrealircd6:
+class Unrealircd6(IProtocol):
 
     def  __init__(self, ircInstance: 'Irc'):
         self.name = 'UnrealIRCD-6'
@@ -31,13 +33,16 @@ class Unrealircd6:
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
                                '006', '007', '018'}
 
-        self.__Logs.info(f"** Loading protocol [{__name__}]")
+        self.Handler = CommandHandler(ircInstance.Loader)
 
-    def get_ircd_protocol_poisition(self, cmd: list[str]) -> tuple[int, Optional[str]]:
+        self.__Logs.info(f"[PROTOCOL] Protocol [{__name__}] loaded!")
+
+    def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
         """Get the position of known commands
 
         Args:
             cmd (list[str]): The server response
+            log (bool): If true it will log in the logger
 
         Returns:
             tuple[int, Optional[str]]: The position and the command.
@@ -46,9 +51,33 @@ class Unrealircd6:
             if token.upper() in self.known_protocol:
                 return index, token.upper()
         
-        self.__Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
+        if log:
+            self.__Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
 
         return (-1, None)
+
+    def register_command(self) -> None:
+        m = self.__Irc.Loader.Definition.MIrcdCommand
+        self.Handler.register(m(command_name="PING", func=self.on_server_ping))
+        self.Handler.register(m(command_name="UID", func=self.on_uid))
+        self.Handler.register(m(command_name="QUIT", func=self.on_quit))
+        self.Handler.register(m(command_name="SERVER", func=self.on_server))
+        self.Handler.register(m(command_name="SJOIN", func=self.on_sjoin))
+        self.Handler.register(m(command_name="EOS", func=self.on_eos))
+        self.Handler.register(m(command_name="PROTOCTL", func=self.on_protoctl))
+        self.Handler.register(m(command_name="SVS2MODE", func=self.on_svs2mode))
+        self.Handler.register(m(command_name="SQUIT", func=self.on_squit))
+        self.Handler.register(m(command_name="PART", func=self.on_part))
+        self.Handler.register(m(command_name="VERSION", func=self.on_version_msg))
+        self.Handler.register(m(command_name="UMODE2", func=self.on_umode2))
+        self.Handler.register(m(command_name="NICK", func=self.on_nick))
+        self.Handler.register(m(command_name="REPUTATION", func=self.on_reputation))
+        self.Handler.register(m(command_name="SMOD", func=self.on_smod))
+        self.Handler.register(m(command_name="SASL", func=self.on_sasl))
+        self.Handler.register(m(command_name="MD", func=self.on_md))
+        self.Handler.register(m(command_name="PRIVMSG", func=self.on_privmsg))
+
+        return None
 
     def parse_server_msg(self, server_msg: list[str]) -> Optional[str]:
         """Parse the server message and return the command
@@ -173,42 +202,52 @@ class Unrealircd6:
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
-
-        nickname = self.__Config.SERVICE_NICKNAME
-        username = self.__Config.SERVICE_USERNAME
-        realname = self.__Config.SERVICE_REALNAME
-        chan = self.__Config.SERVICE_CHANLOG
-        info = self.__Config.SERVICE_INFO
-        smodes = self.__Config.SERVICE_SMODES
-        cmodes = self.__Config.SERVICE_CMODES
-        umodes = self.__Config.SERVICE_UMODES
-        host = self.__Config.SERVICE_HOST
+        service_id = self.__Config.SERVICE_ID
+        service_nickname = self.__Config.SERVICE_NICKNAME
+        service_username = self.__Config.SERVICE_USERNAME
+        service_realname = self.__Config.SERVICE_REALNAME
+        service_channel_log = self.__Config.SERVICE_CHANLOG
+        service_info = self.__Config.SERVICE_INFO
+        service_smodes = self.__Config.SERVICE_SMODES
+        service_cmodes = self.__Config.SERVICE_CMODES
+        service_umodes = self.__Config.SERVICE_UMODES
+        service_hostname = self.__Config.SERVICE_HOST
         service_name = self.__Config.SERVICE_NAME
         protocolversion = self.protocol_version
 
-        password = self.__Config.SERVEUR_PASSWORD
-        link = self.__Config.SERVEUR_LINK
+        server_password = self.__Config.SERVEUR_PASSWORD
+        server_link = self.__Config.SERVEUR_LINK
         server_id = self.__Config.SERVEUR_ID
-        service_id = self.__Config.SERVICE_ID
 
         version = self.__Config.CURRENT_VERSION
         unixtime = self.__Utils.get_unixtime()
 
-        self.send2socket(f":{server_id} PASS :{password}", print_log=False)
+        self.send2socket(f":{server_id} PASS :{server_password}", print_log=False)
         self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
-        self.send2socket(f":{server_id} PROTOCTL EAUTH={link},{protocolversion},,{service_name}-v{version}")
+        self.send2socket(f":{server_id} PROTOCTL EAUTH={server_link},{protocolversion},,{service_name}-v{version}")
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
         self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
-        self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
-        self.send2socket(f":{server_id} {nickname} :Reserved for services")
-        self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        self.send_sjoin(chan)
-        self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
-        self.send2socket(f":{service_id} MODE {chan} {cmodes}")
+        self.send2socket(f":{server_id} SERVER {server_link} 1 :{service_info}")
+        self.send2socket("EOS")
+        self.send2socket(f":{server_id} {service_nickname} :Reserved for services")
+        self.send2socket(f":{server_id} UID {service_nickname} 1 {unixtime} {service_username} {service_hostname} {service_id} * {service_smodes} * * fwAAAQ== :{service_realname}")
+        self.send_sjoin(service_channel_log)
+        self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
+        self.send2socket(f":{service_id} MODE {service_channel_log} {service_cmodes}")
 
         self.__Logs.debug(f'>> {__name__} Link information sent to the server')
 
     def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        """Send a gline command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            hostname (str): The hostname of the client.
+            set_by (str): The nickname who send the gline
+            expire_timestamp (int): Expire timestamp
+            set_at_timestamp (int): Set at timestamp
+            reason (str): The reason of the gline.
+        """
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
@@ -225,6 +264,42 @@ class Unrealircd6:
 
         userObj = self.__Irc.User.get_user(self.__Config.SERVICE_NICKNAME)
         self.__Irc.User.update_nickname(userObj.uid, newnickname)
+        return None
+
+    def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+        """Set a mode to channel or to a nickname or for a user in a channel
+
+        Args:
+            modes (str): The selected mode
+            nickname (Optional[str]): The nickname
+            channel_name (Optional[str]): The channel name
+            params (Optional[str]): Parameters like password.
+        """
+        service_id = self.__Config.SERVICE_ID
+
+        if modes[0] not in ['+', '-']:
+            self.__Logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
+            return None
+
+        if nickname and channel_name:
+            # :98KAAAAAB MODE #services +o defenderdev
+            if not self.__Irc.Channel.is_valid_channel(channel_name):
+                self.__Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+                return None
+            self.send2socket(f":{service_id} MODE {channel_name} {modes} {nickname}")
+            return None
+        
+        if nickname and channel_name is None:
+            self.send2socket(f":{service_id} MODE {nickname} {modes}")
+            return None
+        
+        if nickname is None and channel_name:
+            if not self.__Irc.Channel.is_valid_channel(channel_name):
+                self.__Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+                return None
+            self.send2socket(f":{service_id} MODE {channel_name} {modes} {params}")
+            return None
+        
         return None
 
     def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
@@ -429,7 +504,7 @@ class Unrealircd6:
             reason (str): The reason for the quit
         """
         user_obj = self.__Irc.User.get_user(uidornickname=uid)
-        reputationObj = self.__Irc.Reputation.get_Reputation(uidornickname=uid)
+        reputationObj = self.__Irc.Reputation.get_reputation(uidornickname=uid)
 
         if not user_obj is None:
             self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
@@ -562,6 +637,103 @@ class Unrealircd6:
         self.send2socket(f":{self.__Config.SERVICE_NICKNAME} {raw_command}")
 
         return None
+
+    # ------------------------------------------------------------------------
+    #                           COMMON IRC PARSER
+    # ------------------------------------------------------------------------
+
+    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse UID and return dictionary.
+        >>> ['@s2s-md/geoip=cc=GBtag...', ':001', 'UID', 'albatros', '0', '1721564597', 'albatros', 'hostname...', '001HB8G04', '0', '+iwxz', 'hostname-vhost', 'hostname-vhost', 'MyZBwg==', ':...']
+        Args:
+            serverMsg (list[str]): The UID ircd response
+        """
+        umodes = str(serverMsg[10])
+        remote_ip = self.__Base.decode_ip(str(serverMsg[13])) if 'S' not in umodes else '127.0.0.1'
+
+        # Extract Geoip information
+        pattern = r'^.*geoip=cc=(\S{2}).*$'
+        geoip_match = match(pattern, serverMsg[0])
+        geoip = geoip_match.group(1) if geoip_match else None
+
+        response = {
+            'uid': str(serverMsg[8]),
+            'nickname': str(serverMsg[3]),
+            'username': str(serverMsg[6]),
+            'hostname': str(serverMsg[7]),
+            'umodes': umodes,
+            'vhost': str(serverMsg[11]),
+            'ip': remote_ip,
+            'realname': ' '.join(serverMsg[12:]).lstrip(':'),
+            'geoip': geoip,
+            'reputation_score': 0,
+            'iswebirc': True if 'webirc' in serverMsg[0] else False,
+            'iswebsocket': True if 'websocket' in serverMsg[0] else False
+        }
+        return response
+
+    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse quit and return dictionary.
+        >>> # ['@unrealtag...', ':001JKNY0N', 'QUIT', ':Quit:', '....']
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The dictionary.
+        """
+        scopy = serverMsg.copy()
+        if scopy[0].startswith('@'):
+            scopy.pop(0)
+
+        response = {
+            "uid": scopy[0].replace(':', ''),
+            "reason": " ".join(scopy[3:])
+        }
+        return response
+
+    def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse nick changes and return dictionary.
+        >>> ['@unrealircd.org/geoip=FR;unrealircd.org/', ':001OOU2H3', 'NICK', 'WebIrc', '1703795844']
+
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The response as dictionary.
+        """
+        scopy = serverMsg.copy()
+        if scopy[0].startswith('@'):
+            scopy.pop(0)
+
+        response = {
+            "uid": scopy[0].replace(':', ''),
+            "newnickname": scopy[2],
+            "timestamp": scopy[3]
+        }
+        return response
+
+    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
+        """Parse PRIVMSG message.
+        >>> ['@....', ':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
+        >>> [':97KAAAAAF', 'PRIVMSG', '98KAAAAAB', ':sasa']
+
+        Args:
+            serverMsg (list[str]): The server message to parse
+
+        Returns:
+            dict[str, str]: The response as dictionary.
+        """
+        scopy = serverMsg.copy()
+        if scopy[0].startswith('@'):
+            scopy.pop(0)
+
+        response = {
+            "uid_sender": scopy[0].replace(':', ''),
+            "uid_reciever": self.__Irc.User.get_uid(scopy[2]),
+            "channel": scopy[2] if self.__Irc.Channel.is_valid_channel(scopy[2]) else None,
+            "message": " ".join(scopy[3:])
+        }
+        return response
 
     #####################
     #   HANDLE EVENTS   #
@@ -734,6 +906,7 @@ class Unrealircd6:
             self.__Irc.User.update_nickname(uid, newnickname)
             self.__Irc.Client.update_nickname(uid, newnickname)
             self.__Irc.Admin.update_nickname(uid, newnickname)
+            self.__Irc.Reputation.update(uid, newnickname)
 
             return None
 
@@ -854,6 +1027,8 @@ class Unrealircd6:
                     self.__Logs.info(f"# VERSION  :    {version}                       ")
                     self.__Logs.info(f"################################################")
 
+                    self.send_sjoin(self.__Config.SERVICE_CHANLOG)
+
                     if self.__Base.check_for_new_version(False):
                         self.send_priv_msg(
                             nick_from=self.__Config.SERVICE_NICKNAME,
@@ -872,6 +1047,10 @@ class Unrealircd6:
                 # Send EOF to other modules
                 for module in self.__Irc.ModuleUtils.model_get_loaded_modules().copy():
                     module.class_instance.cmd(server_msg_copy)
+
+                # Join saved channels & load existing modules
+                self.__Irc.join_saved_channels()
+                self.__Irc.ModuleUtils.db_load_all_existing_modules(self.__Irc)
 
                 return None
         except IndexError as ie:
@@ -986,14 +1165,42 @@ class Unrealircd6:
             dnickname = self.__Config.SERVICE_NICKNAME
             dchanlog  = self.__Config.SERVICE_CHANLOG
             GREEN = self.__Config.COLORS.green
+            RED = self.__Config.COLORS.red
             NOGC = self.__Config.COLORS.nogc
 
+            for module in self.__Irc.ModuleUtils.model_get_loaded_modules().copy():
+                module.class_instance.cmd(serverMsg)
+
+            # SASL authentication
+            # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
+
+            uid = serverMsg[8]
+            nickname = serverMsg[3]
+            sasl_obj = self.__Irc.Sasl.get_sasl_obj(uid)
+            if sasl_obj:
+                if sasl_obj.auth_success:
+                    self.__Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
+                    self.send_priv_msg(nick_from=dnickname, 
+                                        msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, sasl_obj.username, dnickname),
+                                        channel=dchanlog)
+                    self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
+                else:
+                    self.send_priv_msg(nick_from=dnickname, 
+                                            msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s", RED, NOGC, nickname, sasl_obj.username),
+                                            channel=dchanlog)
+                    self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
+
+                # Delete sasl object!
+                self.__Irc.Sasl.delete_sasl_client(uid)
+                return None
+
+            # If no sasl authentication then auto connect via fingerprint
             if self.__Irc.Admin.db_auth_admin_via_fingerprint(fingerprint, uid):
                 admin = self.__Irc.Admin.get_admin(uid)
                 account = admin.account if admin else ''
                 self.send_priv_msg(nick_from=dnickname, 
-                                                  msg=tr("[ %sSASL AUTO AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, account, dnickname),
-                                                  channel=dchanlog)
+                                   msg=tr("[ %sSASL AUTO AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, account, dnickname),
+                                   channel=dchanlog)
                 self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
 
             return None
@@ -1034,15 +1241,6 @@ class Unrealircd6:
                         msg=f"This command [{self.__Config.COLORS.bold}{arg[0]}{self.__Config.COLORS.bold}] is not available"
                     )
                     return None
-
-                # if not arg[0].lower() in self.__Irc.module_commands_list:
-                #     self.__Logs.debug(f"This command {arg[0]} is not available")
-                #     self.send_notice(
-                #         nick_from=self.__Config.SERVICE_NICKNAME,
-                #         nick_to=user_trigger,
-                #         msg=f"This command [{self.__Config.COLORS.bold}{arg[0]}{self.__Config.COLORS.bold}] is not available"
-                #     )
-                #     return None
 
                 cmd_to_send = convert_to_string.replace(':','')
                 self.__Base.log_cmd(user_trigger, cmd_to_send)
@@ -1097,7 +1295,7 @@ class Unrealircd6:
         except AttributeError as ae:
             self.__Logs.error(f"Attribute Error: {ae}")
         except Exception as err:
-            self.__Logs.error(f"General Error: {err} - {srv_msg}")
+            self.__Logs.error(f"General Error: {err} - {srv_msg}" , exc_info=True)
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server
@@ -1106,7 +1304,6 @@ class Unrealircd6:
             serverMsg (list[str]): List of str coming from the server
         """
         try:
-            # 
             pong = str(serverMsg[1]).replace(':','')
             self.send2socket(f"PONG :{pong}", print_log=False)
 
@@ -1115,6 +1312,11 @@ class Unrealircd6:
             self.__Logs.error(f"{__name__} - General Error: {err}")
 
     def on_server(self, serverMsg: list[str]) -> None:
+        """_summary_
+
+        Args:
+            serverMsg (list[str]): _description_
+        """
         try:
             # ['SERVER', 'irc.local.org', '1', ':U6100-Fhn6OoE-001', 'Local', 'Server']
             sCopy = serverMsg.copy()
@@ -1177,7 +1379,7 @@ class Unrealircd6:
         Args:
             serverMsg (list[str]): List of str coming from the server
         """
-        # ['@unrealircd.org/userhost=StatServ@stats.deb.biz.st;draft/bot;bot;msgid=ehfAq3m2yjMjhgWEfi1UCS;time=2024-10-26T13:49:06.299Z', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
+        # ['@unrealircd.org/...', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
         # Réponse a un CTCP VERSION
         try:
 
@@ -1186,6 +1388,7 @@ class Unrealircd6:
             arg = serverMsg[4].replace(':', '')
 
             if nickname is None:
+                self.__Logs.debug(serverMsg)
                 return None
 
             if arg == '\x01PING':
@@ -1199,6 +1402,7 @@ class Unrealircd6:
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"
                 )
+                self.__Logs.debug(serverMsg)
 
             return None
         except Exception as err:
@@ -1255,7 +1459,7 @@ class Unrealircd6:
         except Exception as err:
             self.__Logs.error(f'General Error: {err}')
 
-    def on_sasl(self, serverMsg: list[str], psasl: 'Sasl') -> Optional['MSasl']:
+    def on_sasl(self, serverMsg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
 
         Args:
@@ -1268,7 +1472,7 @@ class Unrealircd6:
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '0014ZZH1F', 'S', 'EXTERNAL', 'zzzzzzzkey']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
-
+            psasl = self.__Irc.Sasl
             sasl_enabled = False
             for smod in self.__Settings.SMOD_MODULES:
                 if smod.name == 'sasl':
@@ -1308,6 +1512,7 @@ class Unrealircd6:
                         sasl_obj.fingerprint = str(sCopy[6])
                         self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
 
+                    self.on_sasl_authentication_process(sasl_obj)
                     return sasl_obj
 
                 case 'C':
@@ -1320,13 +1525,63 @@ class Unrealircd6:
                         sasl_obj.username = username
                         sasl_obj.password = password
 
+                        self.on_sasl_authentication_process(sasl_obj)
                         return sasl_obj
                     elif sasl_obj.mechanisme == "EXTERNAL":
                         sasl_obj.message_type = sasl_message_type
+
+                        self.on_sasl_authentication_process(sasl_obj)
                         return sasl_obj
 
         except Exception as err:
             self.__Logs.error(f'General Error: {err}', exc_info=True)
+
+    def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
+        s = sasl_model
+        if sasl_model:
+            def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
+                if fingerprint:
+                    mes_donnees = {'fingerprint': fingerprint}
+                    query = f"SELECT user, level, language FROM {self.__Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
+                else:
+                    mes_donnees = {'user': username, 'password': self.__Utils.hash_password(password)}
+                    query = f"SELECT user, level, language FROM {self.__Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+
+                result = self.__Base.db_execute_query(query, mes_donnees)
+                user_from_db = result.fetchone()
+                if user_from_db:
+                    return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
+                else:
+                    return None
+
+            if s.message_type == 'C' and s.mechanisme == 'PLAIN':
+                # Connection via PLAIN
+                admin_info = db_get_admin_info(username=s.username, password=s.password)
+                if admin_info is not None:
+                    s.auth_success = True
+                    s.level = admin_info.get('level', 0)
+                    s.language = admin_info.get('language', 'EN')
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                else:
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+
+            elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
+                # Connection using fingerprints
+                admin_info = db_get_admin_info(fingerprint=s.fingerprint)
+                
+                if admin_info is not None:
+                    s.auth_success = True
+                    s.level = admin_info.get('level', 0)
+                    s.username = admin_info.get('user', None)
+                    s.language = admin_info.get('language', 'EN')
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                else:
+                    # "904 <nick> :SASL authentication failed"
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} SASL {self.__Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    self.send2socket(f":{self.__Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
     def on_md(self, serverMsg: list[str]) -> None:
         """Handle MD responses

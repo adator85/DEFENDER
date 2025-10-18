@@ -55,7 +55,7 @@ class User:
             return False
 
         user_obj.nickname = new_nickname
-
+        self.Logs.debug(f"UID ({uid}) has benn update with new nickname ({new_nickname}).")
         return True
 
     def update_mode(self, uidornickname: str, modes: str) -> bool:

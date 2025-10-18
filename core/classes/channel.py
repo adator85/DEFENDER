@@ -11,13 +11,15 @@ class Channel:
     """List that contains all the Channels objects (ChannelModel)
     """
 
-    def __init__(self, loader: 'Loader') -> None:
+    def __init__(self, loader: 'Loader'):
+        """
 
+        Args:
+            loader (Loader): The Loader Instance
+        """
         self.Logs = loader.Logs
         self.Base = loader.Base
         self.Utils = loader.Utils
-
-        return None
 
     def insert(self, new_channel: 'MChannel') -> bool:
         """This method will insert a new channel and if the channel exist it will update the user list (uids)
@@ -110,6 +112,7 @@ class Channel:
             return result
         except ValueError as ve:
             self.Logs.error(f'{ve}')
+            return False
 
     def delete_user_from_all_channel(self, uid:str) -> bool:
         """Delete a client from all channels
@@ -134,6 +137,7 @@ class Channel:
             return result
         except ValueError as ve:
             self.Logs.error(f'{ve}')
+            return False
 
     def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
         """Add a client to a channel
@@ -226,16 +230,18 @@ class Channel:
                 return False
 
             pattern = fr'^#'
-            isChannel = findall(pattern, channel_to_check)
+            is_channel = findall(pattern, channel_to_check)
 
-            if not isChannel:
+            if not is_channel:
                 return False
             else:
                 return True
         except TypeError as te:
             self.Logs.error(f'TypeError: [{channel_to_check}] - {te}')
+            return False
         except Exception as err:
             self.Logs.error(f'Error Not defined: {err}')
+            return False
 
     def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:
         """You can add a channel or delete a channel.
@@ -282,8 +288,7 @@ class Channel:
                     else:
                         return False
 
-                case _:
-                    return False
 
         except Exception as err:
             self.Logs.error(err)
+            return False

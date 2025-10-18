@@ -7,12 +7,12 @@ from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes import rehash
-from core.loader import Loader
-from core.classes.protocol import Protocol
+from core.classes.protocols.interface import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
     from core.definition import MSasl
+    from core.loader import Loader
 
 class Irc:
     _instance = None
@@ -24,7 +24,7 @@ class Irc:
 
         return cls._instance
 
-    def __init__(self, loader: Loader) -> 'Irc':
+    def __init__(self, loader: 'Loader'):
 
         # Loader class
         self.Loader = loader
@@ -135,7 +135,7 @@ class Irc:
     ##############################################
     #               CONNEXION IRC                #
     ##############################################
-    def init_irc(self, ircInstance: 'Irc') -> None:
+    def init_irc(self) -> None:
         """Create a socket and connect to irc server
 
         Args:
@@ -143,8 +143,8 @@ class Irc:
         """
         try:
             self.init_service_user()
-            self.Utils.create_socket(ircInstance)
-            self.__connect_to_irc(ircInstance)
+            self.Utils.create_socket(self)
+            self.__connect_to_irc()
 
         except AssertionError as ae:
             self.Logs.critical(f'Assertion error: {ae}')
@@ -161,23 +161,20 @@ class Irc:
         ))
         return None
 
-    def __connect_to_irc(self, ircInstance: 'Irc') -> None:
+    def __connect_to_irc(self) -> None:
         try:
             self.init_service_user()
-            self.ircObject = ircInstance              # créer une copie de l'instance Irc
-            self.Protocol = Protocol(
-                protocol=self.Config.SERVEUR_PROTOCOL,
-                ircInstance=self.ircObject
-                ).Protocol
+            self.Protocol: 'IProtocol' = self.Loader.PFactory.get()
+            self.Protocol.register_command()
             self.Protocol.send_link()                 # Etablir le link en fonction du protocol choisi
             self.signal = True                        # Une variable pour initier la boucle infinie
-            self.join_saved_channels()                # Join existing channels
-            self.ModuleUtils.db_load_all_existing_modules(self)
+            # self.join_saved_channels()                # Join existing channels
+            # self.ModuleUtils.db_load_all_existing_modules(self)
 
             while self.signal:
                 try:
                     if self.Config.DEFENDER_RESTART == 1:
-                        rehash.restart_service(self.ircObject)
+                        rehash.restart_service(self)
 
                     # 4072 max what the socket can grab
                     buffer_size = self.IrcSocket.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
@@ -202,9 +199,11 @@ class Irc:
                     self.Logs.error(f"SSLEOFError __connect_to_irc: {soe} - {data}")
                 except ssl.SSLError as se:
                     self.Logs.error(f"SSLError __connect_to_irc: {se} - {data}")
-                    sys.exit(1)
+                    sys.exit(-1)
                 except OSError as oe:
-                    self.Logs.error(f"SSLError __connect_to_irc: {oe} - {data}")
+                    self.Logs.error(f"SSLError __connect_to_irc: {oe} {oe.errno}")
+                    if oe.errno == 10053:
+                        sys.exit(-1)
                 except (socket.error, ConnectionResetError):
                     self.Logs.debug("Connexion reset")
 
@@ -220,7 +219,7 @@ class Irc:
         except ssl.SSLEOFError as soe:
             self.Logs.error(f"SSLEOFError: {soe}")
         except AttributeError as atte:
-            self.Logs.critical(f"AttributeError: {atte}")
+            self.Logs.critical(f"AttributeError: {atte}", exc_info=True)
         except Exception as e:
             self.Logs.critical(f"General Error: {e}", exc_info=True)
 
@@ -261,9 +260,9 @@ class Irc:
         # This is only to reference the method
         return None
 
-    ##############################################
+    # --------------------------------------------
     #             FIN CONNEXION IRC              #
-    ##############################################
+    # --------------------------------------------
 
     def build_command(self, level: int, module_name: str, command_name: str, command_description: str) -> None:
         """This method build the commands variable
@@ -409,57 +408,58 @@ class Irc:
 
         return None
 
-    def create_defender_user(self, nickname: str, level: int, password: str) -> str:
+    def create_defender_user(self, sender: str,  new_admin: str, new_level: int, new_password: str) -> bool:
+        """Create a new admin user for defender
+
+        Args:
+            sender (str): The current admin sending the request
+            new_admin (str): The new admin to create
+            new_level (int): The level of the admin
+            new_password (str): The clear password
+
+        Returns:
+            bool: True if created.
+        """
 
         # > addaccess [nickname] [level] [password]
+        dnick = self.Config.SERVICE_NICKNAME
+        p = self.Protocol
 
-        get_user = self.User.get_user(nickname)
-        level = self.Base.convert_to_int(level)
-        password = password
+        get_user = self.User.get_user(new_admin)
+        level = self.Base.convert_to_int(new_level)
+        password = new_password
 
         if get_user is None:
-            response = f'This nickname {nickname} does not exist, it is not possible to create this user'
-            self.Logs.warning(response)
-            return response
+            response = tr("The nickname (%s) is not currently connected! please create a new admin when the nickname is connected to the network!", new_admin)
+            p.send_notice(dnick, sender, response)
+            self.Logs.debug(f"New admin {new_admin} sent by {sender} is not connected")
+            return False
 
-        if level is None:
-            response = f'The level [{level}] must be a number from 1 to 4'
-            self.Logs.warning(response)
-            return response
-
-        if level > 4:
-            response = "Impossible d'ajouter un niveau > 4"
-            self.Logs.warning(response)
-            return response
+        if level is None or level > 4 or level == 0:
+            p.send_notice(dnick, sender, tr("The level (%s) must be a number from 1 to 4", level))
+            self.Logs.debug(f"Level must a number between 1 to 4 (sent by {sender})")
+            return False
 
         nickname = get_user.nickname
-        response = ''
-
         hostname = get_user.hostname
         vhost = get_user.vhost
         spassword = self.Loader.Utils.hash_password(password)
 
-        mes_donnees = {'admin': nickname}
-        query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user=:admin"
-        r = self.Base.db_execute_query(query_search_user, mes_donnees)
-        exist_user = r.fetchone()
-
-        # On verifie si le user exist dans la base
-        if not exist_user:
-            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level}
+        # Check if the user already exist
+        if not self.Admin.db_is_admin_exist(nickname):
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level, 'language': 'EN'}
             self.Base.db_execute_query(f'''INSERT INTO {self.Config.TABLE_ADMIN} 
-                    (createdOn, user, password, hostname, vhost, level) VALUES
-                    (:datetime, :user, :password, :hostname, :vhost, :level)
+                    (createdOn, user, password, hostname, vhost, level, language) VALUES
+                    (:datetime, :user, :password, :hostname, :vhost, :level, :language)
                     ''', mes_donnees)
-            response = f"{nickname} ajouté en tant qu'administrateur de niveau {level}"
-            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Logs.info(response)
-            return response
+
+            p.send_notice(dnick, sender, tr("New admin (%s) has been added with level %s", nickname, level))
+            self.Logs.info(f"A new admin ({nickname}) has been created by {sender}!")
+            return True
         else:
-            response = f'{nickname} Existe déjà dans les users enregistrés'
-            self.Protocol.send_notice(nick_from=self.Config.SERVICE_NICKNAME, nick_to=nickname, msg=response)
-            self.Logs.info(response)
-            return response
+            p.send_notice(dnick, sender, tr("The nickname (%s) Already exist!", nickname))
+            self.Logs.info(f"The nickname {nickname} already exist! (sent by {sender})")
+            return False
 
     def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.Config.SERVICE_NICKNAME
@@ -489,116 +489,12 @@ class Irc:
                 return None
 
             self.Logs.debug(f">> {self.Utils.hide_sensitive_data(original_response)}")
-            # parsed_protocol = self.Protocol.parse_server_msg(original_response.copy())
-            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response)
-            match parsed_protocol:
 
-                case 'PING':
-                    self.Protocol.on_server_ping(serverMsg=original_response)
+            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response, log=True)
 
-                case 'SERVER':
-                    self.Protocol.on_server(serverMsg=original_response)
-
-                case 'SJOIN':
-                    self.Protocol.on_sjoin(serverMsg=original_response)
-
-                case 'EOS':
-                    self.Protocol.on_eos(serverMsg=original_response)
-
-                case 'UID':
-                    try:
-                        self.Protocol.on_uid(serverMsg=original_response)
-                        for module in self.ModuleUtils.model_get_loaded_modules().copy():
-                            module.class_instance.cmd(original_response)
-
-                        # SASL authentication
-                        # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
-                        dnickname = self.Config.SERVICE_NICKNAME
-                        dchanlog = self.Config.SERVICE_CHANLOG
-                        uid = original_response[8]
-                        nickname = original_response[3]
-                        sasl_obj = self.Sasl.get_sasl_obj(uid)
-                        if sasl_obj:
-                            if sasl_obj.auth_success:
-                                self.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
-                                self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                  msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, sasl_obj.username, dnickname),
-                                                  channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
-                            else:
-                                self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                        msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s", RED, NOGC, nickname, sasl_obj.username),
-                                                        channel=dchanlog)
-                                self.Protocol.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
-
-                            # Delete sasl object!
-                            self.Sasl.delete_sasl_client(uid)
-
-                        return None
-                    except Exception as err:
-                        self.Logs.error(f'General Error: {err}')
-
-                case 'QUIT':
-                    self.Protocol.on_quit(serverMsg=original_response)
-
-                case 'PROTOCTL':
-                    self.Protocol.on_protoctl(serverMsg=original_response)
-
-                case 'SVS2MODE':
-                    self.Protocol.on_svs2mode(serverMsg=original_response)
-
-                case 'SQUIT':
-                    self.Protocol.on_squit(serverMsg=original_response)
-
-                case 'PART':
-                    self.Protocol.on_part(serverMsg=original_response)
-
-                case 'VERSION':
-                    self.Protocol.on_version_msg(serverMsg=original_response)
-
-                case 'UMODE2':
-                    self.Protocol.on_umode2(serverMsg=original_response)
-
-                case 'NICK':
-                    self.Protocol.on_nick(serverMsg=original_response)
-
-                case 'REPUTATION':
-                    self.Protocol.on_reputation(serverMsg=original_response)
-
-                case 'SMOD':
-                    self.Protocol.on_smod(original_response)
-
-                case 'SASL':
-                    sasl_response = self.Protocol.on_sasl(original_response, self.Sasl)
-                    self.on_sasl_authentication_process(sasl_response)
-
-                case 'MD':
-                    self.Protocol.on_md(serverMsg=original_response)
-
-                case 'PRIVMSG':
-                    self.Protocol.on_privmsg(serverMsg=original_response)
-
-                case 'SLOG': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case 'PONG': # TODO
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case 'MODE': # TODO
-                    #['@msgid=d0ySx56Yd0nc35oHts2SkC-/J9mVUA1hfM6...', ':001', 'MODE', '#a', '+nt', '1723207536']
-                    #['@unrealircd.org/userhost=adator@localhost;...', ':001LQ0L0C', 'MODE', '#services', '-l']
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case '320': # TODO
-                    #:irc.deb.biz.st 320 PyDefender IRCParis07 :is in security-groups: known-users,webirc-users,tls-and-known-users,tls-users
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case '318': # TODO
-                    #:irc.deb.biz.st 318 PyDefender IRCParis93 :End of /WHOIS list.
-                    self.Logs.debug(f"[!] TO HANDLE: {parsed_protocol}")
-
-                case None:
-                    self.Logs.debug(f"[!] TO HANDLE: {original_response}")
+            for parsed in self.Protocol.Handler.get_ircd_commands():
+                if parsed.command_name.upper() == parsed_protocol:
+                    parsed.func(original_response)
 
             if len(original_response) > 2:
                 if original_response[2] != 'UID':
@@ -680,6 +576,9 @@ class Irc:
                         nick_from=dnickname,
                         channel=dchanlog
                         )
+
+                self.Protocol.send_notice(dnickname, fromuser, tr("You have been successfully disconnected from %s", dnickname))
+                return None
 
             case 'firstauth':
                 # firstauth OWNER_NICKNAME OWNER_PASSWORD
@@ -786,8 +685,9 @@ class Irc:
                 
                 if admin_obj:
                     self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - You are already connected to {dnickname}",
+                                                msg=f"[ {GREEN}{str(current_command).upper()}{NOGC} ] - {fromuser} is already connected to {dnickname}",
                                                 channel=dchanlog)
+                    self.Protocol.send_notice(dnickname, fromuser, tr("You are already connected to %s", dnickname))
                     return None
 
                 mes_donnees = {'user': user_to_log, 'password': self.Loader.Utils.hash_password(password)}
@@ -818,15 +718,14 @@ class Irc:
                     if len(cmd) < 4:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} addaccess [nickname] [level] [password]")
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
+                        return None
 
-                    newnickname = cmd[1]
-                    newlevel = self.Base.int_if_possible(cmd[2])
-                    password = cmd[3]
+                    new_admin = str(cmd[1])
+                    level = self.Base.int_if_possible(cmd[2])
+                    password = str(cmd[3])
 
-                    response = self.create_defender_user(newnickname, newlevel, password)
-
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{response}")
-                    self.Logs.info(response)
+                    self.create_defender_user(fromuser, new_admin, level, password)
+                    return None
 
                 except IndexError as ie:
                     self.Logs.error(f'_hcmd addaccess: {ie}')
@@ -1115,7 +1014,7 @@ class Irc:
                 except KeyError as ke:
                     self.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
                 except Exception as err:
-                    self.Logs.error(f"General Error: {ke} - list recieved: {cmd}")
+                    self.Logs.error(f"General Error: {err} - list recieved: {cmd}", exc_info=True)
 
             case 'unload':
                 # unload mod_defender
@@ -1151,7 +1050,8 @@ class Irc:
                     self.Base.execute_periodic_action()
 
                     for chan_name in self.Channel.UID_CHANNEL_DB:
-                        self.Protocol.send_mode_chan(chan_name.name, '-l')
+                        # self.Protocol.send_mode_chan(chan_name.name, '-l')
+                        self.Protocol.send_set_mode('-l', channel_name=chan_name.name)
                     
                     for client in self.Client.CLIENT_DB:
                         self.Protocol.send_svslogout(client)
@@ -1176,7 +1076,7 @@ class Irc:
                 self.Config.DEFENDER_INIT = 1                    # set init to 1 saying that the service will be re initiated
 
             case 'rehash':
-                rehash.rehash_service(self.ircObject, fromuser)
+                rehash.rehash_service(self, fromuser)
                 return None
 
             case 'show_modules':
@@ -1204,7 +1104,7 @@ class Irc:
                         self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=tr('%s - %sNot Loaded%s', module, GREEN, NOGC)
+                            msg=tr('%s - %sNot Loaded%s', module, RED, NOGC)
                         )
 
             case 'show_timers':

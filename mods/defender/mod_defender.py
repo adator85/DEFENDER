@@ -365,7 +365,7 @@ class Defender:
                     release_code = cmd[1]
                     jailed_nickname = self.User.get_nickname(fromuser)
                     jailed_UID = self.User.get_uid(fromuser)
-                    get_reputation = self.Reputation.get_Reputation(jailed_UID)
+                    get_reputation = self.Reputation.get_reputation(jailed_UID)
 
                     if get_reputation is None:
                         self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" No code is requested ...")
@@ -551,7 +551,7 @@ class Defender:
                                                   msg=f"This nickname ({str(cmd[2])}) is not connected to the network!")
                                     return None
 
-                                client_to_release = self.Reputation.get_Reputation(client_obj.uid)
+                                client_to_release = self.Reputation.get_reputation(client_obj.uid)
 
                                 if client_to_release is None:
                                     p.send_notice(nick_from=dnickname,

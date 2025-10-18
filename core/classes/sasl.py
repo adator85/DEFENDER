@@ -1,4 +1,4 @@
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.definition import MSasl
@@ -9,13 +9,18 @@ class Sasl:
     DB_SASL: list['MSasl'] = []
 
     def __init__(self, loader: 'Loader'):
+        """
+
+        Args:
+            loader (Loader): The Loader instance.
+        """
         self.Logs = loader.Logs # logger
 
     def insert_sasl_client(self, psasl: 'MSasl') -> bool:
         """Insert a new Sasl authentication
 
         Args:
-            new_user (UserModel): New userModel object
+            psasl (MSasl): New userModel object
 
         Returns:
             bool: True if inserted
@@ -38,7 +43,7 @@ class Sasl:
         """Delete the User starting from the UID
 
         Args:
-            uid (str): UID of the user
+            client_uid (str): UID of the user
 
         Returns:
             bool: True if deleted
