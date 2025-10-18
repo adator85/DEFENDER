@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Optional, TYPE_CHECKING
+from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
-    from core.classes.sasl import Sasl
-    from core.definition import MClient, MSasl, MRegister
-    from core.classes.protocols.command_handler import CommandHandler
+    from core.definition import MClient, MSasl
+
 
 class IProtocol(ABC):
 
-    DB_REGISTER: list['MRegister'] = []
-    Handler: Optional['CommandHandler'] = None
+    Handler: Optional[CommandHandler] = None
 
     @abstractmethod
     def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
@@ -33,7 +32,8 @@ class IProtocol(ABC):
         """Envoit les commandes à envoyer au serveur.
 
         Args:
-            string (Str): contient la commande à envoyer au serveur.
+            message (str): contient la commande à envoyer au serveur.
+            print_log (bool): If True then print logs
         """
 
     @abstractmethod
@@ -65,15 +65,15 @@ class IProtocol(ABC):
 
     @abstractmethod
     def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
-        """_summary_
+        """Send a gline command to the server
 
         Args:
-            nickname (str): _description_
-            hostname (str): _description_
-            set_by (str): _description_
-            expire_timestamp (int): _description_
-            set_at_timestamp (int): _description_
-            reason (str): _description_
+            nickname (str): The nickname of the client.
+            hostname (str): The hostname of the client.
+            set_by (str): The nickname who send the gline
+            expire_timestamp (int): Expire timestamp
+            set_at_timestamp (int): Set at timestamp
+            reason (str): The reason of the gline.
         """
 
     @abstractmethod
@@ -149,8 +149,7 @@ class IProtocol(ABC):
         """_summary_
 
         Args:
-            from_nick (str): _description_
-            nick_to (str): _description_
+            nick_to_sapart (str): _description_
             channel_name (str): _description_
         """
 
@@ -215,18 +214,19 @@ class IProtocol(ABC):
         """Logout a client from his account
 
         Args:
-            client_uid (str): The Client UID
+            client_obj (MClient): The Client UID
         """
 
     @abstractmethod
-    def send_quit(self, uid: str, reason: str, print_log: True) -> None:
+    def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
         """Send quit message
         - Delete uid from User object
         - Delete uid from Reputation object
 
         Args:
-            uidornickname (str): The UID or the Nickname
+            uid (str): The UID or the Nickname
             reason (str): The reason for the quit
+            print_log (bool): If True then print logs
         """
 
     @abstractmethod
@@ -288,46 +288,46 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_uid(self, server_msg: list[str]) -> dict[str, str]:
         """Parse UID and return dictionary.
 
         Args:
-            serverMsg (list[str]): The UID IRCD message
+            server_msg (list[str]): The UID IRCD message
         
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_quit(self, server_msg: list[str]) -> dict[str, str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
         """Parse nick changes and return dictionary.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_privmsg(self, server_msg: list[str]) -> dict[str, str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
 
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
@@ -345,175 +345,177 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def on_svs2mode(self, serverMsg: list[str]) -> None:
+    def on_svs2mode(self, server_msg: list[str]) -> None:
         """Handle svs2mode coming from a server
         >>> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_mode(self, serverMsg: list[str]) -> None:
+    def on_mode(self, server_msg: list[str]) -> None:
         """Handle mode coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_umode2(self, serverMsg: list[str]) -> None:
+    def on_umode2(self, server_msg: list[str]) -> None:
         """Handle umode2 coming from a server
         >>> [':adator_', 'UMODE2', '-i']
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_quit(self, serverMsg: list[str]) -> None:
+    def on_quit(self, server_msg: list[str]) -> None:
         """Handle quit coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_squit(self, serverMsg: list[str]) -> None:
+    def on_squit(self, server_msg: list[str]) -> None:
         """Handle squit coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_protoctl(self, serverMsg: list[str]) -> None:
+    def on_protoctl(self, server_msg: list[str]) -> None:
         """Handle protoctl coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_nick(self, serverMsg: list[str]) -> None:
+    def on_nick(self, server_msg: list[str]) -> None:
         """Handle nick coming from a server
         new nickname
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sjoin(self, serverMsg: list[str]) -> None:
+    def on_sjoin(self, server_msg: list[str]) -> None:
         """Handle sjoin coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_part(self, serverMsg: list[str]) -> None:
+    def on_part(self, server_msg: list[str]) -> None:
         """Handle part coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_eos(self, serverMsg: list[str]) -> None:
+    def on_eos(self, server_msg: list[str]) -> None:
         """Handle EOS coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_reputation(self, serverMsg: list[str]) -> None:
+    def on_reputation(self, server_msg: list[str]) -> None:
         """Handle REPUTATION coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_uid(self, serverMsg: list[str]) -> None:
+    def on_uid(self, server_msg: list[str]) -> None:
         """Handle uid message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_privmsg(self, serverMsg: list[str]) -> None:
+    def on_privmsg(self, server_msg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_server_ping(self, serverMsg: list[str]) -> None:
+    def on_server_ping(self, server_msg: list[str]) -> None:
         """Send a PONG message to the server
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_server(self, serverMsg: list[str]) -> None:
+    def on_server(self, server_msg: list[str]) -> None:
         """_summary_
 
         Args:
-            serverMsg (list[str]): _description_
+            server_msg (list[str]): _description_
         """
 
     @abstractmethod
-    def on_version(self, serverMsg: list[str]) -> None:
+    def on_version(self, server_msg: list[str]) -> None:
         """Sending Server Version to the server
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_time(self, serverMsg: list[str]) -> None:
+    def on_time(self, server_msg: list[str]) -> None:
         """Sending TIME answer to a requestor
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_ping(self, serverMsg: list[str]) -> None:
+    def on_ping(self, server_msg: list[str]) -> None:
         """Sending a PING answer to requestor
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_version_msg(self, serverMsg: list[str]) -> None:
+    def on_version_msg(self, server_msg: list[str]) -> None:
         """Handle version coming from the server
         \n ex. /version Defender
         Args:
-            serverMsg (list[str]): Original message from the server
+            server_msg (list[str]): Original message from the server
         """
 
     @abstractmethod
-    def on_smod(self, serverMsg: list[str]) -> None:
+    def on_smod(self, server_msg: list[str]) -> None:
         """Handle SMOD message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sasl(self, serverMsg: list[str], psasl: 'Sasl') -> Optional['MSasl']:
+    def on_sasl(self, server_msg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
-            psasl (Sasl): The SASL process object
+            server_msg (list[str]): Original server message
+
+        Returns:
+
         """
 
     @abstractmethod
@@ -528,9 +530,9 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def on_md(self, serverMsg: list[str]) -> None:
+    def on_md(self, server_msg: list[str]) -> None:
         """Handle MD responses
         [':001', 'MD', 'client', '001MYIZ03', 'certfp', ':d1235648...']
         Args:
-            serverMsg (list[str]): The server reply
+            server_msg (list[str]): The server reply
         """

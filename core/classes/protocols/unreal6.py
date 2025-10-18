@@ -202,43 +202,52 @@ class Unrealircd6(IProtocol):
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
-
-        nickname = self.__Config.SERVICE_NICKNAME
-        username = self.__Config.SERVICE_USERNAME
-        realname = self.__Config.SERVICE_REALNAME
-        chan = self.__Config.SERVICE_CHANLOG
-        info = self.__Config.SERVICE_INFO
-        smodes = self.__Config.SERVICE_SMODES
-        cmodes = self.__Config.SERVICE_CMODES
-        umodes = self.__Config.SERVICE_UMODES
-        host = self.__Config.SERVICE_HOST
+        service_id = self.__Config.SERVICE_ID
+        service_nickname = self.__Config.SERVICE_NICKNAME
+        service_username = self.__Config.SERVICE_USERNAME
+        service_realname = self.__Config.SERVICE_REALNAME
+        service_channel_log = self.__Config.SERVICE_CHANLOG
+        service_info = self.__Config.SERVICE_INFO
+        service_smodes = self.__Config.SERVICE_SMODES
+        service_cmodes = self.__Config.SERVICE_CMODES
+        service_umodes = self.__Config.SERVICE_UMODES
+        service_hostname = self.__Config.SERVICE_HOST
         service_name = self.__Config.SERVICE_NAME
         protocolversion = self.protocol_version
 
-        password = self.__Config.SERVEUR_PASSWORD
-        link = self.__Config.SERVEUR_LINK
+        server_password = self.__Config.SERVEUR_PASSWORD
+        server_link = self.__Config.SERVEUR_LINK
         server_id = self.__Config.SERVEUR_ID
-        service_id = self.__Config.SERVICE_ID
 
         version = self.__Config.CURRENT_VERSION
         unixtime = self.__Utils.get_unixtime()
 
-        self.send2socket(f":{server_id} PASS :{password}", print_log=False)
+        self.send2socket(f":{server_id} PASS :{server_password}", print_log=False)
         self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
-        self.send2socket(f":{server_id} PROTOCTL EAUTH={link},{protocolversion},,{service_name}-v{version}")
+        self.send2socket(f":{server_id} PROTOCTL EAUTH={server_link},{protocolversion},,{service_name}-v{version}")
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
         self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
-        self.send2socket(f":{server_id} SERVER {link} 1 :{info}")
+        self.send2socket(f":{server_id} SERVER {server_link} 1 :{service_info}")
         self.send2socket("EOS")
-        self.send2socket(f":{server_id} {nickname} :Reserved for services")
-        self.send2socket(f":{server_id} UID {nickname} 1 {unixtime} {username} {host} {service_id} * {smodes} * * fwAAAQ== :{realname}")
-        self.send_sjoin(chan)
-        self.send2socket(f":{server_id} TKL + Q * {nickname} {host} 0 {unixtime} :Reserved for services")
-        self.send2socket(f":{service_id} MODE {chan} {cmodes}")
+        self.send2socket(f":{server_id} {service_nickname} :Reserved for services")
+        self.send2socket(f":{server_id} UID {service_nickname} 1 {unixtime} {service_username} {service_hostname} {service_id} * {service_smodes} * * fwAAAQ== :{service_realname}")
+        self.send_sjoin(service_channel_log)
+        self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
+        self.send2socket(f":{service_id} MODE {service_channel_log} {service_cmodes}")
 
         self.__Logs.debug(f'>> {__name__} Link information sent to the server')
 
     def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        """Send a gline command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            hostname (str): The hostname of the client.
+            set_by (str): The nickname who send the gline
+            expire_timestamp (int): Expire timestamp
+            set_at_timestamp (int): Set at timestamp
+            reason (str): The reason of the gline.
+        """
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
 
         self.send2socket(f":{self.__Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
@@ -1286,7 +1295,7 @@ class Unrealircd6(IProtocol):
         except AttributeError as ae:
             self.__Logs.error(f"Attribute Error: {ae}")
         except Exception as err:
-            self.__Logs.error(f"General Error: {err} - {srv_msg}")
+            self.__Logs.error(f"General Error: {err} - {srv_msg}" , exc_info=True)
 
     def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server

@@ -9,6 +9,10 @@ class Command:
     DB_COMMANDS: list['MCommand'] = []
 
     def __init__(self, loader: 'Loader'):
+        """
+        Args:
+            loader (Loader): The Loader instance.
+        """
         self.Loader = loader
         self.Base = loader.Base
         self.Logs = loader.Logs

@@ -1014,7 +1014,7 @@ class Irc:
                 except KeyError as ke:
                     self.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
                 except Exception as err:
-                    self.Logs.error(f"General Error: {ke} - list recieved: {cmd}")
+                    self.Logs.error(f"General Error: {err} - list recieved: {cmd}", exc_info=True)
 
             case 'unload':
                 # unload mod_defender

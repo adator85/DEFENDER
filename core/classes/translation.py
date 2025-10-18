@@ -11,9 +11,13 @@ if TYPE_CHECKING:
 class Translation:
 
     def __init__(self, loader: 'Loader') -> None:
+        """
+
+        Args:
+            loader (Loader): The Loader instance.
+        """
         self.Logs = loader.Logs
         self.Settings = loader.Settings
-        return None
 
     def get_translation(self) -> dict[str, list[list[str]]]:
         try:

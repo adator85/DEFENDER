@@ -9,6 +9,11 @@ if TYPE_CHECKING:
 class ProtocolFactorty:
 
     def __init__(self, uplink: 'Irc'):
+        """ProtocolFactory init.
+
+        Args:
+            uplink (Irc): The Irc object
+        """
         self.__Config = uplink.Config
         self.__uplink = uplink
 

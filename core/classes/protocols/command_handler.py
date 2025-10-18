@@ -10,6 +10,11 @@ class CommandHandler:
     DB_SUBSCRIBE: list = []
 
     def __init__(self, loader: 'Loader'):
+        """Init method
+
+        Args:
+            loader (Loader): The loader Object
+        """
         self.__Logs = loader.Logs
 
     def register(self, ircd_command_model: 'MIrcdCommand') -> None:
@@ -25,6 +30,7 @@ class CommandHandler:
             return None
         else:
             self.__Logs.debug(f'[IRCD COMMAND HANDLER] This IRCD command ({ircd_command.command_name}) already exist in the handler.')
+            return None
     
     def get_registred_ircd_command(self, command_name: str) -> Optional['MIrcdCommand']:
         """Get the registred IRCD command model

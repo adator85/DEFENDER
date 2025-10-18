@@ -9,9 +9,14 @@ class Reputation:
     UID_REPUTATION_DB: list[MReputation] = []
 
     def __init__(self, loader: 'Loader'):
+        """
+
+        Args:
+            loader (Loader): The Loader instance.
+        """
 
         self.Logs = loader.Logs
-        self.MReputation: MReputation = MReputation
+        self.MReputation: Optional[MReputation] = None
 
     def insert(self, new_reputation_user: MReputation) -> bool:
         """Insert a new Reputation User object
@@ -47,7 +52,7 @@ class Reputation:
 
         Args:
             uid (str): UID of the user
-            newNickname (str): New nickname
+            new_nickname (str): New nickname
 
         Returns:
             bool: True if updated

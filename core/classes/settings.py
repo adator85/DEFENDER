@@ -1,5 +1,5 @@
-'''This class should never be reloaded.
-'''
+"""This class should never be reloaded.
+"""
 from logging import Logger
 from threading import Timer, Thread, RLock
 from socket import socket
@@ -18,7 +18,7 @@ class Settings:
     RUNNING_TIMERS: list[Timer]                 = []
     RUNNING_THREADS: list[Thread]               = []
     RUNNING_SOCKETS: list[socket]               = []
-    PERIODIC_FUNC: dict[object]                 = {}
+    PERIODIC_FUNC: dict[str, Any]               = {}
     LOCK: RLock                                 = RLock()
 
     CONSOLE: bool                               = False

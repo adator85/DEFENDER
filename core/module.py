@@ -206,6 +206,7 @@ class Module:
             module = self.model_get_module(module_name)
             if module is None:
                 self.__Logs.debug(f"[ UNLOAD MODULE ERROR ] This module {module_name} is not loaded!")
+                self.db_delete_module(module_name)
                 uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"[ {red}UNLOAD MODULE ERROR{nogc} ] This module {module_name} is not loaded!",

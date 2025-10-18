@@ -22,7 +22,12 @@ REHASH_MODULES = [
 
 
 def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -> None:
+    """
 
+    Args:
+        uplink (Irc): The Irc instance
+        reason (str): The reason of the restart.
+    """
     # reload modules.
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         uplink.ModuleUtils.unload_one_module(uplink, module.module_name)
@@ -34,7 +39,7 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
     uplink.Base.garbage_collector_thread()
 
     uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
-    uplink.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason="Defender Power off")
+    uplink.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
     uplink.Logs.debug('Restarting Defender ...')
     uplink.IrcSocket.shutdown(socket.SHUT_RDWR)
     uplink.IrcSocket.close()
@@ -72,13 +77,13 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
             channel=uplink.Config.SERVICE_CHANLOG
             )
     uplink.Utils = sys.modules['core.utils']
-    uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
-    uplink.Loader.Config.HSID = config_model_bakcup.HSID
-    uplink.Loader.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
-    uplink.Loader.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
-    uplink.Loader.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
-    uplink.Loader.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
-    uplink.Loader.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
+    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
+    uplink.Config.HSID = config_model_bakcup.HSID
+    uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
+    uplink.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
+    uplink.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
+    uplink.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
+    uplink.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
 
     conf_bkp_dict: dict = config_model_bakcup.to_dict()
     config_dict: dict = uplink.Config.to_dict()

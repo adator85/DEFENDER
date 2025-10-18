@@ -9,6 +9,11 @@ class Admin:
     UID_ADMIN_DB: list[MAdmin] = []
 
     def __init__(self, loader: 'Loader') -> None:
+        """
+
+        Args:
+            loader (Loader): The Loader Instance.
+        """
         self.Logs = loader.Logs
         self.Base = loader.Base
         self.Setting = loader.Settings
