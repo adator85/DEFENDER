@@ -1199,7 +1199,7 @@ class Unrealircd6(IProtocol):
                 admin = self.__Irc.Admin.get_admin(uid)
                 account = admin.account if admin else ''
                 self.send_priv_msg(nick_from=dnickname, 
-                                   msg=tr("[ %sSASL AUTO AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, account, dnickname),
+                                   msg=tr("[ %sFINGERPRINT AUTH%s ] - %s (%s) is now connected successfuly to %s", GREEN, NOGC, nickname, account, dnickname),
                                    channel=dchanlog)
                 self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Successfuly connected to %s", dnickname))
 
