@@ -42,11 +42,11 @@ class Configuration:
         try:
             import_config = self.__load_json_service_configuration()
 
-            Model_keys = MConfig().to_dict()
+            model_keys = MConfig().to_dict()
             model_key_list: list = []
             json_config_key_list: list = []
 
-            for key in Model_keys:
+            for key in model_keys:
                 model_key_list.append(key)
 
             for key in import_config:

@@ -76,6 +76,7 @@ class Unrealircd6(IProtocol):
         self.Handler.register(m(command_name="SASL", func=self.on_sasl))
         self.Handler.register(m(command_name="MD", func=self.on_md))
         self.Handler.register(m(command_name="PRIVMSG", func=self.on_privmsg))
+        self.Handler.register(m(command_name="KICK", func=self.on_kick))
 
         return None
 
@@ -699,7 +700,9 @@ class Unrealircd6(IProtocol):
             serverMsg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
+            dict: The response as dictionary.
+
+            >>> {"uid": "", "newnickname": "", "timestamp": ""}
         """
         scopy = serverMsg.copy()
         if scopy[0].startswith('@'):
@@ -1612,3 +1615,18 @@ class Unrealircd6(IProtocol):
             ...
         except Exception as e:
             self.__Logs.error(f"General Error: {e}")
+
+    def on_kick(self, serverMsg: list[str]) -> None:
+        """When a user is kicked out from a channel
+
+        ['@unrealircd.org/issued-by=RPC:admin-for-test@...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
+        Args:
+            serverMsg (list[str]): The server message
+        """
+        scopy = serverMsg.copy()
+        uid = scopy[4]
+        channel = scopy[3]
+
+        # Delete the user from the channel.
+        self.__Irc.Channel.delete_user_from_channel(channel, uid)
+        return None

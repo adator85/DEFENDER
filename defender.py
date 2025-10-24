@@ -16,9 +16,6 @@ try:
     from core.loader import Loader
     loader = Loader()
     loader.Irc.init_irc()
-    # from core.irc import Irc
-    # ircInstance = Irc(Loader())
-    # ircInstance.init_irc(ircInstance)
 
 except AssertionError as ae:
     print(f'Assertion Error -> {ae}')

@@ -217,7 +217,7 @@ class Defender:
 
         if response is not None:
             q_insert = "INSERT INTO def_trusted (datetime, user, host, vhost) VALUES (?, ?, ?, ?)"
-            mes_donnees = {'datetime': self.Base.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
+            mes_donnees = {'datetime': self.Loader.Utils.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
             exec_query = self.Base.db_execute_query(q_insert, mes_donnees)
             pass
 
