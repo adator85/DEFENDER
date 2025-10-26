@@ -383,13 +383,10 @@ def action_apply_reputation_santions(uplink: 'Defender') -> None:
     color_red = gconfig.COLORS.red
     nogc = gconfig.COLORS.nogc
     salon_jail = gconfig.SALON_JAIL
-
-    if reputation_flag == 0:
-        return None
-    elif reputation_timer == 0:
-        return None
-
     uid_to_clean = []
+
+    if reputation_flag == 0 or reputation_timer == 0:
+        return None
 
     for user in irc.Reputation.UID_REPUTATION_DB:
         if not user.isWebirc: # Si il ne vient pas de WebIRC

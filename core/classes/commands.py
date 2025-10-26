@@ -36,7 +36,7 @@ class Command:
     def get_command(self, command_name: str, module_name: str) -> Optional[MCommand]:
 
         for command in self.DB_COMMANDS:
-            if command.command_name.lower() == command_name and command.module_name == module_name:
+            if command.command_name.lower() == command_name.lower() and command.module_name.lower() == module_name.lower():
                 return command
 
         return None
@@ -90,7 +90,7 @@ class Command:
         admin_level = admin.level if admin else 0
         commands = self.get_commands_by_level(admin_level)
 
-        if command_name in [command.command_name for command in commands]:
+        if command_name.lower() in [command.command_name.lower() for command in commands]:
             return True
 
         return False

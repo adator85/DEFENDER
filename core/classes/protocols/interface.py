@@ -288,46 +288,46 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def parse_uid(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse UID and return dictionary.
 
         Args:
-            server_msg (list[str]): The UID IRCD message
+            serverMsg (list[str]): The UID IRCD message
         
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_quit(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
-            server_msg (list[str]): The server message to parse
+            serverMsg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse nick changes and return dictionary.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
         Args:
-            server_msg (list[str]): The server message to parse
+            serverMsg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
         """
 
     @abstractmethod
-    def parse_privmsg(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
 
         Args:
-            server_msg (list[str]): The server message to parse
+            serverMsg (list[str]): The server message to parse
 
         Returns:
             dict[str, str]: The response as dictionary.
@@ -345,174 +345,174 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def on_svs2mode(self, server_msg: list[str]) -> None:
+    def on_svs2mode(self, serverMsg: list[str]) -> None:
         """Handle svs2mode coming from a server
         >>> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_mode(self, server_msg: list[str]) -> None:
+    def on_mode(self, serverMsg: list[str]) -> None:
         """Handle mode coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_umode2(self, server_msg: list[str]) -> None:
+    def on_umode2(self, serverMsg: list[str]) -> None:
         """Handle umode2 coming from a server
         >>> [':adator_', 'UMODE2', '-i']
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_quit(self, server_msg: list[str]) -> None:
+    def on_quit(self, serverMsg: list[str]) -> None:
         """Handle quit coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_squit(self, server_msg: list[str]) -> None:
+    def on_squit(self, serverMsg: list[str]) -> None:
         """Handle squit coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_protoctl(self, server_msg: list[str]) -> None:
+    def on_protoctl(self, serverMsg: list[str]) -> None:
         """Handle protoctl coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_nick(self, server_msg: list[str]) -> None:
+    def on_nick(self, serverMsg: list[str]) -> None:
         """Handle nick coming from a server
         new nickname
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sjoin(self, server_msg: list[str]) -> None:
+    def on_sjoin(self, serverMsg: list[str]) -> None:
         """Handle sjoin coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_part(self, server_msg: list[str]) -> None:
+    def on_part(self, serverMsg: list[str]) -> None:
         """Handle part coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_eos(self, server_msg: list[str]) -> None:
+    def on_eos(self, serverMsg: list[str]) -> None:
         """Handle EOS coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_reputation(self, server_msg: list[str]) -> None:
+    def on_reputation(self, serverMsg: list[str]) -> None:
         """Handle REPUTATION coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_uid(self, server_msg: list[str]) -> None:
+    def on_uid(self, serverMsg: list[str]) -> None:
         """Handle uid message coming from the server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_privmsg(self, server_msg: list[str]) -> None:
+    def on_privmsg(self, serverMsg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_server_ping(self, server_msg: list[str]) -> None:
+    def on_server_ping(self, serverMsg: list[str]) -> None:
         """Send a PONG message to the server
 
         Args:
-            server_msg (list[str]): List of str coming from the server
+            serverMsg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_server(self, server_msg: list[str]) -> None:
+    def on_server(self, serverMsg: list[str]) -> None:
         """_summary_
 
         Args:
-            server_msg (list[str]): _description_
+            serverMsg (list[str]): _description_
         """
 
     @abstractmethod
-    def on_version(self, server_msg: list[str]) -> None:
+    def on_version(self, serverMsg: list[str]) -> None:
         """Sending Server Version to the server
 
         Args:
-            server_msg (list[str]): List of str coming from the server
+            serverMsg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_time(self, server_msg: list[str]) -> None:
+    def on_time(self, serverMsg: list[str]) -> None:
         """Sending TIME answer to a requestor
 
         Args:
-            server_msg (list[str]): List of str coming from the server
+            serverMsg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_ping(self, server_msg: list[str]) -> None:
+    def on_ping(self, serverMsg: list[str]) -> None:
         """Sending a PING answer to requestor
 
         Args:
-            server_msg (list[str]): List of str coming from the server
+            serverMsg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_version_msg(self, server_msg: list[str]) -> None:
+    def on_version_msg(self, serverMsg: list[str]) -> None:
         """Handle version coming from the server
         \n ex. /version Defender
         Args:
-            server_msg (list[str]): Original message from the server
+            serverMsg (list[str]): Original message from the server
         """
 
     @abstractmethod
-    def on_smod(self, server_msg: list[str]) -> None:
+    def on_smod(self, serverMsg: list[str]) -> None:
         """Handle SMOD message coming from the server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sasl(self, server_msg: list[str]) -> Optional['MSasl']:
+    def on_sasl(self, serverMsg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
 
         Args:
-            server_msg (list[str]): Original server message
+            serverMsg (list[str]): Original server message
 
         Returns:
 
@@ -530,9 +530,18 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def on_md(self, server_msg: list[str]) -> None:
+    def on_md(self, serverMsg: list[str]) -> None:
         """Handle MD responses
         [':001', 'MD', 'client', '001MYIZ03', 'certfp', ':d1235648...']
         Args:
-            server_msg (list[str]): The server reply
+            serverMsg (list[str]): The server reply
+        """
+
+    @abstractmethod
+    def on_kick(self, serverMsg: list[str]) -> None:
+        """When a user is kicked out from a channel
+
+        Eg. ['@unrealircd.org...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
+        Args:
+            serverMsg (list[str]): The server message
         """
