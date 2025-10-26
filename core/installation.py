@@ -85,9 +85,9 @@ class Install:
             # If the Python version is not good then Exit
             exit("[!] Python version error [!]")
 
-        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'config', 'configuration.json')):
+        if not os.path.exists(os.path.join(self.config.defender_install_folder, 'config', 'configuration.yaml')):
             # If configuration file do not exist
-            exit("[!] Configuration file (core/configuration.json) doesn't exist! please create it [!]")
+            exit("[!] Configuration file (core/configuration.yaml) doesn't exist! please create it [!]")
 
         # Exclude Windows OS from the installation
         if os.name == 'nt':
