@@ -49,7 +49,7 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
         uplink.Logs.warning('-- Waiting for socket to close ...')
 
     # Reload configuration
-    uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
+    uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).configuration_model
     uplink.Loader.Base = uplink.Loader.BaseModule.Base(uplink.Loader)
 
     for mod in REHASH_MODULES:
@@ -77,7 +77,7 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
             channel=uplink.Config.SERVICE_CHANLOG
             )
     uplink.Utils = sys.modules['core.utils']
-    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).get_config_model()
+    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
     uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
     uplink.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART

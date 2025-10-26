@@ -35,7 +35,7 @@ class Loader:
 
         self.Logs: Logger                           = self.ServiceLogging.get_logger()
 
-        self.Config: df.MConfig                     = self.ConfModule.Configuration(self).get_config_model()
+        self.Config: df.MConfig                     = self.ConfModule.Configuration(self).configuration_model
 
         self.Settings.global_lang                   = self.Config.LANG if self.Config.LANG else "EN"
 

@@ -10,9 +10,7 @@ from core import installation
 #############################################
 
 try:
-
     installation.Install()
-
     from core.loader import Loader
     loader = Loader()
     loader.Irc.init_irc()
