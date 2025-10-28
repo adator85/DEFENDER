@@ -1,0 +1,6 @@
+Faker==33.1.2
+psutil==6.1.1
+PyYAML==6.0.2
+requests==2.32.3
+SQLAlchemy==2.0.36
+unrealircd_rpc_py==3.0.2

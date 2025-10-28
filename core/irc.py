@@ -1220,7 +1220,7 @@ class Irc:
                 self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
-                    msg=f">> Defender V.{self.Config.CURRENT_VERSION} Developped by adator®."
+                    msg=f">> Defender V{self.Config.CURRENT_VERSION} Developped by adator®."
                 )
                 return None
 
