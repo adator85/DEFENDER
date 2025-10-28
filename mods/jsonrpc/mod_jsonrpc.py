@@ -88,9 +88,20 @@ class Jsonrpc():
         try:
             self.Rpc = ConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
             self.LiveRpc = LiveConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
-            self.Rpc.setup({'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD})
-            self.LiveRpc.setup({'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD, 
-                                'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'})
+            
+            sync_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE}
+            sync_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD}
+            
+            live_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE,
+                               'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
+            live_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD, 
+                         'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
+
+            sync_param = sync_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else sync_http
+            live_param = live_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else live_http
+
+            self.Rpc.setup(sync_param)
+            self.LiveRpc.setup(live_param)
 
             if self.ModConfig.jsonrpc == 1:
                 self.Base.create_thread(func=self.Threads.thread_subscribe, func_args=(self, ), run_once=True)
