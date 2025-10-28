@@ -53,3 +53,10 @@ ifeq ($(OS), Linux)
 	fi
 	@export echo $DBUS_SESSION_BUS_ADDRESS && systemctl --user daemon-reload && echo "Systemd Daemon reloaded!"
 endif
+
+update:
+ifeq ($(OS), Linux)
+	$(info Starting update from the main repository...)
+	@. .pyenv/bin/activate && python core/install.py --git-update
+	$(info Update done!)
+endif

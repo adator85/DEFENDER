@@ -24,7 +24,7 @@ configuration:
 
     JSONRPC_URL: "https://your.domaine.com:8600/api"
     JSONRPC_PATH_TO_SOCKET_FILE: "/PATH/TO/YOUR/IRCD/data/rpc.socket"
-    JSONRPC_METHOD: "socket"
+    JSONRPC_METHOD: "unixsocket"
     JSONRPC_USER: "YOUR_RPC_USER"
     JSONRPC_PASSWORD: "YOUR_RPC_PASSWORD"
 

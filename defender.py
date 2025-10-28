@@ -1,4 +1,4 @@
-from core import installation
+from core import install
 
 #############################################
 #       @Version : 6.3                      #
@@ -10,7 +10,7 @@ from core import installation
 #############################################
 
 try:
-    installation.Install()
+    install.update_packages()
     from core.loader import Loader
     loader = Loader()
     loader.Irc.init_irc()

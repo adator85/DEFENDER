@@ -34,10 +34,11 @@ Il permet aux opérateurs de gérer efficacement un canal, tout en offrant aux u
         - Python version 3.10 ou supérieure
 ```bash
         # Bash
-        $ git clone https://github.com/adator85/IRC_DEFENDER_MODULES.git
+        $ git clone https://github.com/adator85/DEFENDER.git defender
+        $ cd defender/
         # Renommer le fichier exemple_configuration.json en configuration.json
         # Configurer le fichier configuration.json
-        $ python3 main.py
+        $ make install
 ```
 Si votre configuration est bonne, votre service est censé etre connecté a votre réseau IRC
 Pour Les prochains lancement de defender vous devez utiliser la commande suivante:
@@ -49,11 +50,11 @@ Pour Les prochains lancement de defender vous devez utiliser la commande suivant
 # Installation manuelle:
 ```bash
     # Bash
-    $ git clone https://github.com/adator85/IRC_DEFENDER_MODULES.git
-    $ cd IRC_DEFENDER_MODULES
+    $ git clone https://github.com/adator85/DEFENDER.git defender
+    $ cd defender/
     $ python3 -m venv .pyenv
     $ source .pyenv/bin/activate
-    (pyenv)$ pip install sqlalchemy, psutil, requests, faker, unrealircd_rpc_py, pyyaml
+    (pyenv)$ pip install -r requirements.txt
 
     # Créer un service nommé "defender.service" 
     # pour votre service et placer le dans "/PATH/TO/USER/.config/systemd/user/"
@@ -104,87 +105,91 @@ Pour Les prochains lancement de defender vous devez utiliser la commande suivant
         GLINE_DURATION: Durée de bannissement temporaire d'un utilisateur en minutes. (default : "30")
 
     DEBUG (Debug)
-        DEBUG_LEVEL: Niveau de verbosité des messages de debug (plus grand est le nombre, plus il y a d'informations). (default : 20) Pour une production
+        DEBUG_LEVEL: Niveau de verbosité des messages de debug (plus petit est le nombre, plus il y a d'informations). (default : 20) Pour une production
+        DEBUG_HARD: Généralement utiliser pour les developpeurs.
 
 ```
     Modification de la configuration
 
-        Vous devez modifier le fichier configuration.json en remplaçant les valeurs par défaut avec vos propres informations. Assurez-vous de bien lire la description de chaque paramètre pour une configuration optimale du service.
+        Vous devez modifier le fichier configuration.yaml en remplaçant les valeurs par défaut avec vos propres informations. Assurez-vous de bien lire la description de chaque paramètre pour une configuration optimale du service.
 
 ## Exemple de configuration de base
-```json
-{
-    "SERVEUR_IP": "IP.DE.TON.SERVER",
-    "SERVEUR_HOSTNAME": "HOST.DE.TON.SERVER",
-    "SERVEUR_LINK": "LINK.DE.TON.SERVER",
-    "SERVEUR_PORT": 6901,
-    "SERVEUR_PASSWORD": "MOT_DE_PASS_DE_TON_LINK",
-    "SERVEUR_ID": "10Z",
-    "SERVEUR_SSL": true,
+```yaml
+configuration:
+    SERVEUR_IP: "YOUR.SERVER.IP"
+    SERVEUR_HOSTNAME: "YOUR.SERVER.HOST"
+    SERVEUR_LINK: "LINK.DE.TON.SERVER"
+    SERVEUR_PORT: 7002
+    SERVEUR_PASSWORD: "YOUR_LINK_PASSWORD"
+    SERVEUR_ID: "006"
+    SERVEUR_SSL: true
 
-    "SERVICE_NAME": "defender",
-    "SERVICE_NICKNAME": "PyDefender",
-    "SERVICE_REALNAME": "Python Defender Security",
-    "SERVICE_USERNAME": "PyDefender",
-    "SERVICE_HOST": "HOST.DE.TON.DEFENDER",
+    SERVICE_NAME: "defender"
+    SERVICE_NICKNAME: "PyDefender"
+    SERVICE_REALNAME: "Python Defender Security"
+    SERVICE_USERNAME: "PyDefender"
+    SERVICE_HOST: "HOST.DE.TON.DEFENDER"
+    SERVICE_INFO: "Network IRC Service"
+    SERVICE_CHANLOG: "#services"
+    SERVICE_SMODES: "+ioqBS"
+    SERVICE_CMODES: "ntsOP"
+    SERVICE_UMODES: "o"
+    SERVICE_PREFIX: "!"
 
-    "OWNER": "TON_NICK_NAME",
-    "PASSWORD": "TON_PASSWORD"
-
-}
+    OWNER: "TON_NICK_NAME"
+    PASSWORD: "TON_PASSWORD"
 
 ```
 
 ## Exemple complet de configuration
-```json
-{
-    "SERVEUR_IP": "YOUR.SERVER.IP",
-    "SERVEUR_HOSTNAME": "YOUR.SERVER.HOST",
-    "SERVEUR_LINK": "LINK.DE.TON.SERVER",
-    "SERVEUR_PORT": 6901,
-    "SERVEUR_PASSWORD": "YOUR_LINK_PASSWORD",
-    "SERVEUR_ID": "10Z",
-    "SERVEUR_SSL": true,
+```yaml
+configuration:
+    SERVEUR_IP: "YOUR.SERVER.IP"
+    SERVEUR_HOSTNAME: "YOUR.SERVER.HOST"
+    SERVEUR_LINK: "LINK.DE.TON.SERVER"
+    SERVEUR_PORT: 7002
+    SERVEUR_PASSWORD: "YOUR_LINK_PASSWORD"
+    SERVEUR_ID: "006"
+    SERVEUR_SSL: true
 
-    "SERVICE_NAME": "defender",
-    "SERVICE_NICKNAME": "PyDefender",
-    "SERVICE_REALNAME": "Python Defender Security",
-    "SERVICE_USERNAME": "PyDefender",
-    "SERVICE_HOST": "HOST.DE.TON.DEFENDER",
-    "SERVICE_INFO": "Network IRC Service",
-    "SERVICE_CHANLOG": "#services",
-    "SERVICE_SMODES": "+ioqBS",
-    "SERVICE_CMODES": "ntsOP",
-    "SERVICE_UMODES": "o",
-    "SERVICE_PREFIX": "!",
+    SERVICE_NAME: "defender"
+    SERVICE_NICKNAME: "PyDefender"
+    SERVICE_REALNAME: "Python Defender Security"
+    SERVICE_USERNAME: "PyDefender"
+    SERVICE_HOST: "HOST.DE.TON.DEFENDER"
+    SERVICE_INFO: "Network IRC Service"
+    SERVICE_CHANLOG: "#services"
+    SERVICE_SMODES: "+ioqBS"
+    SERVICE_CMODES: "ntsOP"
+    SERVICE_UMODES: "o"
+    SERVICE_PREFIX: "!"
 
-    "OWNER": "TON_NICK_NAME",
-    "PASSWORD": "TON_PASSWORD",
+    OWNER: "TON_NICK_NAME"
+    PASSWORD: "TON_PASSWORD"
 
-    "JSONRPC_URL": "https://your.domaine.com:8600/api",
-    "JSONRPC_PATH_TO_SOCKET_FILE": "/PATH/TO/YOUR/IRCD/data/rpc.socket",
-    "JSONRPC_METHOD": "socket",
-    "JSONRPC_USER": "YOUR_RPC_USER",
-    "JSONRPC_PASSWORD": "YOUR_RPC_PASSWORD",
+    JSONRPC_URL: "https://your.domaine.com:8600/api"
+    JSONRPC_PATH_TO_SOCKET_FILE: "/PATH/TO/YOUR/IRCD/data/rpc.socket"
+    JSONRPC_METHOD: "unixsocket"
+    JSONRPC_USER: "YOUR_RPC_USER"
+    JSONRPC_PASSWORD: "YOUR_RPC_PASSWORD"
 
-    "SALON_JAIL": "#jail",
-    "SALON_JAIL_MODES": "sS",
-    "SALON_LIBERER": "#welcome",
+    SALON_JAIL: "#jail"
+    SALON_JAIL_MODES: "sS"
+    SALON_LIBERER: "#welcome"
 
-    "CLONE_CHANNEL": "#clones",
-    "CLONE_CMODES": "+nts",
-    "CLONE_LOG_HOST_EXEMPT": ["HOST.TO.SKIP"],
-    "CLONE_CHANNEL_PASSWORD": "YOUR_CHANNEL_PASSWORD",
+    CLONE_CHANNEL: "#clones"
+    CLONE_CMODES: "+nts"
+    CLONE_LOG_HOST_EXEMPT: ["HOST.TO.SKIP"]
+    CLONE_CHANNEL_PASSWORD: "YOUR_CHANNEL_PASSWORD"
 
-    "API_TIMEOUT": 2,
+    API_TIMEOUT: 2
 
-    "PORTS_TO_SCAN": [3028, 8080, 1080, 1085, 4145, 9050],
-    "WHITELISTED_IP": ["127.0.0.1"],
-    "GLINE_DURATION": "30",
+    PORTS_TO_SCAN: [3028 8080 1080 1085 4145 9050]
+    WHITELISTED_IP: ["127.0.0.1"]
+    GLINE_DURATION: "30"
 
-    "DEBUG_LEVEL": 20
-
-}
+    DEBUG_LEVEL: 20
+    DEBUG_HARD: true
 ```
 
 # \\!/ Attention \\!/
@@ -192,7 +197,7 @@ Le mot de passe de l'administrateur et le mot de passe du service doivent être 
 Ne partagez pas vos informations de connexion au serveur IRC avec des tiers.
 a votre premiere connexion vous devez tapez 
 ```
-    /msg [NomDuService] auth [nickname] [password]
+    /msg [NomDuService] firstauth [nickname] [password]
     -- Une fois identifié tapez la commande suivante
     /msg [NomDuService] editaccess [nickname] [Nouveau-Password] 5
 ```
