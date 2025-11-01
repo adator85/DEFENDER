@@ -4,11 +4,37 @@ from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
     from core.definition import MClient, MSasl
-
+    from core.irc import Irc
 
 class IProtocol(ABC):
 
     Handler: Optional[CommandHandler] = None
+
+    def __init__(self, uplink: 'Irc'):
+        self.name: Optional[str] = None
+        self.protocol_version: int = -1
+        self.known_protocol: set[str] = {}
+
+        self._Irc = uplink
+        self._Config = uplink.Config
+        self._Base = uplink.Base
+        self._Settings = uplink.Base.Settings
+        self._Utils = uplink.Loader.Utils
+        self._Logs = uplink.Loader.Logs
+
+        self.Handler = CommandHandler(uplink.Loader)
+
+        self.init_protocol()
+
+        self._Logs.info(f"[PROTOCOL] Protocol [{self.__class__.__name__}] loaded!")
+
+    @abstractmethod
+    def init_protocol(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
 
     @abstractmethod
     def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
