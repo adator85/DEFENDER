@@ -60,6 +60,10 @@ class Jsonrpc(IModule):
 
         self.ModConfig = self.ModConfModel(jsonrpc=0)
 
+        if self.Config.SERVEUR_PROTOCOL != 'unreal6':
+            self.Loader.ModuleUtils.unload_one_module(self.Irc, self.module_name, False)
+            return None
+
         # Is RPC Active?
         self.is_streaming = False
         
@@ -108,6 +112,11 @@ class Jsonrpc(IModule):
             self.Logs.error(f"JSONRPC ERROR: {err.__str__()}")
 
     def unload(self) -> None:
+
+        if self.Config.SERVEUR_PROTOCOL != 'unreal6':
+            self.Loader.ModuleUtils.unload_one_module(self.Irc, self.module_name, False)
+            return None
+
         if self.is_streaming:
             self.Protocol.send_priv_msg(
                         nick_from=self.Config.SERVICE_NICKNAME,
