@@ -204,6 +204,7 @@ class Module:
         """Unload a module
 
         Args:
+            uplink (Irc): The Irc instance
             mod_name (str): Module name ex mod_defender
 
         Returns:
