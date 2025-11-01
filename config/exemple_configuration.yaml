@@ -6,6 +6,7 @@ configuration:
     SERVEUR_PASSWORD: "YOUR_LINK_PASSWORD"
     SERVEUR_ID: "006"
     SERVEUR_SSL: true
+    SERVEUR_PROTOCOL: "unreal6" # unreal6 or inspircd
 
     SERVICE_NAME: "defender"
     SERVICE_NICKNAME: "PyDefender"
@@ -39,8 +40,8 @@ configuration:
 
     API_TIMEOUT: 2
 
-    PORTS_TO_SCAN: [3028 8080 1080 1085 4145 9050]
-    WHITELISTED_IP: ["127.0.0.1"]
+    PORTS_TO_SCAN: [3028, 8080, 1080, 1085, 4145, 9050]
+    WHITELISTED_IP: ["127.0.0.1", "192.168.1.1"]
     GLINE_DURATION: "30"
 
     DEBUG_LEVEL: 20
