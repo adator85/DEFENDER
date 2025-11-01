@@ -45,7 +45,6 @@ class Test(IModule):
         # Build the default configuration model (Mandatory)
         self.ModConfig = self.ModConfModel(param_exemple1='str', param_exemple2=1)
 
-
     def unload(self) -> None:
         self.Irc.Commands.drop_command_by_module(self.module_name)
         return None

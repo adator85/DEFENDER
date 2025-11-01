@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Any
+from core.classes.interfaces.imodule import IModule
 import mods.clone.utils as utils
 import mods.clone.threads as thds
 import mods.clone.schemas as schemas
@@ -8,83 +10,13 @@ if TYPE_CHECKING:
     from core.irc import Irc
     from faker import Faker
 
-class Clone:
+class Clone(IModule):
 
-    def __init__(self, irc_instance: 'Irc') -> None:
+    @dataclass
+    class ModConfModel(schemas.ModConfModel):
+        ...
 
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
-
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = irc_instance
-
-        # Add Irc Protocol Object to the module (Mandatory)
-        self.Protocol = irc_instance.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = irc_instance.Config
-
-        # Add Base object to the module (Mandatory)
-        self.Base = irc_instance.Base
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = irc_instance.Loader.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = irc_instance.User
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = irc_instance.Channel
-        
-        # Add global definitions
-        self.Definition = irc_instance.Loader.Definition
-
-        # The Global Settings
-        self.Settings = irc_instance.Loader.Settings
-
-        self.Schemas = schemas
-
-        self.Utils = utils
-
-        self.Threads = thds
-
-        self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
-
-        self.Clone = CloneManager(self)
-
-        metadata = self.Settings.get_cache('UID_CLONE_DB')
-
-        if metadata is not None:
-            self.Clone.UID_CLONE_DB = metadata
-            self.Logs.debug(f"Cache Size = {self.Settings.get_cache_size()}")
-
-        # Créer les nouvelles commandes du module
-        self.Irc.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
-
-        # Init the module (Mandatory)
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
-
-    def __init_module(self) -> None:
-
-        # Créer les tables necessaire a votre module (ce n'es pas obligatoire)
-        self.__create_tables()
-
-        self.stop = False
-
-        # Load module configuration (Mandatory)
-        self.__load_module_configuration()
-
-        self.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.send_sjoin(self.Config.CLONE_CHANNEL)
-        self.Protocol.send_set_mode('+o', nickname=self.Config.SERVICE_NICKNAME, channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.send_set_mode('+nts', channel_name=self.Config.CLONE_CHANNEL)
-        self.Protocol.send_set_mode('+k', channel_name=self.Config.CLONE_CHANNEL, params=self.Config.CLONE_CHANNEL_PASSWORD)
-
-
-    def __create_tables(self) -> None:
+    def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
 
@@ -104,20 +36,28 @@ class Clone:
 
         return None
 
-    def __load_module_configuration(self) -> None:
-        """### Load Module Configuration
-        """
-        try:
-            # Variable qui va contenir les options de configuration du module Defender
-            self.ModConfig = self.Schemas.ModConfModel()
+    def load(self) -> None:
+        self.ModConfig = self.ModConfModel()
+        self.stop = False
+        self.Schemas = schemas
+        self.Utils = utils
+        self.Threads = thds
+        self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
+        self.Clone = CloneManager(self)
+        metadata = self.Settings.get_cache('UID_CLONE_DB')
 
-            # Sync the configuration with core configuration (Mandatory)
-            # self.Base.db_sync_core_config(self.module_name, self.ModConfig)
+        if metadata is not None:
+            self.Clone.UID_CLONE_DB = metadata
+            self.Logs.debug(f"Cache Size = {self.Settings.get_cache_size()}")
 
-            return None
+        # Créer les nouvelles commandes du module
+        self.Irc.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
 
-        except TypeError as te:
-            self.Logs.critical(te)
+        self.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_sjoin(self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+o', nickname=self.Config.SERVICE_NICKNAME, channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+nts', channel_name=self.Config.CLONE_CHANNEL)
+        self.Protocol.send_set_mode('+k', channel_name=self.Config.CLONE_CHANNEL, params=self.Config.CLONE_CHANNEL_PASSWORD)
 
     def unload(self) -> None:
         """Cette methode sera executée a chaque désactivation ou 
