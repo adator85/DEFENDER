@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 from dataclasses import dataclass
-
 from mods.clone.schemas import ModConfModel
 
 if TYPE_CHECKING:
@@ -23,6 +22,9 @@ class IModule(ABC):
         # Add Irc Object to the module (Mandatory)
         self.Irc = uplink
 
+        # Add Loader object to the module (Mandatory)
+        self.Loader = uplink.Loader
+
         # Add Protocol to the module (Mandatory)
         self.Protocol = uplink.Protocol
 
@@ -41,19 +43,25 @@ class IModule(ABC):
         # Add User object to the module (Mandatory)
         self.User = uplink.User
 
+        # Add Client object to the module (Mandatory)
+        self.Client = uplink.Client
+
         # Add Channel object to the module (Mandatory)
         self.Channel = uplink.Channel
 
         # Add Reputation object to the module (Optional)
         self.Reputation = uplink.Reputation
 
-        self.ModConfig = ModConfModel()
+        # Load the child classes
+        self.load()
 
-        self.load_module_configuration()
-        """Load module configuration"""
+        # Inspect child classes
+        self.inspect_class()
+
+        # Init the ModConfig model object.
+        self.ModConfig:ModConfModel = ModConfModel()
 
         self.create_tables()
-        """Create custom module tables"""
 
         # Sync the configuration with core configuration (Mandatory)
         uplink.Base.db_sync_core_config(self.module_name, self.ModConfig)
@@ -70,32 +78,27 @@ class IModule(ABC):
         """
         self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
+    def inspect_class(self):
+        if not hasattr(self, 'ModConfig'):
+            raise AttributeError("The Module must init ModConfig attribute in the load method!")
+
     @abstractmethod
     def create_tables(self) -> None:
-        """Methode qui va créer la base de donnée si elle n'existe pas.
-           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
+        """
+        Method that will create the database if it does not exist.
+        A single Session for this class will be created, which will be used within this class/module.
+
         Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
+            database_name (str): Name of the database (no spaces allowed in the name)
 
         Returns:
-            None: Aucun retour n'es attendu
+            None: No return is expected
         """
 
     @abstractmethod
-    def load_module_configuration(self) -> None:
-        """### Load Module Configuration
+    def load(self) -> None:
+        """This method is executed when the module is loaded or reloaded.
         """
-        try:
-            # Build the default configuration model (Mandatory)
-            self.ModConfig = self.ModConfModel(jsonrpc=0)
-
-            # Sync the configuration with core configuration (Mandatory)
-            self.Base.db_sync_core_config(self.module_name, self.ModConfig)
-
-            return None
-
-        except TypeError as te:
-            self.Logs.critical(te)
 
     @abstractmethod
     def unload(self) -> None:

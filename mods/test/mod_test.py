@@ -6,24 +6,11 @@ class Test(IModule):
     @dataclass
     class ModConfModel:
         """The Model containing the module parameters
+        you can leave it without params.
+        just use pass | if you leave it empty, in the load() method just init empty object ==> self.ModConfig = ModConfModel()
         """
         param_exemple1: str
         param_exemple2: int
-
-    def load_module_configuration(self) -> None:
-        """### Load Module Configuration
-        """
-
-        # Create module commands (Mandatory)
-        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
-        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
-        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
-        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
-
-        # Build the default configuration model (Mandatory)
-        self.ModConfig = self.ModConfModel(param_exemple1='str', param_exemple2=1)
-
-        return None
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -44,6 +31,19 @@ class Test(IModule):
 
         # self.Base.db_execute_query(table_logs)
         return None
+
+    def load(self) -> None:
+        """### Load Module Configuration
+        """
+
+        # Create module commands (Mandatory)
+        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
+
+        # Build the default configuration model (Mandatory)
+        self.ModConfig = self.ModConfModel(param_exemple1='str', param_exemple2=1)
 
     def unload(self) -> None:
         self.Irc.Commands.drop_command_by_module(self.module_name)

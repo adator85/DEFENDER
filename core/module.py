@@ -66,9 +66,19 @@ class Module:
             return self.reload_one_module(uplink, module_name, nickname)
         
         # Charger le module
-        loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
-        my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
-        create_instance_of_the_class = my_class(uplink)             # Créer une nouvelle instance de la classe
+        try:
+            loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
+            my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
+            create_instance_of_the_class = my_class(uplink)             # Créer une nouvelle instance de la classe
+        except AttributeError as attr:
+            red = uplink.Config.COLORS.red
+            nogc = uplink.Config.COLORS.nogc
+            uplink.Protocol.send_priv_msg(
+                    nick_from=self.__Config.SERVICE_NICKNAME,
+                    msg=f"[{red}MODULE ERROR{nogc}] Module {module_name} is facing issues ! {attr}",
+                    channel=self.__Config.SERVICE_CHANLOG
+                )
+            return False
 
         if not hasattr(create_instance_of_the_class, 'cmd'):
             uplink.Protocol.send_priv_msg(

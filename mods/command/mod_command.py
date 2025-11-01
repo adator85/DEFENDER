@@ -1,13 +1,12 @@
 from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+from core.classes.interfaces.imodule import IModule
 import mods.command.utils as utils
 
 if TYPE_CHECKING:
-    from core.irc import Irc
     from core.definition import MUser
-    from sqlalchemy import CursorResult, Row, Sequence
 
-class Command:
+class Command(IModule):
 
     @dataclass
     class ModConfModel:
@@ -15,43 +14,43 @@ class Command:
         """
         pass
 
-    def __init__(self, ircInstance: 'Irc') -> None:
+    def create_tables(self) -> None:
+        """Methode qui va créer la base de donnée si elle n'existe pas.
+           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
+        Args:
+            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
+        Returns:
+            None: Aucun retour n'es attendu
+        """
 
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = ircInstance
+        table_automode = '''CREATE TABLE IF NOT EXISTS command_automode (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_on TEXT,
+            updated_on TEXT,
+            nickname TEXT,
+            channel TEXT,
+            mode TEXT
+            )
+        '''
 
-        # Add Loader Object to the module (Mandatory)
-        self.Loader = ircInstance.Loader
+        self.Base.db_execute_query(table_automode)
+        return None
 
-        # Add Protocol object to the module (Mandatory)
-        self.Protocol = ircInstance.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = ircInstance.Config
-
-        # Add Base object to the module (Mandatory)
-        self.Base = ircInstance.Base
-
-        # Add main Utils to the module
-        self.MainUtils = ircInstance.Utils
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Loader.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = ircInstance.User
-
-        # Add Client object to the module (Mandatory)
-        self.Client = ircInstance.Client
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = ircInstance.Channel
-
+    def load(self) -> None:
         # Module Utils
         self.mod_utils = utils
+
+        # Build the default configuration model (Mandatory)
+        self.ModConfig = self.ModConfModel()
+
+        self.user_to_notice: str = ''
+        self.show_219: bool = True
+
+        # Register new commands into the protocol
+        new_cmds = {'403', '401', '006', '018', '219', '223'}
+        for c in new_cmds:
+            self.Irc.Protocol.known_protocol.add(c)
 
         self.Irc.build_command(2, self.module_name, 'join', 'Join a channel')
         self.Irc.build_command(2, self.module_name, 'assign', 'Assign a user to a role or task')
@@ -104,73 +103,6 @@ class Command:
         self.Irc.build_command(2, self.module_name, 'klinelist', 'List all K-line bans')
         self.Irc.build_command(3, self.module_name, 'map', 'Show the server network map')
 
-        # Init the module
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'-- Module {self.module_name} loaded ...')
-
-    def __init_module(self) -> None:
-
-        # Create you own tables (Mandatory)
-        self.__create_tables()
-
-        # Load module configuration and sync with core one (Mandatory)
-        self.__load_module_configuration()
-        # End of mandatory methods you can start your customization #
-
-        self.user_to_notice: str = ''
-        self.show_219: bool = True
-
-        return None
-
-    def __create_tables(self) -> None:
-        """Methode qui va créer la base de donnée si elle n'existe pas.
-           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
-
-        Returns:
-            None: Aucun retour n'es attendu
-        """
-
-        table_automode = '''CREATE TABLE IF NOT EXISTS command_automode (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_on TEXT,
-            updated_on TEXT,
-            nickname TEXT,
-            channel TEXT,
-            mode TEXT
-            )
-        '''
-
-        self.Base.db_execute_query(table_automode)
-        return None
-
-    def __load_module_configuration(self) -> None:
-        """### Load Module Configuration
-        """
-        try:
-            # Build the default configuration model (Mandatory)
-            self.ModConfig = self.ModConfModel()
-
-            # Sync the configuration with core configuration (Mandatory)
-            self.Base.db_sync_core_config(self.module_name, self.ModConfig)
-
-            return None
-
-        except TypeError as te:
-            self.Logs.critical(te)
-
-    def __update_configuration(self, param_key: str, param_value: str):
-        """Update the local and core configuration
-
-        Args:
-            param_key (str): The parameter key
-            param_value (str): The parameter value
-        """
-        self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
-
     def unload(self) -> None:
         self.Irc.Commands.drop_command_by_module(self.module_name)
         return None
@@ -186,10 +118,12 @@ class Command:
             nogc = self.Config.COLORS.nogc
             cmd = list(data).copy()
 
-            if len(cmd) < 2:
+            pos, parsed_cmd = self.Irc.Protocol.get_ircd_protocol_poisition(cmd=cmd, log=True)
+
+            if pos == -1:
                 return None
 
-            match cmd[1]:
+            match parsed_cmd:
                 # [':irc.deb.biz.st', '403', 'Dev-PyDefender', '#Z', ':No', 'such', 'channel']
                 case '403' | '401':
                     try:
@@ -260,22 +194,10 @@ class Command:
                     except Exception as err:
                         self.Logs.warning(f'Unknown Error: {str(err)}')
 
-                case _:
-                    pass
-
-            if len(cmd) < 3:
-                return None
-
-            match cmd[2]:
-
                 case 'SJOIN':
                     # ['@msgid=yldTlbwAGbzCGUcCIHi3ku;time=2024-11-11T17:56:24.297Z', ':001', 'SJOIN', '1728815963', '#znc', ':001LQ0L0C']
                     # Check if the user has an automode
                     try:
-
-                        if len(cmd) < 6:
-                            return None
-
                         user_uid = self.User.clean_uid(cmd[5])
                         userObj: MUser = self.User.get_user(user_uid)
                         channel_name = cmd[4] if self.Channel.is_valid_channel(cmd[4]) else None
@@ -300,6 +222,9 @@ class Command:
 
                     except KeyError as ke:
                         self.Logs.error(f"Key Error: {err}")
+
+                case _:
+                    pass
 
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
