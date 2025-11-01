@@ -1,54 +1,49 @@
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from core.classes.interfaces.imodule import IModule
 import mods.defender.schemas as schemas
 import mods.defender.utils as utils
 import mods.defender.threads as thds
 from core.utils import tr
 
-if TYPE_CHECKING:
-    from core.irc import Irc
+class Defender(IModule):
 
-class Defender:
+    @dataclass
+    class ModConfModel(schemas.ModConfModel):
+        ...
 
-    def __init__(self, irc_instance: 'Irc') -> None:
+    def create_tables(self) -> None:
+        """Methode qui va créer la base de donnée si elle n'existe pas.
+           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
+        Args:
+            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
+        Returns:
+            None: Aucun retour n'es attendu
+        """
 
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = irc_instance
+        # table_autoop = '''CREATE TABLE IF NOT EXISTS defender_autoop (
+        #     id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #     datetime TEXT,
+        #     nickname TEXT,
+        #     channel TEXT
+        #     )
+        # '''
 
-        # Add Loader Object to the module (Mandatory)
-        self.Loader = irc_instance.Loader
+        # self.Base.db_execute_query(table_autoop)
+        # self.Base.db_execute_query(table_config)
+        # self.Base.db_execute_query(table_trusted)
+        return None
 
-        # Add server protocol Object to the module (Mandatory)
-        self.Protocol = irc_instance.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = irc_instance.Config
-
-        # Add Base object to the module (Mandatory)
-        self.Base = irc_instance.Base
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = irc_instance.Loader.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = irc_instance.User
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = irc_instance.Channel
-
-        # Add Settings object to save objects when reloading modules (Mandatory)
-        self.Settings = irc_instance.Settings
-
-        # Add Reputation object to the module (Optional)
-        self.Reputation = irc_instance.Reputation
-
+    def load(self):
+        
         # Add module schemas
         self.Schemas = schemas
 
         # Add utils functions
         self.Utils = utils
+        
+        # Variable qui va contenir les options de configuration du module Defender
+        self.ModConfig: schemas.ModConfModel  = self.ModConfModel()
 
         # Create module commands (Mandatory)
         self.Irc.build_command(0, self.module_name, 'code', 'Display the code or key for access')
@@ -62,38 +57,16 @@ class Defender:
         self.Irc.build_command(3, self.module_name, 'show_reputation', 'Display reputation information')
         self.Irc.build_command(3, self.module_name, 'sentinel', 'Monitor and guard the channel or server')
 
-        # Init the module (Mandatory)
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'-- Module {self.module_name} V2 loaded ...')
-
-    def __init_module(self) -> None:
-
-        # Create you own tables if needed (Mandatory)
-        self.__create_tables()
-
-        # Load module configuration (Mandatory)
-        self.__load_module_configuration()
-        # End of mandatory methods you can start your customization #
-
         self.timeout = self.Config.API_TIMEOUT
 
         # Listes qui vont contenir les ip a scanner avec les différentes API
-        self.Schemas.DB_ABUSEIPDB_USERS = []
-        self.Schemas.DB_FREEIPAPI_USERS = []
-        self.Schemas.DB_CLOUDFILT_USERS = []
-        self.Schemas.DB_PSUTIL_USERS = []
-        self.Schemas.DB_LOCALSCAN_USERS = []
+        self.Schemas.DB_ABUSEIPDB_USERS = self.Schemas.DB_FREEIPAPI_USERS = self.Schemas.DB_CLOUDFILT_USERS = []
+        self.Schemas.DB_PSUTIL_USERS = self.Schemas.DB_LOCALSCAN_USERS = []
 
         # Variables qui indique que les threads sont en cours d'éxecutions
-        self.abuseipdb_isRunning:bool       = True
-        self.freeipapi_isRunning:bool       = True
-        self.cloudfilt_isRunning:bool       = True
-        self.psutil_isRunning:bool          = True
-        self.localscan_isRunning:bool       = True
-        self.reputationTimer_isRunning:bool = True
-        self.autolimit_isRunning: bool      = True
+        self.abuseipdb_isRunning = self.freeipapi_isRunning= self.cloudfilt_isRunning = True
+        self.psutil_isRunning = self.localscan_isRunning = self.reputationTimer_isRunning = True
+        self.autolimit_isRunning = True
 
         # Variable qui va contenir les users
         self.flood_system = {}
@@ -120,46 +93,6 @@ class Defender:
         if self.ModConfig.reputation == 1:
             self.Protocol.send_sjoin(self.Config.SALON_JAIL)
             self.Protocol.send2socket(f":{self.Config.SERVICE_NICKNAME} SAMODE {self.Config.SALON_JAIL} +o {self.Config.SERVICE_NICKNAME}")
-
-        return None
-
-    def __create_tables(self) -> None:
-        """Methode qui va créer la base de donnée si elle n'existe pas.
-           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
-
-        Returns:
-            None: Aucun retour n'es attendu
-        """
-
-        # table_autoop = '''CREATE TABLE IF NOT EXISTS defender_autoop (
-        #     id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #     datetime TEXT,
-        #     nickname TEXT,
-        #     channel TEXT
-        #     )
-        # '''
-
-        # self.Base.db_execute_query(table_autoop)
-        # self.Base.db_execute_query(table_config)
-        # self.Base.db_execute_query(table_trusted)
-        return None
-
-    def __load_module_configuration(self) -> None:
-        """### Load Module Configuration
-        """
-        # Variable qui va contenir les options de configuration du module Defender
-        self.ModConfig = self.Schemas.ModConfModel()
-
-        # Sync the configuration with core configuration (Mandatory)
-        self.Base.db_sync_core_config(self.module_name, self.ModConfig)
-
-        return None
-
-    def __update_configuration(self, param_key: str, param_value: str):
-
-        self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
 
     def __onload(self):
 
@@ -431,7 +364,7 @@ class Defender:
                     match arg:
                         case 'on':
                             if self.ModConfig.autolimit == 0:
-                                self.__update_configuration('autolimit', 1)
+                                self.update_configuration('autolimit', 1)
                                 self.autolimit_isRunning = True
                                 self.Base.create_thread(func=thds.thread_autolimit, func_args=(self, ))
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Activated", channel=self.Config.SERVICE_CHANLOG)
@@ -440,7 +373,7 @@ class Defender:
 
                         case 'off':
                             if self.ModConfig.autolimit == 1:
-                                self.__update_configuration('autolimit', 0)
+                                self.update_configuration('autolimit', 0)
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Deactivated", channel=self.Config.SERVICE_CHANLOG)
                             else:
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[{self.Config.COLORS.red}AUTOLIMIT{self.Config.COLORS.nogc}] Already Deactivated", channel=self.Config.SERVICE_CHANLOG)
@@ -449,8 +382,8 @@ class Defender:
                             amount = int(cmd[2])
                             interval = int(cmd[3])
 
-                            self.__update_configuration('autolimit_amount', amount)
-                            self.__update_configuration('autolimit_interval', interval)
+                            self.update_configuration('autolimit_amount', amount)
+                            self.update_configuration('autolimit_interval', interval)
                             self.Protocol.send_priv_msg(
                                 nick_from=dnickname,
                                 msg=f"[{self.Config.COLORS.green}AUTOLIMIT{self.Config.COLORS.nogc}] Amount set to ({amount}) | Interval set to ({interval})", 
@@ -489,7 +422,7 @@ class Defender:
                                 return False
 
                             # self.update_db_configuration('reputation', 1)
-                            self.__update_configuration(key, 1)
+                            self.update_configuration(key, 1)
 
                             self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}REPUTATION{self.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
 
@@ -515,7 +448,7 @@ class Defender:
                                     )
                                 return False
 
-                            self.__update_configuration(key, 0)
+                            self.update_configuration(key, 0)
 
                             self.Protocol.send_priv_msg(
                                     nick_from=dnickname,
@@ -604,7 +537,7 @@ class Defender:
                                         return False
 
                                     # self.update_db_configuration(key, 1)
-                                    self.__update_configuration(key, 1)
+                                    self.update_configuration(key, 1)
 
                                     self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -622,7 +555,7 @@ class Defender:
                                         return False
 
                                     # self.update_db_configuration(key, 0)
-                                    self.__update_configuration(key, 0)
+                                    self.update_configuration(key, 0)
 
                                     self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -635,7 +568,7 @@ class Defender:
                                 key = 'reputation_seuil'
 
                                 # self.update_db_configuration(key, reputation_seuil)
-                                self.__update_configuration(key, reputation_seuil)
+                                self.update_configuration(key, reputation_seuil)
 
                                 self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -647,7 +580,7 @@ class Defender:
                             case 'timer':
                                 reputation_timer = int(cmd[3])
                                 key = 'reputation_timer'
-                                self.__update_configuration(key, reputation_timer)
+                                self.update_configuration(key, reputation_timer)
 
                                 self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -659,7 +592,7 @@ class Defender:
                             case 'score_after_release':
                                 reputation_score_after_release = int(cmd[3])
                                 key = 'reputation_score_after_release'
-                                self.__update_configuration(key, reputation_score_after_release)
+                                self.update_configuration(key, reputation_score_after_release)
 
                                 self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -671,7 +604,7 @@ class Defender:
                             case 'security_group':
                                 reputation_sg = int(cmd[3])
                                 key = 'reputation_sg'
-                                self.__update_configuration(key, reputation_sg)
+                                self.update_configuration(key, reputation_sg)
 
                                 self.Protocol.send_priv_msg(
                                                 nick_from=dnickname,
@@ -733,7 +666,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 1)
+                                self.update_configuration(option, 1)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
@@ -741,7 +674,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 0)
+                                self.update_configuration(option, 0)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -751,7 +684,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 1)
+                                self.update_configuration(option, 1)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
@@ -759,7 +692,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 0)
+                                self.update_configuration(option, 0)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -769,7 +702,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 1)
+                                self.update_configuration(option, 1)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
@@ -777,7 +710,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 0)
+                                self.update_configuration(option, 0)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -787,7 +720,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 1)
+                                self.update_configuration(option, 1)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
@@ -795,7 +728,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 0)
+                                self.update_configuration(option, 0)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -805,7 +738,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 1)
+                                self.update_configuration(option, 1)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
@@ -813,7 +746,7 @@ class Defender:
                                     self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
-                                self.__update_configuration(option, 0)
+                                self.update_configuration(option, 0)
 
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -846,7 +779,7 @@ class Defender:
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Already activated", channel=dchanlog)
                                 return False
 
-                            self.__update_configuration(key, 1)
+                            self.update_configuration(key, 1)
 
                             self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
 
@@ -855,7 +788,7 @@ class Defender:
                                 self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.red}FLOOD{self.Config.COLORS.black} ] : Already Deactivated", channel=dchanlog)
                                 return False
 
-                            self.__update_configuration(key, 0)
+                            self.update_configuration(key, 0)
 
                             self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
@@ -867,7 +800,7 @@ class Defender:
                                 case 'flood_message':
                                     key = 'flood_message'
                                     set_value = int(cmd[3])
-                                    self.__update_configuration(key, set_value)
+                                    self.update_configuration(key, set_value)
 
                                     self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                               msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood message set to {set_value} by {fromuser}", 
@@ -876,7 +809,7 @@ class Defender:
                                 case 'flood_time':
                                     key = 'flood_time'
                                     set_value = int(cmd[3])
-                                    self.__update_configuration(key, set_value)
+                                    self.update_configuration(key, set_value)
 
                                     self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                               msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood time set to {set_value} by {fromuser}", 
@@ -885,7 +818,7 @@ class Defender:
                                 case 'flood_timer':
                                     key = 'flood_timer'
                                     set_value = int(cmd[3])
-                                    self.__update_configuration(key, set_value)
+                                    self.update_configuration(key, set_value)
 
                                     self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                               msg=f"[ {self.Config.COLORS.green}FLOOD{self.Config.COLORS.black} ] : Flood timer set to {set_value} by {fromuser}", 
@@ -922,6 +855,7 @@ class Defender:
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {self.ModConfig.flood_message}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_time                        ==> {self.ModConfig.flood_time}')
                     self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_timer                       ==> {self.ModConfig.flood_timer}')
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.ModConfig.flood == 1 else color_red}Sentinel{nogc}]                             ==> {self.ModConfig.sentinel}')
                 except KeyError as ke:
                     self.Logs.error(f"Key Error : {ke}")
 
@@ -963,14 +897,27 @@ class Defender:
                 channel_to_dont_quit = [self.Config.SALON_JAIL, self.Config.SERVICE_CHANLOG]
 
                 if activation == 'on':
+                    result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}")
+                    channels = result.fetchall()
+                    channel_in_db = [channel[0] for channel in channels]
+                    channel_to_dont_quit.extend(channel_in_db)
+
+                    self.update_configuration('sentinel', 1)
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if chan.name not in channel_to_dont_quit:
                             self.Protocol.send_join_chan(uidornickname=dnickname, channel=chan.name)
+                            self.Protocol.send_priv_msg(dnickname, f"Sentinel mode activated on {channel}", channel=chan.name)
                     return None
 
                 if activation == 'off':
+                    result = self.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}")
+                    channels = result.fetchall()
+                    channel_in_db = [channel[0] for channel in channels]
+                    channel_to_dont_quit.extend(channel_in_db)
+                    self.update_configuration('sentinel', 0)
                     for chan in self.Channel.UID_CHANNEL_DB:
                         if chan.name not in channel_to_dont_quit:
                             self.Protocol.send_part_chan(uidornickname=dnickname, channel=chan.name)
+                            self.Protocol.send_priv_msg(dnickname, f"Sentinel mode deactivated on {channel}", channel=chan.name)
                     self.join_saved_channels()
                     return None

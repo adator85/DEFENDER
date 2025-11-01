@@ -1,139 +1,19 @@
 import logging
-import asyncio
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
+from core.classes.interfaces.imodule import IModule
 import mods.jsonrpc.utils as utils
 import mods.jsonrpc.threads as thds
-from time import sleep
-from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from unrealircd_rpc_py.ConnectionFactory import ConnectionFactory
 from unrealircd_rpc_py.LiveConnectionFactory import LiveConnectionFactory
 
-if TYPE_CHECKING:
-    from core.irc import Irc
-
-class Jsonrpc():
+class Jsonrpc(IModule):
 
     @dataclass
     class ModConfModel:
         """The Model containing the module parameters
         """
         jsonrpc: int = 0
-
-    def __init__(self, ircInstance: 'Irc') -> None:
-
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
-
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = ircInstance
-
-        # Add Protocol to the module (Mandatory)
-        self.Protocol = ircInstance.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = ircInstance.Config
-
-        # Add Base object to the module (Mandatory)
-        self.Base = ircInstance.Base
-
-        # Add Main Utils (Mandatory)
-        self.MainUtils = ircInstance.Utils
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Loader.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = ircInstance.User
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = ircInstance.Channel
-
-        # Is RPC Active?
-        self.is_streaming = False
-        
-        # Module Utils
-        self.Utils = utils
-
-        # Module threads
-        self.Threads = thds
-
-        # Run Garbage collector.
-        self.Base.create_timer(10, self.MainUtils.run_python_garbage_collector)
-
-        # Create module commands (Mandatory)
-        self.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
-        self.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
-        self.Irc.build_command(1, self.module_name, 'jrinstances', 'Get number of instances')
-
-        # Init the module
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
-
-    def __init_module(self) -> None:
-
-        logging.getLogger('websockets').setLevel(logging.WARNING)
-        logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
-        logging.getLogger('unrealircd-liverpc-py').setLevel(logging.CRITICAL)
-
-        # Create you own tables (Mandatory)
-        # self.__create_tables()
-
-        # Load module configuration and sync with core one (Mandatory)
-        self.__load_module_configuration()
-        # End of mandatory methods you can start your customization #
-
-        try:
-            self.Rpc = ConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
-            self.LiveRpc = LiveConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
-            
-            sync_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE}
-            sync_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD}
-            
-            live_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE,
-                               'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
-            live_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD, 
-                         'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
-
-            sync_param = sync_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else sync_http
-            live_param = live_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else live_http
-
-            self.Rpc.setup(sync_param)
-            self.LiveRpc.setup(live_param)
-
-            if self.ModConfig.jsonrpc == 1:
-                self.Base.create_thread(func=self.Threads.thread_subscribe, func_args=(self, ), run_once=True)
-            
-            return None
-        except Exception as err:
-            self.Protocol.send_priv_msg(
-                    nick_from=self.Config.SERVICE_NICKNAME,
-                    msg=f"[{self.Config.COLORS.red}JSONRPC ERROR{self.Config.COLORS.nogc}] {err.__str__()}",
-                    channel=self.Config.SERVICE_CHANLOG
-                    )
-            self.Logs.error(f"JSONRPC ERROR: {err.__str__()}")
-
-    def __create_tables(self) -> None:
-        """Methode qui va créer la base de donnée si elle n'existe pas.
-           Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
-
-        Returns:
-            None: Aucun retour n'es attendu
-        """
-
-        table_logs = '''CREATE TABLE IF NOT EXISTS test_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            datetime TEXT,
-            server_msg TEXT
-            )
-        '''
-
-        self.Base.db_execute_query(table_logs)
-        return None
 
     def callback_sent_to_irc(self, response: LiveRPCResult) -> None:
 
@@ -169,29 +49,63 @@ class Jsonrpc():
         
         return None
 
-    def __load_module_configuration(self) -> None:
-        """### Load Module Configuration
-        """
+    def create_tables(self) -> None:
+        return None
+
+    def load(self) -> None:
+
+        logging.getLogger('websockets').setLevel(logging.WARNING)
+        logging.getLogger('unrealircd-rpc-py').setLevel(logging.CRITICAL)
+        logging.getLogger('unrealircd-liverpc-py').setLevel(logging.CRITICAL)
+
+        self.ModConfig = self.ModConfModel(jsonrpc=0)
+
+        # Is RPC Active?
+        self.is_streaming = False
+        
+        # Module Utils
+        self.Utils = utils
+
+        # Module threads
+        self.Threads = thds
+
+        # Run Garbage collector.
+        self.Base.create_timer(10, self.MainUtils.run_python_garbage_collector)
+
+        # Create module commands (Mandatory)
+        self.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
+        self.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
+        self.Irc.build_command(1, self.module_name, 'jrinstances', 'Get number of instances')
+
         try:
-            # Build the default configuration model (Mandatory)
-            self.ModConfig = self.ModConfModel(jsonrpc=0)
+            self.Rpc = ConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
+            self.LiveRpc = LiveConnectionFactory(self.Config.DEBUG_LEVEL).get(self.Config.JSONRPC_METHOD)
+            
+            sync_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE}
+            sync_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD}
+            
+            live_unixsocket = {'path_to_socket_file': self.Config.JSONRPC_PATH_TO_SOCKET_FILE,
+                               'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
+            live_http = {'url': self.Config.JSONRPC_URL, 'username': self.Config.JSONRPC_USER, 'password': self.Config.JSONRPC_PASSWORD, 
+                         'callback_object_instance' : self, 'callback_method_or_function_name': 'callback_sent_to_irc'}
 
-            # Sync the configuration with core configuration (Mandatory)
-            self.Base.db_sync_core_config(self.module_name, self.ModConfig)
+            sync_param = sync_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else sync_http
+            live_param = live_unixsocket if self.Config.JSONRPC_METHOD == 'unixsocket' else live_http
 
+            self.Rpc.setup(sync_param)
+            self.LiveRpc.setup(live_param)
+
+            if self.ModConfig.jsonrpc == 1:
+                self.Base.create_thread(func=self.Threads.thread_subscribe, func_args=(self, ), run_once=True)
+            
             return None
-
-        except TypeError as te:
-            self.Logs.critical(te)
-
-    def update_configuration(self, param_key: str, param_value: str) -> None:
-        """Update the local and core configuration
-
-        Args:
-            param_key (str): The parameter key
-            param_value (str): The parameter value
-        """
-        self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
+        except Exception as err:
+            self.Protocol.send_priv_msg(
+                    nick_from=self.Config.SERVICE_NICKNAME,
+                    msg=f"[{self.Config.COLORS.red}JSONRPC ERROR{self.Config.COLORS.nogc}] {err.__str__()}",
+                    channel=self.Config.SERVICE_CHANLOG
+                    )
+            self.Logs.error(f"JSONRPC ERROR: {err.__str__()}")
 
     def unload(self) -> None:
         if self.is_streaming:

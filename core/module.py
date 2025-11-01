@@ -78,6 +78,7 @@ class Module:
                     msg=f"[{red}MODULE ERROR{nogc}] Module {module_name} is facing issues ! {attr}",
                     channel=self.__Config.SERVICE_CHANLOG
                 )
+            self.__Logs.error(msg=attr, exc_info=True)
             return False
 
         if not hasattr(create_instance_of_the_class, 'cmd'):

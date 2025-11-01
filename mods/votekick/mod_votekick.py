@@ -1,95 +1,29 @@
 """
     File        : mod_votekick.py
-    Version     : 1.0.0
+    Version     : 1.0.2
     Description : Manages votekick sessions for multiple channels.
                 Handles activation, ongoing vote checks, and cleanup.
     Author      : adator
     Created     : 2025-08-16
-    Last Updated: 2025-08-16
+    Last Updated: 2025-11-01
 -----------------------------------------
 """
+from dataclasses import dataclass
 import re
+from core.classes.interfaces.imodule import IModule
 import mods.votekick.schemas as schemas
 import mods.votekick.utils as utils
 from mods.votekick.votekick_manager import VotekickManager
 import mods.votekick.threads as thds
 from typing import TYPE_CHECKING, Any, Optional
 
-if TYPE_CHECKING:
-    from core.irc import Irc
+class Votekick(IModule):
 
+    @dataclass
+    class ModConfModel(schemas.VoteChannelModel):
+        ...
 
-class Votekick:
-
-    def __init__(self, uplink: 'Irc') -> None:
-
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
-
-        # Add Irc Object to the module
-        self.Irc = uplink
-
-        # Add Loader Object to the module (Mandatory)
-        self.Loader = uplink.Loader
-
-        # Add server protocol Object to the module (Mandatory)
-        self.Protocol = uplink.Protocol
-
-        # Add Global Configuration to the module
-        self.Config = uplink.Config
-
-        # Add Base object to the module
-        self.Base = uplink.Base
-
-        # Add logs object to the module
-        self.Logs = uplink.Logs
-
-        # Add User object to the module
-        self.User = uplink.User
-
-        # Add Channel object to the module
-        self.Channel = uplink.Channel
-
-        # Add Utils.
-        self.Utils = uplink.Utils
-
-        # Add Utils module
-        self.ModUtils = utils
-
-        # Add Schemas module
-        self.Schemas = schemas
-
-        # Add Threads module
-        self.Threads = thds
-
-        # Add VoteKick Manager
-        self.VoteKickManager = VotekickManager(self)
-
-        metadata = uplink.Loader.Settings.get_cache('VOTEKICK')
-        
-        if metadata is not None:
-            self.VoteKickManager.VOTE_CHANNEL_DB = metadata
-            # self.VOTE_CHANNEL_DB = metadata
-
-        # Créer les nouvelles commandes du module
-        self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
-
-        # Init the module
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'-- Module {self.module_name} loaded ...')
-
-    def __init_module(self) -> None:
-
-        # Add admin object to retrieve admin users
-        self.Admin = self.Irc.Admin
-        self.__create_tables()
-        self.ModUtils.join_saved_channels(self)
-
-        return None
-
-    def __create_tables(self) -> None:
+    def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
 
@@ -115,10 +49,37 @@ class Votekick:
         self.Base.db_execute_query(table_vote)
         return None
 
+    def load(self) -> None:
+
+        self.ModConfig = self.ModConfModel()
+        
+        # Add VoteKick Manager
+        self.VoteKickManager = VotekickManager(self)
+
+        # Add Utils module
+        self.ModUtils = utils
+
+        # Add Schemas module
+        self.Schemas = schemas
+
+        # Add Threads module
+        self.Threads = thds
+
+        self.ModUtils.join_saved_channels(self)
+
+        metadata = self.Settings.get_cache('VOTEKICK')
+        
+        if metadata is not None:
+            self.VoteKickManager.VOTE_CHANNEL_DB = metadata
+            # self.VOTE_CHANNEL_DB = metadata
+
+        # Créer les nouvelles commandes du module
+        self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
+
     def unload(self) -> None:
         try:
             # Cache the local DB with current votes.
-            self.Loader.Settings.set_cache('VOTEKICK', self.VoteKickManager.VOTE_CHANNEL_DB)
+            self.Settings.set_cache('VOTEKICK', self.VoteKickManager.VOTE_CHANNEL_DB)
 
             for chan in self.VoteKickManager.VOTE_CHANNEL_DB:
                 self.Protocol.send_part_chan(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)

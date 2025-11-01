@@ -31,6 +31,9 @@ class IModule(ABC):
         # Add Global Configuration to the module (Mandatory)
         self.Config = uplink.Config
 
+        # Add Settings to the module (Mandatory)
+        self.Settings = uplink.Settings
+
         # Add Base object to the module (Mandatory)
         self.Base = uplink.Base
 
@@ -46,6 +49,9 @@ class IModule(ABC):
         # Add Client object to the module (Mandatory)
         self.Client = uplink.Client
 
+        # Add Admin object to the module (Mandatory)
+        self.Admin = uplink.Admin
+
         # Add Channel object to the module (Mandatory)
         self.Channel = uplink.Channel
 
@@ -57,9 +63,6 @@ class IModule(ABC):
 
         # Inspect child classes
         self.inspect_class()
-
-        # Init the ModConfig model object.
-        self.ModConfig:ModConfModel = ModConfModel()
 
         self.create_tables()
 

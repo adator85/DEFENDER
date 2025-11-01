@@ -62,6 +62,14 @@ def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
 
 def handle_on_privmsg(uplink: 'Defender', srvmsg: list[str]):
     # ['@mtag....',':python', 'PRIVMSG', '#defender', ':zefzefzregreg', 'regg', 'aerg']
+    sender = srvmsg[1].replace(':','')
+    channel = srvmsg[3]
+    message = srvmsg[4:]
+    message[0] = message[0].replace(':', '')
+
+    if uplink.ModConfig.sentinel == 1 and srvmsg[3] != uplink.Config.SERVICE_CHANLOG:
+        uplink.Protocol.send_priv_msg(uplink.Config.SERVICE_NICKNAME, f"{sender} say on {channel}: {' '.join(message)}", uplink.Config.SERVICE_CHANLOG)
+
     action_on_flood(uplink, srvmsg)
     return None
 
@@ -385,7 +393,7 @@ def action_apply_reputation_santions(uplink: 'Defender') -> None:
     salon_jail = gconfig.SALON_JAIL
     uid_to_clean = []
 
-    if reputation_flag == 0 or reputation_timer == 0:
+    if reputation_flag == 0 or reputation_timer == 0 or not irc.Reputation.UID_REPUTATION_DB:
         return None
 
     for user in irc.Reputation.UID_REPUTATION_DB:

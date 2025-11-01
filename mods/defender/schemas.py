@@ -20,6 +20,7 @@ class ModConfModel(MainModel):
     autolimit: int = 0
     autolimit_amount: int = 3
     autolimit_interval: int = 3
+    sentinel: int = 0
 
 @dataclass
 class FloodUser(MainModel):
