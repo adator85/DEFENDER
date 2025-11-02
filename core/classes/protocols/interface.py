@@ -3,7 +3,7 @@ from typing import Optional, TYPE_CHECKING
 from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
-    from core.definition import MClient, MSasl
+    from core.definition import MClient, MSasl, MUser, MChannel
     from core.irc import Irc
 
 class IProtocol(ABC):
@@ -21,6 +21,8 @@ class IProtocol(ABC):
         self._Settings = uplink.Base.Settings
         self._Utils = uplink.Loader.Utils
         self._Logs = uplink.Loader.Logs
+        self._User = uplink.User
+        self._Channel = uplink.Channel
 
         self.Handler = CommandHandler(uplink.Loader)
 
@@ -348,7 +350,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_privmsg(self, serverMsg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
 
@@ -356,14 +358,7 @@ class IProtocol(ABC):
             serverMsg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
-            ```python 
-            response = {
-                "uid": '97KAAAAAE',
-                "channel": '#welcome',
-                "message": 'This is my public message'
-            }
-            ```
+            tuple[MUser(Sender), MUser(Reciever), MChannel, str]: Sender user model, reciever user model, Channel model, messgae.
         """
 
     # ------------------------------------------------------------------------

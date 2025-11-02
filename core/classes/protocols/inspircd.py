@@ -8,7 +8,7 @@ from core.classes.protocols.interface import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
-    from core.definition import MSasl, MClient
+    from core.definition import MSasl, MClient, MUser, MChannel
 
 class Inspircd(IProtocol):
 
@@ -1257,7 +1257,7 @@ class Inspircd(IProtocol):
         }
         return response
 
-    def parse_privmsg(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
         >>> [':97KAAAAAF', 'PRIVMSG', '98KAAAAAB', ':My','Message','...']
@@ -1272,13 +1272,15 @@ class Inspircd(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        response = {
-            "uid_sender": scopy[0].replace(':', ''),
-            "uid_reciever": self._Irc.User.get_uid(scopy[2]),
-            "channel": scopy[2] if self._Irc.Channel.is_valid_channel(scopy[2]) else None,
-            "message": " ".join(scopy[3:])
-        }
-        return response
+        sender = self._User.get_user(self._Utils.clean_uid(scopy[0]))
+        reciever = self._User.get_user(self._Utils.clean_uid(scopy[2]))
+        channel = self._Channel.get_channel(scopy[2]) if self._Channel.is_valid_channel(scopy[2]) else None
+
+        tmp_message = scopy[3:]
+        tmp_message = tmp_message[0].replace(':', '')
+        message = ' '.join(tmp_message)
+
+        return sender, reciever, channel, message
 
 
     # ------------------------------------------------------------------------
