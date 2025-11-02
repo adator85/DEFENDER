@@ -316,14 +316,14 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_uid(self, serverMsg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
 
         Args:
             serverMsg (list[str]): The UID IRCD message
         
         Returns:
-            dict[str, str]: The response as dictionary.
+            Optional[MUser]: The MUser object or None
         """
 
     @abstractmethod

@@ -630,35 +630,18 @@ class Unrealircd6(IProtocol):
     #                           COMMON IRC PARSER
     # ------------------------------------------------------------------------
 
-    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_uid(self, serverMsg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
         >>> ['@s2s-md/geoip=cc=GBtag...', ':001', 'UID', 'albatros', '0', '1721564597', 'albatros', 'hostname...', '001HB8G04', '0', '+iwxz', 'hostname-vhost', 'hostname-vhost', 'MyZBwg==', ':...']
         Args:
             serverMsg (list[str]): The UID ircd response
         """
-        umodes = str(serverMsg[10])
-        remote_ip = self._Base.decode_ip(str(serverMsg[13])) if 'S' not in umodes else '127.0.0.1'
+        scopy = serverMsg.copy()
+        if '@' in scopy[0]:
+            scopy.pop(0)
 
-        # Extract Geoip information
-        pattern = r'^.*geoip=cc=(\S{2}).*$'
-        geoip_match = match(pattern, serverMsg[0])
-        geoip = geoip_match.group(1) if geoip_match else None
-
-        response = {
-            'uid': str(serverMsg[8]),
-            'nickname': str(serverMsg[3]),
-            'username': str(serverMsg[6]),
-            'hostname': str(serverMsg[7]),
-            'umodes': umodes,
-            'vhost': str(serverMsg[11]),
-            'ip': remote_ip,
-            'realname': ' '.join(serverMsg[12:]).lstrip(':'),
-            'geoip': geoip,
-            'reputation_score': 0,
-            'iswebirc': True if 'webirc' in serverMsg[0] else False,
-            'iswebsocket': True if 'websocket' in serverMsg[0] else False
-        }
-        return response
+        uid = scopy[7]
+        return self._User.get_user(uid)
 
     def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse quit and return dictionary.

@@ -1186,35 +1186,15 @@ class Inspircd(IProtocol):
     #                           COMMON IRC PARSER
     # ------------------------------------------------------------------------
 
-    def parse_uid(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
-
+        >>> [':97K', 'UID', '97KAAAAAC', '1762113659', 'adator_', '172.18.128.1', '172.18.128.1', '...', '...', '172.18.128.1', '1762113659', '+', ':...']
         Args:
             server_msg (list[str]): _description_
         """
-        umodes = str(server_msg[11])
-        remote_ip = server_msg[9] if 'S' not in umodes else '127.0.0.1'
-
-        # Extract Geoip information
-        pattern = r'^.*geoip=cc=(\S{2}).*$'
-        geoip_match = match(pattern, server_msg[0])
-        geoip = geoip_match.group(1) if geoip_match else None
-
-        response = {
-            'uid': str(server_msg[2]),
-            'nickname': str(server_msg[4]),
-            'username': str(server_msg[7]),
-            'hostname': str(server_msg[5]),
-            'umodes': umodes,
-            'vhost': str(server_msg[6]),
-            'ip': remote_ip,
-            'realname': ' '.join(server_msg[12:]).lstrip(':'),
-            'geoip': geoip,
-            'reputation_score': 0,
-            'iswebirc': True if 'webirc' in server_msg[0] else False,
-            'iswebsocket': True if 'websocket' in server_msg[0] else False
-        }
-        return response
+        scopy = server_msg.copy()
+        uid = scopy[2]
+        return self._User.get_user(uid)
 
     def parse_quit(self, server_msg: list[str]) -> dict[str, str]:
         """Parse quit and return dictionary.

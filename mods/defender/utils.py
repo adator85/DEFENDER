@@ -212,7 +212,7 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
         uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
     """
-    parser_uid = uplink.Protocol.parse_uid(srvmsg)
+    _User = uplink.Protocol.parse_uid(srvmsg)
     gconfig = uplink.Config
     irc = uplink.Irc
     confmodel = uplink.ModConfig
@@ -222,10 +222,8 @@ def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
         return None
 
     # Get User information
-    _User = irc.User.get_user(parser_uid.get('uid', None))
-
     if _User is None:
-        irc.Logs.warning(f'This UID: [{parser_uid.get("uid", None)}] is not available please check why')
+        irc.Logs.warning(f'Error when parsing UID', exc_info=True)
         return
 
     # If user is not service or IrcOp then scan them
