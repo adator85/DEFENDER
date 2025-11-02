@@ -1,4 +1,5 @@
 from base64 import b64decode
+from optparse import Option
 from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
@@ -637,30 +638,31 @@ class Unrealircd6(IProtocol):
             serverMsg (list[str]): The UID ircd response
         """
         scopy = serverMsg.copy()
-        if '@' in scopy[0]:
+        if scopy[0].startswith('@'):
             scopy.pop(0)
 
         uid = scopy[7]
         return self._User.get_user(uid)
 
-    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_quit(self, serverMsg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
         >>> # ['@unrealtag...', ':001JKNY0N', 'QUIT', ':Quit:', '....']
         Args:
             serverMsg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The dictionary.
+            tuple[MUser, str]: The User Who Quit Object and the reason.
         """
         scopy = serverMsg.copy()
         if scopy[0].startswith('@'):
             scopy.pop(0)
+        
+        user_obj = self._User.get_user(self._Utils.clean_uid(scopy[0]))
+        tmp_reason = scopy[3:]
+        tmp_reason[0] = tmp_reason[0].replace(':', '')
+        reason = ' '.join(tmp_reason)
 
-        response = {
-            "uid": scopy[0].replace(':', ''),
-            "reason": " ".join(scopy[3:])
-        }
-        return response
+        return user_obj, reason
 
     def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
         """Parse nick changes and return dictionary.
@@ -705,7 +707,7 @@ class Unrealircd6(IProtocol):
         channel = self._Channel.get_channel(scopy[2]) if self._Channel.is_valid_channel(scopy[2]) else None
 
         tmp_message = scopy[3:]
-        tmp_message = tmp_message[0].replace(':', '')
+        tmp_message[0] = tmp_message[0].replace(':', '')
         message = ' '.join(tmp_message)
 
         return sender, reciever, channel, message

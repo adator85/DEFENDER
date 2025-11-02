@@ -1196,25 +1196,26 @@ class Inspircd(IProtocol):
         uid = scopy[2]
         return self._User.get_user(uid)
 
-    def parse_quit(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
             server_msg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The dictionary.
+            tuple[MUser, str]: The User Who Quit Object and the reason.
         """
         scopy = server_msg.copy()
 
         if scopy[0].startswith('@'):
             scopy.pop(0)
+        
+        user_obj = self._User.get_user(self._Utils.clean_uid(scopy[0]))
+        tmp_reason = scopy[3:]
+        tmp_reason[0] = tmp_reason[0].replace(':', '')
+        reason = ' '.join(tmp_reason)
 
-        response = {
-            "uid": scopy[0].replace(':', ''),
-            "reason": " ".join(scopy[3:])
-        }
-        return response
+        return user_obj, reason
 
     def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
         """Parse nick changes.

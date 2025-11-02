@@ -184,14 +184,17 @@ def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
         srvmsg (list[str]): The Server MSG
     """
     p = uplink.Protocol
-    parser = p.parse_quit(srvmsg)
+    userobj, reason = p.parse_quit(srvmsg)
     confmodel = uplink.ModConfig
+    
+    if userobj is None:
+        uplink.Logs.error("Error when parsing message QUIT", exc_info=True)
+        return None
 
     ban_all_chan = uplink.Base.int_if_possible(confmodel.reputation_ban_all_chan)
-    final_UID = uplink.Loader.Utils.clean_uid(str(parser.get('uid', None)))
     jail_salon = uplink.Config.SALON_JAIL
     service_id = uplink.Config.SERVICE_ID
-    get_user_reputation = uplink.Reputation.get_reputation(final_UID)
+    get_user_reputation = uplink.Reputation.get_reputation(userobj.uid)
 
     if get_user_reputation is not None:
         final_nickname = get_user_reputation.nickname
@@ -200,7 +203,7 @@ def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
                 p.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
                 uplink.Logs.debug(f"Mode -b {final_nickname} on channel {chan.name}")
 
-        uplink.Reputation.delete(final_UID)
+        uplink.Reputation.delete(userobj.uid)
         uplink.Logs.debug(f"Client {get_user_reputation.nickname} has been removed from Reputation local DB")
 
 def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):

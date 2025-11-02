@@ -327,14 +327,14 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_quit(self, serverMsg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
             serverMsg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
+            tuple[MUser, str]: The User Who Quit Object and the reason.
         """
 
     @abstractmethod
