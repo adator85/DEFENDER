@@ -7,7 +7,7 @@ from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes import rehash
-from core.classes.protocols.interface import IProtocol
+from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:

@@ -4,7 +4,7 @@ from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
-from core.classes.protocols.interface import IProtocol
+from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:

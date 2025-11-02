@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Optional
 from .unreal6 import Unrealircd6
 from .inspircd import Inspircd
-from .interface import IProtocol
+from ..interfaces.iprotocol import IProtocol
 
 if TYPE_CHECKING:
     from core.irc import Irc
