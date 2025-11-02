@@ -11,10 +11,11 @@ if TYPE_CHECKING:
 REHASH_MODULES = [
     'core.definition',
     'core.utils',
-    'core.classes.config',
+    'core.classes.modules.config',
     'core.base',
-    'core.classes.commands',
-    'core.classes.protocols.interface',
+    'core.classes.modules.commands',
+    'core.classes.interfaces.iprotocol',
+    'core.classes.protocols.command_handler',
     'core.classes.protocols.factory',
     'core.classes.protocols.unreal6',
     'core.classes.protocols.inspircd'
@@ -32,10 +33,6 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         uplink.ModuleUtils.unload_one_module(uplink, module.module_name)
 
-    uplink.ModuleUtils.model_clear()          # Clear loaded modules.
-    uplink.User.UID_DB.clear()                # Clear User Object
-    uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-    uplink.Client.CLIENT_DB.clear()           # Clear Client object
     uplink.Base.garbage_collector_thread()
 
     uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
@@ -57,6 +54,11 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
 
     uplink.Protocol = uplink.Loader.PFactory.get()
     uplink.Protocol.register_command()
+
+    uplink.ModuleUtils.model_clear()          # Clear loaded modules.
+    uplink.User.UID_DB.clear()                # Clear User Object
+    uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
+    uplink.Client.CLIENT_DB.clear()           # Clear Client object
 
     uplink.init_service_user()
     uplink.Utils.create_socket(uplink)

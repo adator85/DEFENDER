@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from time import time
 from random import choice
 from hashlib import md5, sha3_512
-from core.classes.settings import global_settings
+from core.classes.modules.settings import global_settings
 
 if TYPE_CHECKING:
     from core.irc import Irc

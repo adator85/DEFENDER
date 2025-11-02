@@ -8,7 +8,7 @@ from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
-    from core.classes.sasl import Sasl
+    from core.classes.modules.sasl import Sasl
     from core.definition import MClient, MSasl, MUser, MChannel
     from core.loader import Loader
 

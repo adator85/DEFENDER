@@ -1,13 +1,13 @@
 from logging import Logger
-from core.classes.settings import global_settings
-from core.classes import translation, user, admin, client, channel, reputation, settings, sasl
+from core.classes.modules.settings import global_settings
+from core.classes.modules import translation, user, admin, client, channel, reputation, settings, sasl
 import core.logs as logs
 import core.definition as df
 import core.utils as utils
 import core.base as base_mod
 import core.module as module_mod
-import core.classes.commands as commands_mod
-import core.classes.config as conf_mod
+import core.classes.modules.commands as commands_mod
+import core.classes.modules.config as conf_mod
 import core.irc as irc
 import core.classes.protocols.factory as factory
 
