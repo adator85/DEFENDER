@@ -254,7 +254,7 @@ class Inspircd(IProtocol):
         self.send2socket(f":{server_id} SQUIT {server_link} :{reason}")
         return None
 
-    def send_ungline(self, nickname:str, hostname: str) -> None:
+    def send_ungline(self, nickname: str, hostname: str) -> None:
 
         self.send2socket(f":{self._Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self._Config.SERVICE_NICKNAME}")
 
@@ -312,7 +312,9 @@ class Inspircd(IProtocol):
 
         return None
 
-    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    def send_uid(self, nickname: str, username: str, hostname: str,
+                 uid:str, umodes: str, vhost: str, remote_ip: str,
+                 realname: str, print_log: bool = True) -> None:
         """Send UID to the server
         [:<sid>] UID <uid> <ts> <nick> <real-host> <displayed-host> <real-user> <ip> <signon> <modes> [<mode-parameters>]+ :<real>
         Args:
@@ -384,7 +386,7 @@ class Inspircd(IProtocol):
         self._Irc.Channel.insert(self._Irc.Loader.Definition.MChannel(name=channel, uids=[user_obj.uid]))
         return None
 
-    def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
+    def send_part_chan(self, uidornickname: str, channel: str, print_log: bool = True) -> None:
         """Part from a channel
 
         Args:
@@ -409,7 +411,7 @@ class Inspircd(IProtocol):
         self._Irc.Channel.delete_user_from_channel(channel, user_obj.uid)
         return None
 
-    def send_unkline(self, nickname:str, hostname: str) -> None:
+    def send_unkline(self, nickname: str, hostname: str) -> None:
 
         self.send2socket(f":{self._Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self._Config.SERVICE_NICKNAME}")
 
@@ -1262,7 +1264,6 @@ class Inspircd(IProtocol):
         message = ' '.join(tmp_message)
 
         return sender, reciever, channel, message
-
 
     # ------------------------------------------------------------------------
     #                           IRC SENDER METHODS

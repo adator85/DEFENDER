@@ -1,5 +1,4 @@
 from base64 import b64decode
-from optparse import Option
 from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
@@ -10,7 +9,6 @@ from core.utils import tr
 if TYPE_CHECKING:
     from core.classes.modules.sasl import Sasl
     from core.definition import MClient, MSasl, MUser, MChannel
-    from core.loader import Loader
 
 class Unrealircd6(IProtocol):
 
@@ -106,7 +104,8 @@ class Unrealircd6(IProtocol):
         """Envoit les commandes à envoyer au serveur.
 
         Args:
-            string (Str): contient la commande à envoyer au serveur.
+            message (str): contient la commande à envoyer au serveur.
+            print_log (bool): True print log message in the console
         """
         try:
             with self._Base.lock:
@@ -142,22 +141,22 @@ class Unrealircd6(IProtocol):
         """
         try:
             batch_size      = self._Config.BATCH_SIZE
-            User_from       = self._Irc.User.get_user(nick_from)
-            User_to         = self._Irc.User.get_user(nick_to) if not nick_to is None else None
+            user_from       = self._Irc.User.get_user(nick_from)
+            user_to         = self._Irc.User.get_user(nick_to) if not nick_to is None else None
 
-            if User_from is None:
+            if user_from is None:
                 self._Logs.error(f"The sender nickname [{nick_from}] do not exist")
                 return None
 
             if not channel is None:
                 for i in range(0, len(str(msg)), batch_size):
                     batch = str(msg)[i:i+batch_size]
-                    self.send2socket(f":{User_from.uid} PRIVMSG {channel} :{batch}")
+                    self.send2socket(f":{user_from.uid} PRIVMSG {channel} :{batch}")
 
             if not nick_to is None:
                 for i in range(0, len(str(msg)), batch_size):
                     batch = str(msg)[i:i+batch_size]
-                    self.send2socket(f":{nick_from} PRIVMSG {User_to.uid} :{batch}")
+                    self.send2socket(f":{nick_from} PRIVMSG {user_to.uid} :{batch}")
 
         except Exception as err:
             self._Logs.error(f"General Error: {err}")
@@ -173,16 +172,16 @@ class Unrealircd6(IProtocol):
         """
         try:
             batch_size  = self._Config.BATCH_SIZE
-            User_from   = self._Irc.User.get_user(nick_from)
-            User_to     = self._Irc.User.get_user(nick_to)
+            user_from   = self._Irc.User.get_user(nick_from)
+            user_to     = self._Irc.User.get_user(nick_to)
 
-            if User_from is None or User_to is None:
+            if user_from is None or user_to is None:
                 self._Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
                 return None
 
             for i in range(0, len(str(msg)), batch_size):
                 batch = str(msg)[i:i+batch_size]
-                self.send2socket(f":{User_from.uid} NOTICE {User_to.uid} :{batch}")
+                self.send2socket(f":{user_from.uid} NOTICE {user_to.uid} :{batch}")
 
         except Exception as err:
             self._Logs.error(f"General Error: {err}")
@@ -199,7 +198,7 @@ class Unrealircd6(IProtocol):
         service_info = self._Config.SERVICE_INFO
         service_smodes = self._Config.SERVICE_SMODES
         service_cmodes = self._Config.SERVICE_CMODES
-        service_umodes = self._Config.SERVICE_UMODES
+        # service_umodes = self._Config.SERVICE_UMODES
         service_hostname = self._Config.SERVICE_HOST
         service_name = self._Config.SERVICE_NAME
         protocolversion = self.protocol_version
@@ -251,8 +250,8 @@ class Unrealircd6(IProtocol):
         """
         self.send2socket(f":{self._Config.SERVICE_NICKNAME} NICK {newnickname}")
 
-        userObj = self._Irc.User.get_user(self._Config.SERVICE_NICKNAME)
-        self._Irc.User.update_nickname(userObj.uid, newnickname)
+        user_obj = self._Irc.User.get_user(self._Config.SERVICE_NICKNAME)
+        self._Irc.User.update_nickname(user_obj.uid, newnickname)
         return None
 
     def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
@@ -339,21 +338,20 @@ class Unrealircd6(IProtocol):
         """_summary_
 
         Args:
-            from_nick (str): _description_
-            nick_to (str): _description_
+            nick_to_sapart (str): _description_
             channel_name (str): _description_
         """
         try:
 
-            userObj = self._Irc.User.get_user(uidornickname=nick_to_sapart)
-            chanObj = self._Irc.Channel.get_channel(channel_name)
+            user_obj = self._Irc.User.get_user(uidornickname=nick_to_sapart)
+            chan_obj = self._Irc.Channel.get_channel(channel_name)
             service_uid = self._Config.SERVICE_ID
 
-            if userObj is None or chanObj is None:
+            if user_obj is None or chan_obj is None:
                 return None
 
-            self.send2socket(f":{service_uid} SAPART {userObj.nickname} {chanObj.name}")
-            self._Irc.Channel.delete_user_from_channel(chanObj.name, userObj.uid)
+            self.send2socket(f":{service_uid} SAPART {user_obj.nickname} {chan_obj.name}")
+            self._Irc.Channel.delete_user_from_channel(chan_obj.name, user_obj.uid)
 
             return None
 
@@ -369,28 +367,28 @@ class Unrealircd6(IProtocol):
         """
         try:
 
-            userObj = self._Irc.User.get_user(uidornickname=nick_to_sajoin)
-            chanObj = self._Irc.Channel.get_channel(channel_name)
+            user_obj = self._Irc.User.get_user(uidornickname=nick_to_sajoin)
+            chan_obj = self._Irc.Channel.get_channel(channel_name)
             service_uid = self._Config.SERVICE_ID
 
-            if userObj is None:
+            if user_obj is None:
                 # User not exist: leave
                 return None
 
-            if chanObj is None:
+            if chan_obj is None:
                 # Channel not exist
                 if not self._Irc.Channel.is_valid_channel(channel_name):
                     # Incorrect channel: leave
                     return None
 
                 # Create the new channel with the uid
-                newChanObj = self._Irc.Loader.Definition.MChannel(name=channel_name, uids=[userObj.uid])
-                self._Irc.Channel.insert(newChanObj)
-                self.send2socket(f":{service_uid} SAJOIN {userObj.nickname} {newChanObj.name}")
+                new_chan_obj = self._Irc.Loader.Definition.MChannel(name=channel_name, uids=[user_obj.uid])
+                self._Irc.Channel.insert(new_chan_obj)
+                self.send2socket(f":{service_uid} SAJOIN {user_obj.nickname} {new_chan_obj.name}")
 
             else:
-                self._Irc.Channel.add_user_to_a_channel(channel_name=channel_name, uid=userObj.uid)
-                self.send2socket(f":{service_uid} SAJOIN {userObj.nickname} {chanObj.name}")
+                self._Irc.Channel.add_user_to_a_channel(channel_name=channel_name, uid=user_obj.uid)
+                self.send2socket(f":{service_uid} SAJOIN {user_obj.nickname} {chan_obj.name}")
 
             return None
 
@@ -472,7 +470,7 @@ class Unrealircd6(IProtocol):
         """Logout a client from his account
 
         Args:
-            client_uid (str): The Client UID
+            client_obj (MClient): The Client object
         """
         try:
             c_uid = client_obj.uid
@@ -483,31 +481,33 @@ class Unrealircd6(IProtocol):
         except Exception as err:
             self._Logs.error(f'General Error: {err}')
 
-    def send_quit(self, uid: str, reason: str, print_log: True) -> None:
+    def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
         """Send quit message
         - Delete uid from User object
         - Delete uid from Reputation object
 
         Args:
-            uidornickname (str): The UID or the Nickname
+            uid (str): The UID or the Nickname
             reason (str): The reason for the quit
+            print_log (bool): Print the log
         """
         user_obj = self._Irc.User.get_user(uidornickname=uid)
-        reputationObj = self._Irc.Reputation.get_reputation(uidornickname=uid)
+        reputation_obj = self._Irc.Reputation.get_reputation(uidornickname=uid)
 
         if not user_obj is None:
             self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
             self._Irc.User.delete(user_obj.uid)
 
-        if not reputationObj is None:
-            self._Irc.Reputation.delete(reputationObj.uid)
+        if not reputation_obj is None:
+            self._Irc.Reputation.delete(reputation_obj.uid)
 
         if not self._Irc.Channel.delete_user_from_all_channel(uid):
             self._Logs.error(f"The UID [{uid}] has not been deleted from all channels")
 
         return None
 
-    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str,
+                 vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -555,34 +555,34 @@ class Unrealircd6(IProtocol):
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        userObj = self._Irc.User.get_user(uidornickname)
-        passwordChannel = password if not password is None else ''
+        user_obj = self._Irc.User.get_user(uidornickname)
+        pwd_channel = password if not password is None else ''
 
-        if userObj is None:
+        if user_obj is None:
             return None
 
         if not self._Irc.Channel.is_valid_channel(channel):
             self._Logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        self.send2socket(f":{userObj.uid} JOIN {channel} {passwordChannel}", print_log=print_log)
+        self.send2socket(f":{user_obj.uid} JOIN {channel} {pwd_channel}", print_log=print_log)
 
         if uidornickname == self._Config.SERVICE_NICKNAME or uidornickname == self._Config.SERVICE_ID:
             self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {self._Config.SERVICE_UMODES} {self._Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
-        self._Irc.Channel.insert(self._Irc.Loader.Definition.MChannel(name=channel, uids=[userObj.uid]))
+        self._Irc.Channel.insert(self._Irc.Loader.Definition.MChannel(name=channel, uids=[user_obj.uid]))
 
         # Set the automode to the user
-        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
+        if 'r' not in user_obj.umodes and 'o' not in user_obj.umodes:
             return None
 
-        db_data: dict[str, str] = {"nickname": userObj.nickname, "channel": channel}
+        db_data: dict[str, str] = {"nickname": user_obj.nickname, "channel": channel}
         db_query = self._Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
         db_result = db_query.fetchone()
         if db_result is not None:
-            id, mode = db_result
-            self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {mode} {userObj.nickname}")
+            id_cmd_automode, mode = db_result
+            self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {mode} {user_obj.nickname}")
 
         return None
 
