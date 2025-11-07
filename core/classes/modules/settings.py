@@ -7,7 +7,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from core.definition import MSModule, MAdmin
 
 if TYPE_CHECKING:
-    from core.classes.user import User
+    from core.classes.modules.user import User
 
 class Settings:
     """This Class will never be reloaded. 

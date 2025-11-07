@@ -129,7 +129,6 @@ class Irc:
         # Define the IrcSocket object
         self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
 
-        self.__create_table()
         self.Base.create_thread(func=self.heartbeat, func_args=(self.beat, ))
 
     ##############################################
@@ -353,11 +352,6 @@ class Irc:
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} SASL {self.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
                     self.Protocol.send2socket(f":{self.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
-    def __create_table(self) -> None:
-        """## Create core tables
-        """
-        pass
-
     def get_defender_uptime(self) -> str:
         """Savoir depuis quand Defender est connecté
 
@@ -526,6 +520,7 @@ class Irc:
 
         RED = self.Config.COLORS.red
         GREEN = self.Config.COLORS.green
+        BLACK = self.Config.COLORS.black
         NOGC = self.Config.COLORS.nogc
 
         # Defender information
@@ -596,7 +591,7 @@ class Irc:
                         nick_to=fromuser,
                         msg=tr("You can't use this command anymore ! Please use [%sauth] instead", self.Config.SERVICE_PREFIX)
                         )
-                    return False
+                    return None
 
                 if current_nickname is None:
                     self.Logs.critical(f"This nickname [{fromuser}] don't exist")
@@ -641,7 +636,7 @@ class Irc:
                     self.Base.db_create_first_admin()
                     self.insert_db_admin(current_uid, cmd_owner, 5, self.Config.LANG)
                     self.Protocol.send_priv_msg(
-                        msg=f"[ {self.Config.COLORS.green}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
+                        msg=f"[ {GREEN}{str(current_command).upper()} {NOGC}] - {self.User.get_nickname(fromuser)} est désormais connecté a {dnickname}",
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -649,11 +644,11 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"Connexion a {dnickname} réussie!"
+                        msg=tr("Successfuly connected to %s", dnickname)
                         )
                 else:
                     self.Protocol.send_priv_msg(
-                        msg=f"[ {self.Config.COLORS.red}{str(current_command).upper()} ]{self.Config.COLORS.black} - {self.User.get_nickname(fromuser)} a tapé un mauvais mot de pass",
+                        msg=f"[ {RED}{str(current_command).upper()} {NOGC}] - {self.User.get_nickname(fromuser)} a tapé un mauvais mot de pass",
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -661,7 +656,7 @@ class Irc:
                     self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"Mot de passe incorrecte"
+                        msg=tr("Wrong password!")
                         )
 
             case 'auth':
