@@ -43,6 +43,9 @@ endif
 
 clean:
 ifeq ($(OS), Linux)
+	@export echo $DBUS_SESSION_BUS_ADDRESS && \
+		systemctl --user stop defender
+	$(info Defender has been stopped...)
 	@if [ -e .pyenv ]; then \
 		rm -rf .pyenv; \
 		echo "Virtual Env has been removed!"; \

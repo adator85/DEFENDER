@@ -7,7 +7,6 @@ import mods.clone.schemas as schemas
 from mods.clone.clone_manager import CloneManager
 
 if TYPE_CHECKING:
-    from core.irc import Irc
     from faker import Faker
 
 class Clone(IModule):

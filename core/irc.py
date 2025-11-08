@@ -6,6 +6,7 @@ import time
 from ssl import SSLSocket
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
+from xml.etree.ElementInclude import DEFAULT_MAX_INCLUSION_DEPTH
 from core.classes.modules import rehash
 from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
@@ -178,14 +179,21 @@ class Irc:
                     # 4072 max what the socket can grab
                     buffer_size = self.IrcSocket.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
                     data_in_bytes = self.IrcSocket.recv(buffer_size)
-                    data = data_in_bytes.splitlines(True)
-                    count_bytes = len(data_in_bytes)
-
-                    while count_bytes > 4070:
-                        # If the received message is > 4070 then loop and add the value to the variable
+                    eol = True
+                    if data_in_bytes[-2:] != b"\r\n":
+                        eol = False
+                    
+                    while not eol:
                         new_data = self.IrcSocket.recv(buffer_size)
                         data_in_bytes += new_data
-                        count_bytes = len(new_data)
+                        if data_in_bytes[-2:] == eol:
+                            eol = False
+
+                    # while count_bytes > 4070:
+                    #     # If the received message is > 4070 then loop and add the value to the variable
+                    #     new_data = self.IrcSocket.recv(buffer_size)
+                    #     data_in_bytes += new_data
+                    #     count_bytes = len(new_data)
 
                     data = data_in_bytes.splitlines(True)
 
@@ -441,7 +449,7 @@ class Irc:
 
         # Check if the user already exist
         if not self.Admin.db_is_admin_exist(nickname):
-            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level, 'language': 'EN'}
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level, 'language': self.Config.LANG}
             self.Base.db_execute_query(f'''INSERT INTO {self.Config.TABLE_ADMIN} 
                     (createdOn, user, password, hostname, vhost, level, language) VALUES
                     (:datetime, :user, :password, :hostname, :vhost, :level, :language)
@@ -840,17 +848,37 @@ class Irc:
             case 'cert':
                 # Syntax !cert
                 try:
+                    if len(cmd) < 2:
+                        self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert add")
+                        self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert del")
+                        return None
+
                     admin_obj = self.Admin.get_admin(fromuser)
-                    if admin_obj:
-                        if admin_obj.fingerprint is not None:
-                            query = f'UPDATE {self.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user = :user'
-                            r = self.Base.db_execute_query(query, {'fingerprint': admin_obj.fingerprint, 'user': admin_obj.account})
-                            if r.rowcount > 0:
-                                self.Protocol.send_notice(dnickname, fromuser, f'[ {GREEN}CERT{NOGC} ] Your new fingerprint has been attached to your account. {admin_obj.fingerprint}')
-                            else:
-                                self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] Impossible to add your fingerprint.{admin_obj.fingerprint}')
-                        else:
-                            self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] There is no fingerprint to add.')
+                    param = cmd[1] # add or del
+                    match param:
+                        case 'add':
+                            if admin_obj:
+                                if admin_obj.fingerprint is not None:
+                                    query = f'UPDATE {self.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user = :user'
+                                    r = self.Base.db_execute_query(query, {'fingerprint': admin_obj.fingerprint, 'user': admin_obj.account})
+                                    if r.rowcount > 0:
+                                        self.Protocol.send_notice(dnickname, fromuser, f'[ {GREEN}CERT{NOGC} ] Your new fingerprint has been attached to your account. {admin_obj.fingerprint}')
+                                    else:
+                                        self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] Impossible to add your fingerprint.{admin_obj.fingerprint}')
+                                else:
+                                    self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] There is no fingerprint to add.')
+                        case 'del':
+                            if admin_obj:
+                                query = f"UPDATE {self.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user =:user"
+                                r = self.Base.db_execute_query(query, {'fingerprint': None, 'user': admin_obj.account})
+                                if r.rowcount > 0:
+                                    self.Protocol.send_notice(dnickname, fromuser, f'[ {GREEN}CERT{NOGC} ] Your fingerprint has been removed from your account. {admin_obj.fingerprint}')
+                                else:
+                                    self.Protocol.send_notice(dnickname, fromuser, f'[ {RED}CERT{NOGC} ] Impossible to remove your fingerprint.{admin_obj.fingerprint}')
+                        case _:
+                            self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert add")
+                            self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert del")
+                            return None
 
                 except Exception as e:
                     self.Logs.error(e)

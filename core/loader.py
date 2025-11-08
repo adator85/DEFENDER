@@ -69,4 +69,6 @@ class Loader:
 
         self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self.Irc)
 
+        self.Base.init()
+
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))

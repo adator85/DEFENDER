@@ -3,7 +3,7 @@ traduction:
   - orig: "Access denied!"
     trad: "Accès refusé."
   - orig: "Wrong password!"
-    tard: "Mot de passe incorrect!"
+    trad: "Mot de passe incorrect!"
   - orig: "%s - %sLoaded%s by %s on %s"
     trad: "%s - %sChargé%s par %s le %s"
   - orig: "%s - %sNot Loaded%s"

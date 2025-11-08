@@ -15,6 +15,7 @@ REHASH_MODULES = [
     'core.base',
     'core.classes.modules.commands',
     'core.classes.interfaces.iprotocol',
+    'core.classes.interfaces.imodule',
     'core.classes.protocols.command_handler',
     'core.classes.protocols.factory',
     'core.classes.protocols.unreal6',

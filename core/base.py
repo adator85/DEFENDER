@@ -45,7 +45,10 @@ class Base:
 
         self.install: bool = False                              # Initialisation de la variable d'installation
         self.engine, self.cursor = self.db_init()               # Initialisation de la connexion a la base de données
-        self.__create_db()                                      # Initialisation de la base de données
+        # self.__create_db()                                      # Initialisation de la base de données
+
+    def init(self) -> None:
+        self.__create_db()
 
     def __set_current_defender_version(self) -> None:
         """This will put the current version of Defender
@@ -481,7 +484,7 @@ class Base:
 
         engine = create_engine(f'sqlite:///{full_path_db}.db', echo=False)
         cursor = engine.connect()
-        self.logs.info("-- database connexion has been initiated")
+        self.logs.info("-- Database connexion has been initiated")
         return engine, cursor
 
     def __create_db(self) -> None:
@@ -535,6 +538,7 @@ class Base:
             vhost TEXT,
             password TEXT,
             fingerprint TEXT,
+            language TEXT,
             level INTEGER
             )
         '''

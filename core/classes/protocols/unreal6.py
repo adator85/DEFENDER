@@ -34,7 +34,7 @@ class Unrealircd6(IProtocol):
             tuple[int, Optional[str]]: The position and the command.
         """
         for index, token in enumerate(cmd):
-            if token.upper() in self.known_protocol:
+            if token.upper() in self.known_protocol and index < 3:
                 return index, token.upper()
         
         if log:
@@ -216,9 +216,9 @@ class Unrealircd6(IProtocol):
         self.send2socket(f":{server_id} PROTOCTL SID={server_id}")
         self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
         self.send2socket(f":{server_id} SERVER {server_link} 1 :{service_info}")
-        self.send2socket("EOS")
         self.send2socket(f":{server_id} {service_nickname} :Reserved for services")
         self.send2socket(f":{server_id} UID {service_nickname} 1 {unixtime} {service_username} {service_hostname} {service_id} * {service_smodes} * * fwAAAQ== :{service_realname}")
+        self.send2socket("EOS")
         self.send_sjoin(service_channel_log)
         self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
         self.send2socket(f":{service_id} MODE {service_channel_log} {service_cmodes}")
@@ -1064,7 +1064,7 @@ class Unrealircd6(IProtocol):
             self._Logs.error(f'Index Error {__name__}: {ie}')
         except ValueError as ve:
             self._Irc.first_score = 0
-            self._Logs.error(f'Value Error {__name__}: {ve}')
+            self._Logs.error(f'Value Error {__name__}: {ve}', exc_info=True)
         except Exception as err:
             self._Logs.error(f"{__name__} - General Error: {err}")
 
