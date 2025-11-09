@@ -93,18 +93,11 @@ class Admin:
         Returns:
             bool: True if the admin has been deleted
         """
-
-        for record in self.UID_ADMIN_DB:
-            if record.uid == uidornickname:
-                # If the admin exist, delete and do not go further
-                self.UID_ADMIN_DB.remove(record)
-                self.Logs.debug(f'UID ({record.uid}) has been deleted')
-                return True
-            if record.nickname.lower() == uidornickname.lower():
-                # If the admin exist, delete and do not go further
-                self.UID_ADMIN_DB.remove(record)
-                self.Logs.debug(f'nickname ({record.nickname}) has been deleted')
-                return True
+        admin_obj = self.get_admin(uidornickname)
+        if admin_obj:
+            self.UID_ADMIN_DB.remove(admin_obj)
+            self.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
+            return True
 
         self.Logs.debug(f'The UID {uidornickname} was not deleted')
 
