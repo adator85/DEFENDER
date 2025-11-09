@@ -15,6 +15,14 @@ class Jsonrpc(IModule):
         """
         jsonrpc: int = 0
 
+    MOD_HEADER: set[str] = {
+        'JsonRPC',
+        '1.0.0',
+        'Module using the unrealircd-rpc-py library',
+        'Defender Team',
+        'Defender-6'
+    }
+
     def callback_sent_to_irc(self, response: LiveRPCResult) -> None:
 
         dnickname = self.Config.SERVICE_NICKNAME

@@ -15,13 +15,21 @@ import mods.votekick.schemas as schemas
 import mods.votekick.utils as utils
 from mods.votekick.votekick_manager import VotekickManager
 import mods.votekick.threads as thds
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 class Votekick(IModule):
 
     @dataclass
     class ModConfModel(schemas.VoteChannelModel):
         ...
+
+    MOD_HEADER: set[str] = {
+        'votekick',
+        '1.0.2',
+        'Channel Democraty',
+        'Defender Team',
+        'Defender-6'
+    }
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.

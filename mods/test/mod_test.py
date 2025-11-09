@@ -12,6 +12,14 @@ class Test(IModule):
         param_exemple1: str
         param_exemple2: int
 
+    MOD_HEADER: set[str] = {
+        'Test',
+        '1.0.0',
+        'The test module',
+        'Defender Team',
+        'Defender-6'
+    }
+
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module

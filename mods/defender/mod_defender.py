@@ -12,6 +12,14 @@ class Defender(IModule):
     class ModConfModel(schemas.ModConfModel):
         ...
 
+    MOD_HEADER: set[str] = {
+        'Defender',
+        '1.0.0',
+        'Defender main module that uses the reputation security.',
+        'Defender Team',
+        'Defender-6'
+    }
+
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module

@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from typing import TYPE_CHECKING, Optional
 from dataclasses import dataclass
 from mods.clone.schemas import ModConfModel
@@ -84,6 +84,8 @@ class IModule(ABC):
     def inspect_class(self):
         if not hasattr(self, 'ModConfig'):
             raise AttributeError("The Module must init ModConfig attribute in the load method!")
+        if not hasattr(self, 'MOD_HEADER'):
+            raise NotImplementedError(f"You must declare the header of the module in {self.__class__.__name__}!")
 
     @abstractmethod
     def create_tables(self) -> None:
