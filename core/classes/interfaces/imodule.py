@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 from dataclasses import dataclass
 from mods.clone.schemas import ModConfModel
