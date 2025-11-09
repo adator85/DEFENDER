@@ -190,6 +190,9 @@ class Admin:
         Returns:
             bool: True if found
         """
+        if fp is None:
+            return False
+
         query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
         data = {'fp': fp}
         exe = self.Base.db_execute_query(query, data)
@@ -200,12 +203,13 @@ class Admin:
             language = result[2]
             user_obj = self.User.get_user(uidornickname)
             if user_obj:
-                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(),account=account, level=level, language=language)
+                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(), account=account, level=level, language=language)
                 if self.insert(admin_obj):
                     self.Setting.current_admin = admin_obj
+                    self.Logs.debug(f"[Fingerprint login] {user_obj.nickname} ({admin_obj.account}) has been logged in successfully!")
                     return True
         
-        return False            
+        return False
 
     def db_is_admin_exist(self, admin_nickname: str) -> bool:
         """Verify if the admin exist in the database!
