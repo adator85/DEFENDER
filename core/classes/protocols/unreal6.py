@@ -1088,18 +1088,15 @@ class Unrealircd6(IProtocol):
             hostname = str(serverMsg[7])
             umodes = str(serverMsg[10])
             vhost = str(serverMsg[11])
-
-            if not 'S' in umodes:
-                remote_ip = self._Base.decode_ip(str(serverMsg[13]))
-            else:
-                remote_ip = '127.0.0.1'
-
+            remote_ip = '127.0.0.1' if 'S' in umodes else self._Base.decode_ip(str(serverMsg[13]))
+            
             # extract realname
             realname = ' '.join(serverMsg[14:]).lstrip(':')
 
             # Extract Geoip information
             pattern = r'^.*geoip=cc=(\S{2}).*$'
             geoip_match = match(pattern, serverMsg[0])
+            geoip = geoip_match.group(1) if geoip_match else None
 
             # Extract Fingerprint information
             pattern = r'^.*certfp=([^;]+).*$'
@@ -1110,12 +1107,6 @@ class Unrealircd6(IProtocol):
             pattern = r'^.*tls_cipher=([^;]+).*$'
             tlsc_match = match(pattern, serverMsg[0])
             tls_cipher = tlsc_match.group(1) if tlsc_match else None
-
-            if geoip_match:
-                geoip = geoip_match.group(1)
-            else:
-                geoip = None
-
             score_connexion = self._Irc.first_score
 
             self._Irc.User.insert(
@@ -1145,8 +1136,8 @@ class Unrealircd6(IProtocol):
             RED = self._Config.COLORS.red
             NOGC = self._Config.COLORS.nogc
 
-            for module in self._Irc.ModuleUtils.model_get_loaded_modules().copy():
-                module.class_instance.cmd(serverMsg)
+            # for module in self._Irc.ModuleUtils.model_get_loaded_modules().copy():
+            #     module.class_instance.cmd(serverMsg)
 
             # SASL authentication
             # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
