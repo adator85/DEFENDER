@@ -188,7 +188,7 @@ def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
     confmodel = uplink.ModConfig
     
     if userobj is None:
-        uplink.Logs.error("Error when parsing message QUIT", exc_info=True)
+        uplink.Logs.debug(f"This UID do not exist anymore: {srvmsg}")
         return None
 
     ban_all_chan = uplink.Base.int_if_possible(confmodel.reputation_ban_all_chan)
