@@ -12,12 +12,12 @@ class Test(IModule):
         param_exemple1: str
         param_exemple2: int
 
-    MOD_HEADER: set[str] = {
-        'Test',
-        '1.0.0',
-        'The test module',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'Test',
+        'version':'1.0.0',
+        'description':'The test module',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def create_tables(self) -> None:

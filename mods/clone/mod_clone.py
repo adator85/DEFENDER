@@ -15,12 +15,12 @@ class Clone(IModule):
     class ModConfModel(schemas.ModConfModel):
         ...
 
-    MOD_HEADER: set[str] = {
-        'Clone',
-        '1.0.0',
-        'Connect thousands of clones to your IRCD, by group. You can use them as security moderation.',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'Clone',
+        'version':'1.0.0',
+        'description':'Connect thousands of clones to your IRCD, by group. You can use them as security moderation.',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def create_tables(self) -> None:

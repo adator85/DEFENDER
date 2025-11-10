@@ -23,12 +23,12 @@ class Votekick(IModule):
     class ModConfModel(schemas.VoteChannelModel):
         ...
 
-    MOD_HEADER: set[str] = {
-        'votekick',
-        '1.0.2',
-        'Channel Democraty',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'votekick',
+        'version':'1.0.2',
+        'description':'Channel Democraty',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def create_tables(self) -> None:
@@ -79,7 +79,6 @@ class Votekick(IModule):
         
         if metadata is not None:
             self.VoteKickManager.VOTE_CHANNEL_DB = metadata
-            # self.VOTE_CHANNEL_DB = metadata
 
         # Créer les nouvelles commandes du module
         self.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
@@ -87,7 +86,8 @@ class Votekick(IModule):
     def unload(self) -> None:
         try:
             # Cache the local DB with current votes.
-            self.Settings.set_cache('VOTEKICK', self.VoteKickManager.VOTE_CHANNEL_DB)
+            if self.VoteKickManager.VOTE_CHANNEL_DB:
+                self.Settings.set_cache('VOTEKICK', self.VoteKickManager.VOTE_CHANNEL_DB)
 
             for chan in self.VoteKickManager.VOTE_CHANNEL_DB:
                 self.Protocol.send_part_chan(uidornickname=self.Config.SERVICE_ID, channel=chan.channel_name)

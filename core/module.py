@@ -1,12 +1,13 @@
 '''
 This is the main operational file to handle modules
 '''
+from optparse import Option
 from pathlib import Path
 import sys
 import importlib
 from types import ModuleType
 from typing import TYPE_CHECKING, Optional
-from core.definition import MModule
+from core.definition import DefenderModuleHeader, MModule
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 class Module:
 
     DB_MODULES: list[MModule] = []
+    DB_MODULE_HEADERS: list[DefenderModuleHeader] = []
 
     def __init__(self, loader: 'Loader') -> None:
         self.__Loader = loader
@@ -38,10 +40,45 @@ class Module:
         if not module_name.lower().startswith('mod_'):
             return None, None, None
 
-        module_name = module_name.lower()
+        module_name = module_name.lower() # --> mod_defender
         module_folder = module_name.split('_')[1].lower() # --> defender
         class_name = module_name.split('_')[1].capitalize() # --> Defender
         return module_folder, module_name, class_name
+
+    def get_module_header(self, module_name: str) -> Optional[DefenderModuleHeader]:
+
+        for mod_h in self.DB_MODULE_HEADERS:
+            if module_name.lower() == mod_h.name.lower():
+                return mod_h
+        
+        return None
+
+    def create_module_header(self, module_header: dict[str, str]) -> bool:
+        """Create a new module header into DB_MODULE_HEADERS
+
+        Args:
+            module_header (dict[str, str]): The module header
+
+        Returns:
+            bool: True if the module header has been created.
+        """
+        mod_header = DefenderModuleHeader(**module_header)
+        if self.get_module_header(mod_header.name) is None:
+            self.__Logs.debug(f"[MOD_HEADER] The module header has been created! ({mod_header.name} v{mod_header.version})")
+            self.DB_MODULE_HEADERS.append(mod_header)
+            return True
+       
+        return False
+
+    def delete_module_header(self, module_name: str) -> bool:
+        mod_header = self.get_module_header(module_name)
+        if mod_header is not None:
+            self.__Logs.debug(f"[MOD_HEADER] The module header has been deleted ({mod_header.name} v{mod_header.version})")
+            self.DB_MODULE_HEADERS.remove(mod_header)
+            return True
+
+        self.__Logs.debug(f"[MOD_HEADER ERROR] Impossible to remove the module header ({module_name})")
+        return False
 
     def load_one_module(self, uplink: 'Irc', module_name: str, nickname: str, is_default: bool = False) -> bool:
 
@@ -70,6 +107,7 @@ class Module:
             loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
             my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
             create_instance_of_the_class = my_class(uplink)             # Créer une nouvelle instance de la classe
+            self.create_module_header(create_instance_of_the_class.MOD_HEADER)
         except AttributeError as attr:
             red = uplink.Config.COLORS.red
             nogc = uplink.Config.COLORS.nogc
@@ -124,6 +162,7 @@ class Module:
             if self.is_module_exist_in_sys_module(module_name):
                 module_model = self.model_get_module(module_name)
                 if module_model:
+                    self.delete_module_header(module_model.class_instance.MOD_HEADER['name'])
                     module_model.class_instance.unload()
                 else:
                     uplink.Protocol.send_priv_msg(
@@ -141,6 +180,7 @@ class Module:
                 importlib.reload(the_module)
                 my_class = getattr(the_module, class_name, None)
                 new_instance = my_class(uplink)
+                self.create_module_header(new_instance.MOD_HEADER)
                 module_model.class_instance = new_instance
 
                 # Créer le module dans la base de données
@@ -163,7 +203,7 @@ class Module:
                 return False
 
         except (TypeError, AttributeError, KeyError, Exception) as err:
-            self.__Logs.error(f"[RELOAD MODULE ERROR]: {err}")
+            self.__Logs.error(f"[RELOAD MODULE ERROR]: {err}", exc_info=True)
             uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"[RELOAD MODULE ERROR]: {err}",
@@ -227,6 +267,7 @@ class Module:
                 return False
 
             if module:
+                self.delete_module_header(module.class_instance.MOD_HEADER['name'])
                 module.class_instance.unload()
                 self.DB_MODULES.remove(module)
 
@@ -253,7 +294,7 @@ class Module:
             return False
 
         except Exception as err:
-            self.__Logs.error(f"General Error: {err}")
+            self.__Logs.error(f"General Error: {err}", exc_info=True)
             return False
 
     def unload_all_modules(self) -> bool:

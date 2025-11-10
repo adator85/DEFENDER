@@ -14,12 +14,12 @@ class Command(IModule):
         """
         pass
 
-    MOD_HEADER: set[str] = {
-        'Command',
-        '1.0.0',
-        'Module contains all IRC commands',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'Command',
+        'version':'1.0.0',
+        'description':'Module contains all IRC commands',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def create_tables(self) -> None:

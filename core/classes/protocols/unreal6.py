@@ -1029,9 +1029,11 @@ class Unrealircd6(IProtocol):
                 self._Irc.join_saved_channels()
                 self._Irc.ModuleUtils.db_load_all_existing_modules(self._Irc)
 
+                self.send2socket(f":{self._Config.SERVEUR_ID} SMOD :L:Defender:1.0.0 :L:Command:1.0.0")
+
                 return None
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Key Error: {ie}")
+            self._Logs.error(f"{__name__} - Index Error: {ie}")
         except KeyError as ke:
             self._Logs.error(f"{__name__} - Key Error: {ke}")
         except Exception as err:

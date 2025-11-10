@@ -12,12 +12,12 @@ class Defender(IModule):
     class ModConfModel(schemas.ModConfModel):
         ...
 
-    MOD_HEADER: set[str] = {
-        'Defender',
-        '1.0.0',
-        'Defender main module that uses the reputation security.',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'Defender',
+        'version':'1.0.0',
+        'description':'Defender main module that uses the reputation security.',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def create_tables(self) -> None:
@@ -214,12 +214,10 @@ class Defender(IModule):
                     return None
 
                 case 'UID':
-                    print(f"{self.module_name} - {cmd}")
                     self.Utils.handle_on_uid(self, cmd)
                     return None
 
                 case 'SJOIN':
-
                     self.Utils.handle_on_sjoin(self, cmd)
                     return None
 

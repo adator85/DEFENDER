@@ -15,12 +15,12 @@ class Jsonrpc(IModule):
         """
         jsonrpc: int = 0
 
-    MOD_HEADER: set[str] = {
-        'JsonRPC',
-        '1.0.0',
-        'Module using the unrealircd-rpc-py library',
-        'Defender Team',
-        'Defender-6'
+    MOD_HEADER: dict[str, str] = {
+        'name':'JsonRPC',
+        'version':'1.0.0',
+        'description':'Module using the unrealircd-rpc-py library',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
     }
 
     def callback_sent_to_irc(self, response: LiveRPCResult) -> None:

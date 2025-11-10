@@ -350,6 +350,14 @@ class MModule(MainModel):
     class_instance: Optional[Any] = None
 
 @dataclass
+class DefenderModuleHeader(MainModel):
+    name: str = ''
+    version: str = ''
+    description: str = ''
+    author: str = ''
+    core_version: str = ''
+
+@dataclass
 class MSModule:
     """Server Modules model"""
     name: str = None

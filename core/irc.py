@@ -125,7 +125,7 @@ class Irc:
         self.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
         self.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
         self.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
-        self.build_command(4, 'core', 'print_users', 'Print users in a file.')
+        self.build_command(4, 'core', 'print_vars', 'Print users in a file.')
 
         # Define the IrcSocket object
         self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
@@ -1253,7 +1253,7 @@ class Irc:
                 self.Protocol.send_raw(raw_command)
                 return None
 
-            case 'print_users':
+            case 'print_vars':
                 with open('users.txt', 'w') as fw:
                     i = 1
                     for u in self.User.UID_DB:
@@ -1261,6 +1261,14 @@ class Irc:
                         self.Logs.debug(f" {i} - chars written {w}")
                         i += 1
                     self.Protocol.send_priv_msg(dnickname, "Data written in users.txt file", dchanlog)
+                
+                with open('modules.txt', 'w') as fw:
+                    i = 1
+                    for u in self.ModuleUtils.DB_MODULE_HEADERS:
+                        w = fw.write(u.to_dict().__str__() + "\n")
+                        self.Logs.debug(f" {i} - chars written {w}")
+                        i += 1
+                    self.Protocol.send_priv_msg(dnickname, "Data written in modules.txt file", dchanlog)
 
                 return None
 
