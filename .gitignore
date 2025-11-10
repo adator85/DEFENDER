@@ -12,3 +12,4 @@ configuration_unreal6.json
 *.log
 test.py
 users.txt
+modules.txt
