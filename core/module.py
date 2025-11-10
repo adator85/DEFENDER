@@ -1,7 +1,6 @@
 '''
 This is the main operational file to handle modules
 '''
-from optparse import Option
 from pathlib import Path
 import sys
 import importlib
