@@ -1,3 +1,4 @@
+from typing import Any
 from core.classes.interfaces.imodule import IModule
 from dataclasses import dataclass
 
@@ -5,7 +6,7 @@ class Test(IModule):
 
     @dataclass
     class ModConfModel:
-        """The Model containing the module parameters
+        """The Model containing the module parameters (Mandatory)
         you can leave it without params.
         just use pass | if you leave it empty, in the load() method just init empty object ==> self.ModConfig = ModConfModel()
         """
@@ -19,6 +20,7 @@ class Test(IModule):
         'author':'Defender Team',
         'core_version':'Defender-6'
     }
+    """Module Header (Mandatory)"""
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -41,7 +43,7 @@ class Test(IModule):
         return None
 
     def load(self) -> None:
-        """### Load Module Configuration
+        """### Load Module Configuration (Mandatory)
         """
 
         # Create module commands (Mandatory)
@@ -54,38 +56,48 @@ class Test(IModule):
         self.ModConfig = self.ModConfModel(param_exemple1='str', param_exemple2=1)
 
     def unload(self) -> None:
+        """### This method is called when you unload or you reload the module (Mandatory)"""
         self.Irc.Commands.drop_command_by_module(self.module_name)
         return None
 
-    def cmd(self, data:list) -> None:
-        try:
-            cmd = list(data).copy()
+    def cmd(self, data: list[str]) -> None:
+        """All messages coming from the IRCD server will be handled using this method (Mandatory)
 
+        Args:
+            data (list): Messages coming from the IRCD server.
+        """
+        cmd = list(data).copy()
+        try:
             return None
-        except KeyError as ke:
-            self.Logs.error(f"Key Error: {ke}")
-        except IndexError as ie:
-            self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
+        """All messages coming from the user commands (Mandatory)
+
+        Args:
+            user (str): The user who send the request.
+            channel (Any): The channel from where is coming the message (could be None).
+            cmd (list): The messages coming from the IRCD server.
+            fullcmd (list, optional): The full messages coming from the IRCD server. Defaults to [].
+        """
+        u = self.User.get_user(user)
+        c = self.Channel.get_channel(channel) if self.Channel.is_valid_channel(channel) else None
+        if u is None:
+            return None
 
         command = str(cmd[0]).lower()
         dnickname = self.Config.SERVICE_NICKNAME
-        fromuser = user
-        fromchannel = str(channel) if not channel is None else None
 
         match command:
 
             case 'test-command':
                 try:
+                    self.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
+                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
 
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
-                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
-
-                    if not fromchannel is None:
-                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
+                    if c is not None:
+                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
 
                     # How to update your module configuration
                     self.update_configuration('param_exemple2', 7)
