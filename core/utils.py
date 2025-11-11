@@ -1,15 +1,14 @@
-'''
+"""
 Main utils library.
-'''
+"""
 import gc
 import ssl
 import socket
 import sys
 from pathlib import Path
 from re import match, sub
-from base64 import b64decode
 from typing import Literal, Optional, Any, TYPE_CHECKING
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from time import time
 from random import choice
 from hashlib import md5, sha3_512
@@ -84,9 +83,9 @@ def get_unixtime() -> int:
     Returns:
         int: Current time in seconds since the Epoch (int)
     """
-    cet_offset = timezone(timedelta(hours=2))
-    now_cet = datetime.now(cet_offset)
-    unixtime_cet = int(now_cet.timestamp())
+    # cet_offset = timezone(timedelta(hours=2))
+    # now_cet = datetime.now(cet_offset)
+    # unixtime_cet = int(now_cet.timestamp())
     return int(time())
 
 def get_sdatetime() -> str:
@@ -142,9 +141,9 @@ def create_socket(uplink: 'Irc') -> None:
     except OSError as oe:
         uplink.Logs.critical(f"[OS Error]: {oe}")
         if 'connection refused' in str(oe).lower():
-            sys.exit(oe)
+            sys.exit(oe.__str__())
         if oe.errno == 10053:
-            sys.exit(oe)
+            sys.exit(oe.__str__())
     except AttributeError as ae:
         uplink.Logs.critical(f"AttributeError: {ae}")
 
@@ -225,9 +224,9 @@ def clean_uid(uid: str) -> Optional[str]:
         return None
 
     pattern = fr'[:|@|%|\+|~|\*]*'
-    parsed_UID = sub(pattern, '', uid)
+    parsed_uid = sub(pattern, '', uid)
 
-    return parsed_UID
+    return parsed_uid
 
 def hide_sensitive_data(srvmsg: list[str]) -> list[str]:
     try:

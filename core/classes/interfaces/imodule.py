@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 from dataclasses import dataclass
-from mods.clone.schemas import ModConfModel
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -89,12 +88,8 @@ class IModule(ABC):
 
     @abstractmethod
     def create_tables(self) -> None:
-        """
-        Method that will create the database if it does not exist.
+        """Method that will create the database if it does not exist.
         A single Session for this class will be created, which will be used within this class/module.
-
-        Args:
-            database_name (str): Name of the database (no spaces allowed in the name)
 
         Returns:
             None: No return is expected
@@ -119,7 +114,7 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: list = []) -> None:
+    def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]] = None) -> None:
         """These are the commands recieved from a client
 
         Args:
