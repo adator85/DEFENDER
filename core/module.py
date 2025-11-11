@@ -7,6 +7,7 @@ import importlib
 from types import ModuleType
 from typing import TYPE_CHECKING, Optional
 from core.definition import DefenderModuleHeader, MModule
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -32,9 +33,11 @@ class Module:
             list[str]: List of all module names.
         """
         base_path = Path('mods')
-        return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
+        modules_available = [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
+        self.__Logs.debug(f"Modules available: {modules_available}")
+        return modules_available
 
-    def get_module_information(self, module_name: str) -> tuple[str, str, str]:
+    def get_module_information(self, module_name: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
         # module_name : mod_defender
         if not module_name.lower().startswith('mod_'):
             return None, None, None
@@ -42,12 +45,14 @@ class Module:
         module_name = module_name.lower() # --> mod_defender
         module_folder = module_name.split('_')[1].lower() # --> defender
         class_name = module_name.split('_')[1].capitalize() # --> Defender
+        self.__Logs.debug(f"Module information Folder: {module_folder}, Name: {module_name}, Class: {class_name}")
         return module_folder, module_name, class_name
 
     def get_module_header(self, module_name: str) -> Optional[DefenderModuleHeader]:
 
         for mod_h in self.DB_MODULE_HEADERS:
             if module_name.lower() == mod_h.name.lower():
+                self.__Logs.debug(f"Module Header found: {mod_h}")
                 return mod_h
         
         return None
@@ -112,7 +117,7 @@ class Module:
             nogc = uplink.Config.COLORS.nogc
             uplink.Protocol.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
-                    msg=f"[{red}MODULE ERROR{nogc}] Module {module_name} is facing issues ! {attr}",
+                    msg=tr("[%sMODULE ERROR%s] Module %s is facing issues! %s", red, nogc, module_name, attr),
                     channel=self.__Config.SERVICE_CHANLOG
                 )
             self.__Logs.error(msg=attr, exc_info=True)
@@ -121,7 +126,7 @@ class Module:
         if not hasattr(create_instance_of_the_class, 'cmd'):
             uplink.Protocol.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
-                    msg=f"Module {module_name} ne contient pas de méthode cmd",
+                    msg=tr("cmd method is not available in the module (%s)", module_name),
                     channel=self.__Config.SERVICE_CHANLOG
                 )
             self.__Logs.critical(f"The Module {module_name} has not been loaded because cmd method is not available")
@@ -134,11 +139,14 @@ class Module:
             self.db_register_module(module_name, nickname, is_default)
             uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
-                        msg=f"Module {module_name} chargé",
+                        msg=tr("Module %s loaded!", module_name),
                         channel=self.__Config.SERVICE_CHANLOG
                     )
 
             self.__Logs.debug(f"Module {class_name} has been loaded")
+            return True
+
+        return False
 
     def load_all_modules(self) -> bool:
         ...
@@ -244,7 +252,8 @@ class Module:
 
         Args:
             uplink (Irc): The Irc instance
-            mod_name (str): Module name ex mod_defender
+            module_name (str): Module name ex mod_defender
+            keep_in_db (bool): Keep in database
 
         Returns:
             bool: True if success
