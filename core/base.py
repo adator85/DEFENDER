@@ -324,7 +324,7 @@ class Base:
             self.logs.error(f'Assertion Error -> {ae}')
             return None
 
-    def create_thread(self, func:object, func_args: tuple = (), run_once:bool = False, daemon: bool = True) -> None:
+    def create_thread(self, func: object, func_args: tuple = (), run_once: bool = False, daemon: bool = True) -> None:
         """Create a new thread and store it into running_threads variable
 
         Args:
@@ -333,6 +333,9 @@ class Base:
             run_once (bool, optional): If you want to ensure that this method/function run once. Defaults to False.
         """
         try:
+            # Clean unused threads first
+            self.garbage_collector_thread()
+
             func_name = func.__name__
 
             if run_once:
@@ -346,8 +349,8 @@ class Base:
             self.running_threads.append(th)
             self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.name} | Running Threads : {len(threading.enumerate())}")
 
-        except AssertionError as ae:
-            self.logs.error(f'{ae}')
+        except Exception as err:
+            self.logs.error(err, exc_info=True)
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -424,11 +427,11 @@ class Base:
                 if thread.name != 'heartbeat':
                     if not thread.is_alive():
                         self.running_threads.remove(thread)
-                        self.logs.info(f"-- Thread {str(thread.name)} {str(thread.native_id)} removed")
+                        self.logs.debug(f"-- Thread {str(thread.name)} {str(thread.native_id)} has been removed!")
 
             # print(threading.enumerate())
-        except AssertionError as ae:
-            self.logs.error(f'Assertion Error -> {ae}')
+        except Exception as err:
+            self.logs.error(err, exc_info=True)
 
     def garbage_collector_sockets(self) -> None:
 
