@@ -69,7 +69,7 @@ class IModule(ABC):
         uplink.Base.db_sync_core_config(self.module_name, self.ModConfig)
 
         # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
+        self.Logs.debug(f'Loading Module {self.module_name} ...')
 
     def update_configuration(self, param_key: str, param_value: str) -> None:
         """Update the local and core configuration
