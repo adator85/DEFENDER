@@ -26,7 +26,8 @@ class Base:
         self.Utils = loader.Utils
         self.logs = loader.Logs
 
-        self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
+        # Check if new Defender version is available
+        self.check_for_new_version(True)
 
         # Liste des timers en cours
         self.running_timers: list[threading.Timer] = self.Settings.RUNNING_TIMERS
@@ -43,9 +44,14 @@ class Base:
         # Création du lock
         self.lock = self.Settings.LOCK
 
-        self.install: bool = False                              # Initialisation de la variable d'installation
-        self.engine, self.cursor = self.db_init()               # Initialisation de la connexion a la base de données
-        # self.__create_db()                                      # Initialisation de la base de données
+        # Init install variable
+        self.install: bool = False
+        
+        # Init database connection
+        self.engine, self.cursor = self.db_init()
+        
+        # Create the database
+        # self.__create_db()
 
     def init(self) -> None:
         self.__create_db()
