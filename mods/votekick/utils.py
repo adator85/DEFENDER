@@ -58,7 +58,7 @@ def delete_vote_channel_from_database(uplink: 'Votekick', channel: str) -> bool:
     else:
         return False
 
-def join_saved_channels(uplink: 'Votekick') -> None:
+async def join_saved_channels(uplink: 'Votekick') -> None:
 
     param = {'module_name': uplink.module_name}
     result = uplink.Base.db_execute_query(f"SELECT id, channel_name FROM {uplink.Config.TABLE_CHANNEL} WHERE module_name = :module_name", param)
@@ -68,7 +68,7 @@ def join_saved_channels(uplink: 'Votekick') -> None:
     for channel in channels:
         id_, chan = channel
         uplink.VoteKickManager.activate_new_channel(chan)
-        uplink.Protocol.send_sjoin(channel=chan)
-        uplink.Protocol.send2socket(f":{uplink.Config.SERVICE_NICKNAME} SAMODE {chan} +o {uplink.Config.SERVICE_NICKNAME}")
+        await uplink.Protocol.send_sjoin(channel=chan)
+        await uplink.Protocol.send2socket(f":{uplink.Config.SERVICE_NICKNAME} SAMODE {chan} +o {uplink.Config.SERVICE_NICKNAME}")
 
     return None

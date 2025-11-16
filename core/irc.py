@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import socket
 import ssl
@@ -25,6 +26,8 @@ class Irc:
         return cls._instance
 
     def __init__(self, loader: 'Loader'):
+
+        self.signal: bool = True
 
         # Loader class
         self.Loader = loader
@@ -132,7 +135,33 @@ class Irc:
         # Define the IrcSocket object
         self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
 
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
+
         self.Base.create_thread(func=self.heartbeat, func_args=(self.beat, ))
+
+    async def connect(self):
+
+        if self.Config.SERVEUR_SSL:
+            self.reader, self.writer = await asyncio.open_connection(self.Config.SERVEUR_IP, self.Config.SERVEUR_PORT, ssl=self.Utils.get_ssl_context())
+        else:
+            self.reader, self.writer = await asyncio.open_connection(self.Config.SERVEUR_IP, self.Config.SERVEUR_PORT)
+
+        self.init_service_user()
+        self.Protocol: 'IProtocol' = self.Loader.PFactory.get()
+        self.Protocol.register_command()
+        await self.Protocol.send_link()
+
+
+    async def listen(self):
+
+        while self.signal:
+            data = await self.reader.readuntil(b'\r\n')
+            await self.send_response(data.splitlines())
+
+    async def run(self):
+        await self.connect()
+        await self.listen()
 
     ##############################################
     #               CONNEXION IRC                #
@@ -232,7 +261,7 @@ class Irc:
         except Exception as e:
             self.Logs.critical(f"General Error: {e}", exc_info=True)
 
-    def join_saved_channels(self) -> None:
+    async def join_saved_channels(self) -> None:
         """## Joining saved channels"""
         exec_query = self.Base.db_execute_query(f'SELECT distinct channel_name FROM {self.Config.TABLE_CHANNEL}')
         result_query = exec_query.fetchall()
@@ -240,25 +269,25 @@ class Irc:
         if result_query:
             for chan_name in result_query:
                 chan = chan_name[0]
-                self.Protocol.send_sjoin(channel=chan)
+                await self.Protocol.send_sjoin(channel=chan)
 
-    def send_response(self, responses:list[bytes]) -> None:
+    async def send_response(self, responses:list[bytes]) -> None:
         try:
             for data in responses:
                 response = data.decode(self.CHARSET[0]).split()
-                self.cmd(response)
+                await self.cmd(response)
 
         except UnicodeEncodeError as ue:
             for data in responses:
                 response = data.decode(self.CHARSET[1],'replace').split()
-                self.cmd(response)
+                await self.cmd(response)
             self.Logs.error(f'UnicodeEncodeError: {ue}')
             self.Logs.error(response)
 
         except UnicodeDecodeError as ud:
             for data in responses:
                 response = data.decode(self.CHARSET[1],'replace').split()
-                self.cmd(response)
+                await self.cmd(response)
             self.Logs.error(f'UnicodeDecodeError: {ud}')
             self.Logs.error(response)
 
@@ -287,7 +316,7 @@ class Irc:
 
         return None
 
-    def generate_help_menu(self, nickname: str, module: Optional[str] = None) -> None:
+    async def generate_help_menu(self, nickname: str, module: Optional[str] = None) -> None:
 
         # Check if the nickname is an admin
         p = self.Protocol
@@ -300,14 +329,14 @@ class Irc:
         if admin_obj is not None:
             current_level = admin_obj.level
 
-        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f" ***************** LISTE DES COMMANDES *****************")
+        await p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f" ***************** LISTE DES COMMANDES *****************")
         header = f"  {'Level':<8}| {'Command':<25}| {'Module':<15}| {'Description':<35}"
         line = "-"*75
-        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=header)
-        p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f"  {line}")
+        await p.send_notice(nick_from=dnickname,nick_to=nickname, msg=header)
+        await p.send_notice(nick_from=dnickname,nick_to=nickname, msg=f"  {line}")
         for cmd in self.Commands.get_commands_by_level(current_level):
             if module is None or cmd.module_name.lower() == module.lower():
-                p.send_notice(
+                await p.send_notice(
                         nick_from=dnickname, 
                         nick_to=nickname, 
                         msg=f"  {color_black}{cmd.command_level:<8}{color_nogc}| {cmd.command_name:<25}| {cmd.module_name:<15}| {cmd.description:<35}"
@@ -465,18 +494,18 @@ class Irc:
             self.Logs.info(f"The nickname {nickname} already exist! (sent by {sender})")
             return False
 
-    def thread_check_for_new_version(self, fromuser: str) -> None:
+    async def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.Config.SERVICE_NICKNAME
 
         if self.Base.check_for_new_version(True):
-            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.Config.CURRENT_VERSION} >>> {self.Config.LATEST_VERSION}")
-            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
+            await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.Config.CURRENT_VERSION} >>> {self.Config.LATEST_VERSION}")
+            await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
         else:
-            self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" You have the latest version of defender")
+            await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" You have the latest version of defender")
 
         return None
 
-    def cmd(self, data: list[str]) -> None:
+    async def cmd(self, data: list[str]) -> None:
         """Parse server response
 
         Args:
@@ -494,7 +523,7 @@ class Irc:
 
             for parsed in self.Protocol.Handler.get_ircd_commands():
                 if parsed.command_name.upper() == parsed_protocol:
-                    parsed.func(original_response)
+                    await parsed.func(original_response)
                     for module in modules:
                         module.class_instance.cmd(original_response)
 
@@ -509,7 +538,7 @@ class Irc:
         except Exception as err:
             self.Logs.error(f"General Error: {err}", exc_info=True)
 
-    def hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
+    async def hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
         """Create
 
         Args:
@@ -560,13 +589,13 @@ class Irc:
             case 'notallowed':
                 try:
                     current_command = str(cmd[0])
-                    self.Protocol.send_priv_msg(
+                    await self.Protocol.send_priv_msg(
                         msg=tr('[ %s%s%s ] - Access denied to %s', RED, current_command.upper(), NOGC, fromuser),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
-                    self.Protocol.send_notice(
+                    await self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=tr('Access denied!')
@@ -1012,7 +1041,7 @@ class Irc:
             case 'help':
                 # Syntax. !help [module_name]
                 module_name = str(cmd[1]) if len(cmd) == 2 else None
-                self.generate_help_menu(nickname=fromuser, module=module_name)
+                await self.generate_help_menu(nickname=fromuser, module=module_name)
                 return None
                 
             case 'load':
@@ -1119,14 +1148,14 @@ class Irc:
                             loaded = True
 
                     if loaded:
-                        self.Protocol.send_notice(
+                        await self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=tr('%s - %sLoaded%s by %s on %s', module, GREEN, NOGC, loaded_user, loaded_datetime)
                         )
                         loaded = False
                     else:
-                        self.Protocol.send_notice(
+                        await self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=tr('%s - %sNot Loaded%s', module, RED, NOGC)
@@ -1150,11 +1179,17 @@ class Irc:
 
             case 'show_threads':
                 for thread in self.Base.running_threads:
-                    self.Protocol.send_notice(
+                    await self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f">> {thread.name} ({thread.is_alive()})"
                     )
+                
+                asyncio.create_task(self.new_coro(), name='my_new_coro')
+                for task in asyncio.all_tasks():
+                    print(task.get_name())
+                    print(task)
+
                 return None
 
             case 'show_channels':
@@ -1282,3 +1317,8 @@ class Irc:
 
             case _:
                 pass
+    
+    async def new_coro(self):
+        self.Logs.debug("Creating new coro")
+        await asyncio.sleep(5)
+        self.Logs.debug("End of the coro")

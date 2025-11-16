@@ -84,7 +84,7 @@ class Module:
         self.__Logs.debug(f"[MOD_HEADER ERROR] Impossible to remove the module header ({module_name})")
         return False
 
-    def load_one_module(self, uplink: 'Irc', module_name: str, nickname: str, is_default: bool = False) -> bool:
+    async def load_one_module(self, uplink: 'Irc', module_name: str, nickname: str, is_default: bool = False) -> bool:
 
         module_folder, module_name, class_name = self.get_module_information(module_name)
 
@@ -97,7 +97,7 @@ class Module:
             if self.model_is_module_exist(module_name):
                 # Si le module existe dans la variable globale retourne False
                 self.__Logs.debug(f"Module [{module_folder}.{module_name}] exist in the local variable!")
-                uplink.Protocol.send_priv_msg(
+                await uplink.Protocol.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
                     msg=f"Le module {module_name} est déja chargé ! si vous souhaiter le recharge tapez {self.__Config.SERVICE_PREFIX}reload {module_name}",
                     channel=self.__Config.SERVICE_CHANLOG
@@ -110,12 +110,12 @@ class Module:
         try:
             loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
             my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
-            create_instance_of_the_class = my_class(uplink)             # Créer une nouvelle instance de la classe
+            create_instance_of_the_class = my_class(uplink)       # Créer une nouvelle instance de la classe
             self.create_module_header(create_instance_of_the_class.MOD_HEADER)
         except AttributeError as attr:
             red = uplink.Config.COLORS.red
             nogc = uplink.Config.COLORS.nogc
-            uplink.Protocol.send_priv_msg(
+            await uplink.Protocol.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
                     msg=tr("[%sMODULE ERROR%s] Module %s is facing issues! %s", red, nogc, module_name, attr),
                     channel=self.__Config.SERVICE_CHANLOG
@@ -124,7 +124,7 @@ class Module:
             return False
 
         if not hasattr(create_instance_of_the_class, 'cmd'):
-            uplink.Protocol.send_priv_msg(
+            await uplink.Protocol.send_priv_msg(
                     nick_from=self.__Config.SERVICE_NICKNAME,
                     msg=tr("cmd method is not available in the module (%s)", module_name),
                     channel=self.__Config.SERVICE_CHANLOG
@@ -137,7 +137,7 @@ class Module:
         if self.model_insert_module(MModule(module_name, class_name, create_instance_of_the_class)):
             # Enregistrer le module dans la base de données
             self.db_register_module(module_name, nickname, is_default)
-            uplink.Protocol.send_priv_msg(
+            await uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=tr("Module %s loaded!", module_name),
                         channel=self.__Config.SERVICE_CHANLOG
@@ -399,7 +399,7 @@ class Module:
         OPERATION DEDICATED TO DATABASE MANAGEMENT
     '''
 
-    def db_load_all_existing_modules(self, uplink: 'Irc') -> bool:
+    async def db_load_all_existing_modules(self, uplink: 'Irc') -> bool:
         """Charge les modules qui existe déja dans la base de données
 
         Returns:
@@ -408,7 +408,7 @@ class Module:
         self.__Logs.debug("[DB LOAD MODULE] Loading modules from the database!")
         result = self.__Base.db_execute_query(f"SELECT module_name FROM {self.__Config.TABLE_MODULE}")
         for r in result.fetchall():
-            self.load_one_module(uplink, r[0], 'sys', True)
+            await self.load_one_module(uplink, r[0], 'sys', True)
 
         return True
  

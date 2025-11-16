@@ -1,3 +1,4 @@
+import asyncio
 from core import install
 
 #############################################
@@ -9,14 +10,24 @@ from core import install
 #           UnrealIRCD 6.2.2 or higher      #
 #############################################
 
-try:
-    # install.update_packages()
+async def main():
     from core.loader import Loader
     loader = Loader()
-    loader.Irc.init_irc()
+    await loader.Irc.run()
 
-except AssertionError as ae:
-    print(f'Assertion Error -> {ae}')
-except KeyboardInterrupt as k:
-    # ircInstance.Base.execute_periodic_action()
-    ...
+if __name__ == "__main__":
+    asyncio.run(main(), debug=True)
+
+
+
+# try:
+#     # install.update_packages()
+#     from core.loader import Loader
+#     loader = Loader()
+#     loader.Irc.init_irc()
+
+# except AssertionError as ae:
+#     print(f'Assertion Error -> {ae}')
+# except KeyboardInterrupt as k:
+#     # ircInstance.Base.execute_periodic_action()
+#     ...
