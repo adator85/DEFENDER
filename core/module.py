@@ -319,7 +319,9 @@ class Module:
         """
         module_folder, module_name, class_name = self.get_module_information(module_name)
         if "mods." + module_folder + "." + module_name in sys.modules:
+            self.__Logs.debug(f"[SYS MODULE] (mods.{module_folder}.{module_name}) found in sys.modules")
             return True
+        self.__Logs.debug(f"[SYS MODULE] (mods.{module_folder}.{module_name}) not found in sys.modules")
         return False
 
     '''
