@@ -10,7 +10,7 @@ from core import install
 #############################################
 
 try:
-    install.update_packages()
+    # install.update_packages()
     from core.loader import Loader
     loader = Loader()
     loader.Irc.init_irc()

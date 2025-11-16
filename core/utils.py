@@ -177,7 +177,7 @@ def generate_random_string(lenght: int) -> str:
 
     return randomize
 
-def hash_password(password: str, algorithm: Literal["md5, sha3_512"] = 'md5') -> str:
+def hash_password(password: str, algorithm: Literal["md5", "sha3_512"] = 'md5') -> str:
     """Return the crypted password following the selected algorithm
 
     Args:
@@ -190,16 +190,16 @@ def hash_password(password: str, algorithm: Literal["md5, sha3_512"] = 'md5') ->
 
     match algorithm:
         case 'md5':
-            password = md5(password.encode()).hexdigest()
-            return password
+            hashed_password = md5(password.encode()).hexdigest()
+            return hashed_password
 
         case 'sha3_512':
-            password = sha3_512(password.encode()).hexdigest()
-            return password
+            hashed_password = sha3_512(password.encode()).hexdigest()
+            return hashed_password
 
         case _:
-            password = md5(password.encode()).hexdigest()
-            return password
+            hashed_password = md5(password.encode()).hexdigest()
+            return hashed_password
 
 def get_all_modules() -> list[str]:
     """Get list of all main modules

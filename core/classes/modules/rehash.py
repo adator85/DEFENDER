@@ -14,6 +14,7 @@ REHASH_MODULES = [
     'core.classes.modules.config',
     'core.base',
     'core.classes.modules.commands',
+    'core.classes.modules.rpc',
     'core.classes.interfaces.iprotocol',
     'core.classes.interfaces.imodule',
     'core.classes.protocols.command_handler',
@@ -69,6 +70,8 @@ def restart_service(uplink: 'Irc', reason: str = "Restarting with no reason!") -
 def rehash_service(uplink: 'Irc', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
     uplink.Settings.set_cache('db_commands', uplink.Commands.DB_COMMANDS)
+    uplink.Loader.RpcServer.stop_server()
+
     restart_flag = False
     config_model_bakcup = uplink.Config
     mods = REHASH_MODULES
@@ -80,7 +83,7 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
             channel=uplink.Config.SERVICE_CHANLOG
             )
     uplink.Utils = sys.modules['core.utils']
-    uplink.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).configuration_model
+    uplink.Config = uplink.Loader.Config = uplink.Loader.ConfModule.Configuration(uplink.Loader).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
     uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
     uplink.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
@@ -113,6 +116,8 @@ def rehash_service(uplink: 'Irc', nickname: str) -> None:
 
     # Reload Main Commands Module
     uplink.Commands = uplink.Loader.CommandModule.Command(uplink.Loader)
+    uplink.Loader.RpcServer = uplink.Loader.RpcServerModule.JSONRPCServer(uplink.Loader)
+    uplink.Loader.RpcServer.start_server()
     uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('db_commands')
 
     uplink.Loader.Base = uplink.Loader.BaseModule.Base(uplink.Loader)

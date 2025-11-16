@@ -152,8 +152,13 @@ def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
         confmodel (ModConfModel): The Module Configuration
     """
     p = uplink.Protocol
-    parser = p.parse_nick(srvmsg)
-    uid = uplink.Loader.Utils.clean_uid(parser.get('uid', None))
+    u, new_nickname, timestamp = p.parse_nick(srvmsg)
+
+    if u is None:
+        uplink.Logs.error(f"[USER OBJ ERROR {timestamp}] - {srvmsg}")
+        return None
+
+    uid = u.uid
     confmodel = uplink.ModConfig
 
     get_reputation = uplink.Reputation.get_reputation(uid)
@@ -166,7 +171,7 @@ def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
 
     # Update the new nickname
     oldnick = get_reputation.nickname
-    newnickname = parser.get('newnickname', None)
+    newnickname = new_nickname
     get_reputation.nickname = newnickname
 
     # If ban in all channel is ON then unban old nickname an ban the new nickname

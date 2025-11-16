@@ -8,6 +8,7 @@ import core.base as base_mod
 import core.module as module_mod
 import core.classes.modules.commands as commands_mod
 import core.classes.modules.config as conf_mod
+import core.classes.modules.rpc.rpc as rpc_mod
 import core.irc as irc
 import core.classes.protocols.factory as factory
 
@@ -25,6 +26,8 @@ class Loader:
         self.CommandModule: commands_mod            = commands_mod
 
         self.LoggingModule: logs                    = logs
+
+        self.RpcServerModule: rpc_mod               = rpc_mod
 
         self.Utils: utils                           = utils
 
@@ -68,6 +71,8 @@ class Loader:
         self.Irc: irc.Irc                           = irc.Irc(self)
 
         self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self.Irc)
+
+        self.RpcServer: rpc_mod.JSONRPCServer       = rpc_mod.JSONRPCServer(self)
 
         self.Base.init()
 

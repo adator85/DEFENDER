@@ -126,6 +126,8 @@ class Irc:
         self.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
         self.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
         self.build_command(4, 'core', 'print_vars', 'Print users in a file.')
+        self.build_command(4, 'core', 'start_rpc', 'Start defender jsonrpc server')
+        self.build_command(4, 'core', 'stop_rpc', 'Stop defender jsonrpc server')
 
         # Define the IrcSocket object
         self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
@@ -372,7 +374,7 @@ class Irc:
 
         return uptime
 
-    def heartbeat(self, beat:float) -> None:
+    def heartbeat(self, beat: float) -> None:
         """Execute certaines commandes de nettoyage toutes les x secondes
         x étant définit a l'initialisation de cette class (self.beat)
 
@@ -1271,6 +1273,12 @@ class Irc:
                     self.Protocol.send_priv_msg(dnickname, "Data written in modules.txt file", dchanlog)
 
                 return None
+
+            case 'start_rpc':
+                self.Loader.RpcServer.start_server()
+
+            case 'stop_rpc':
+                self.Loader.RpcServer.stop_server()
 
             case _:
                 pass
