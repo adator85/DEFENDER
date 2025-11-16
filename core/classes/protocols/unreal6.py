@@ -19,8 +19,7 @@ class Unrealircd6(IProtocol):
                                'VERSION', 'REPUTATION', 'SVS2MODE', 
                                'SLOG', 'NICK', 'PART', 'PONG', 'SASL', 'PING',
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
-                               '006', '007', '018'}
-
+                               'SETHOST', '006', '007', '018'}
 
     def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
         """Get the position of known commands
@@ -62,6 +61,7 @@ class Unrealircd6(IProtocol):
         self.Handler.register(m(command_name="MD", func=self.on_md))
         self.Handler.register(m(command_name="PRIVMSG", func=self.on_privmsg))
         self.Handler.register(m(command_name="KICK", func=self.on_kick))
+        self.Handler.register(m(command_name="SETHOST", func=self.on_sethost))
 
         return None
 
@@ -663,7 +663,7 @@ class Unrealircd6(IProtocol):
 
         return user_obj, reason
 
-    def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes and return dictionary.
         >>> ['@unrealircd.org/geoip=FR;unrealircd.org/', ':001OOU2H3', 'NICK', 'WebIrc', '1703795844']
 
@@ -671,20 +671,18 @@ class Unrealircd6(IProtocol):
             server_msg (list[str]): The server message to parse
 
         Returns:
-            dict: The response as dictionary.
+            tuple(MUser, newnickname(str), timestamp(str)): Tuple of the response.
 
-            >>> {"uid": "", "newnickname": "", "timestamp": ""}
+            >>> MUser, newnickname, timestamp
         """
         scopy = server_msg.copy()
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        response = {
-            "uid": scopy[0].replace(':', ''),
-            "newnickname": scopy[2],
-            "timestamp": scopy[3]
-        }
-        return response
+        user_obj = self._User.get_user(self._User.clean_uid(scopy[0]))
+        newnickname = scopy[2]
+        timestamp = scopy[3]
+        return user_obj, newnickname, timestamp
 
     def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
@@ -772,7 +770,6 @@ class Unrealircd6(IProtocol):
             # TODO : User object should be able to update user modes
             if self._Irc.User.update_mode(u.uid, user_mode):
                 return None
-                # self._Logs.debug(f"Updating user mode for [{userObj.nickname}] [{old_umodes}] => [{userObj.umodes}]")
 
             return None
 
@@ -1573,7 +1570,6 @@ class Unrealircd6(IProtocol):
                 case _:
                     return None
 
-            ...
         except Exception as e:
             self._Logs.error(f"General Error: {e}")
 
@@ -1591,3 +1587,16 @@ class Unrealircd6(IProtocol):
         # Delete the user from the channel.
         self._Irc.Channel.delete_user_from_channel(channel, uid)
         return None
+
+    def on_sethost(self, server_msg: list[str]) -> None:
+        """On SETHOST command
+        >>> [':001DN7305', 'SETHOST', ':netadmin.example.org']
+
+        Args:
+            server_msg (list[str]): _description_
+        """
+        scopy = server_msg.copy()
+        uid = self._User.clean_uid(scopy[0])
+        vhost = scopy[2].lstrip(':')
+        user = self._User.get_user(uid)
+        user.vhost = vhost

@@ -1219,7 +1219,7 @@ class Inspircd(IProtocol):
 
         return user_obj, reason
 
-    def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
@@ -1233,12 +1233,10 @@ class Inspircd(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        response = {
-            "uid": scopy[0].replace(':', ''),
-            "newnickname": scopy[2],
-            "timestamp": scopy[3]
-        }
-        return response
+        user_obj = self._User.get_user(self._User.clean_uid(scopy[0]))
+        newnickname = scopy[2]
+        timestamp = scopy[3]
+        return user_obj, newnickname, timestamp
 
     def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
@@ -1410,5 +1408,13 @@ class Inspircd(IProtocol):
 
         Args:
             server_msg (list[str]): Original server message
+        """
+        ...
+
+    def on_sethost(self, server_msg: list[str]) -> None:
+        """On SETHOST command
+
+        Args:
+            server_msg (list[str]): _description_
         """
         ...

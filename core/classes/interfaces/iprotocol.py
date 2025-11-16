@@ -335,7 +335,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def parse_nick(self, server_msg: list[str]) -> dict[str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes and return dictionary.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
@@ -343,7 +343,9 @@ class IProtocol(ABC):
             server_msg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
+            tuple(MUser, newnickname(str), timestamp(str)): Tuple of the response.
+
+            >>> MUser, newnickname, timestamp
         """
 
     @abstractmethod
@@ -562,4 +564,13 @@ class IProtocol(ABC):
         Eg. ['@unrealircd.org...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
         Args:
             server_msg (list[str]): The server message
+        """
+
+    @abstractmethod
+    def on_sethost(self, server_msg: list[str]) -> None:
+        """On SETHOST command
+        >>> [':001DN7305', 'SETHOST', ':netadmin.example.org']
+
+        Args:
+            server_msg (list[str]): _description_
         """
