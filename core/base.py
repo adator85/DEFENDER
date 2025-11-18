@@ -259,20 +259,20 @@ class Base:
             self.logs.error(err)
             return False
 
-    def db_update_core_config(self, module_name:str, dataclassObj: object, param_key:str, param_value: str) -> bool:
+    def db_update_core_config(self, module_name:str, dataclass_obj: object, param_key:str, param_value: str) -> bool:
 
         core_table = self.Config.TABLE_CONFIG
         # Check if the param exist
-        if not hasattr(dataclassObj, param_key):
+        if not hasattr(dataclass_obj, param_key):
             self.logs.error(f"Le parametre {param_key} n'existe pas dans la variable global")
             return False
 
         mes_donnees = {'module_name': module_name, 'param_key': param_key, 'param_value': param_value}
         search_param_query = f"SELECT id FROM {core_table} WHERE module_name = :module_name AND param_key = :param_key"
         result = self.db_execute_query(search_param_query, mes_donnees)
-        isParamExist = result.fetchone()
+        is_param_exist = result.fetchone()
 
-        if not isParamExist is None:
+        if not is_param_exist is None:
             mes_donnees = {'datetime': self.Utils.get_sdatetime(),
                            'module_name': module_name,
                            'param_key': param_key,
@@ -282,14 +282,14 @@ class Base:
             update = self.db_execute_query(query, mes_donnees)
             updated_rows = update.rowcount
             if updated_rows > 0:
-                setattr(dataclassObj, param_key, self.int_if_possible(param_value))
+                setattr(dataclass_obj, param_key, self.int_if_possible(param_value))
                 self.logs.debug(f'Parameter updated : {param_key} - {param_value} | Module: {module_name}')
             else:
                 self.logs.error(f'Parameter NOT updated : {param_key} - {param_value} | Module: {module_name}')
         else:
             self.logs.error(f'Parameter and Module do not exist: Param ({param_key}) - Value ({param_value}) | Module ({module_name})')
 
-        self.logs.debug(dataclassObj)
+        self.logs.debug(dataclass_obj)
 
         return True
 
@@ -362,7 +362,7 @@ class Base:
         except Exception as err:
             self.logs.error(err, exc_info=True)
 
-    def create_asynctask(self, func: Callable, *, async_name: str = None, run_once: bool = False) -> asyncio.Task:
+    def create_asynctask(self, func: Any, *, async_name: str = None, run_once: bool = False) -> asyncio.Task:
         """Create a new asynchrone and store it into running_asynctasks variable
 
         Args:

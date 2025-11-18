@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Optional
 from core.classes.interfaces.imodule import IModule
 from dataclasses import dataclass
 
@@ -28,13 +28,11 @@ class Test(IModule):
 
     def __init__(self, uplink: 'Loader'):
         super().__init__(uplink)
-        self.init()
+        self._mod_config: Optional[Test.ModConfModel] = None
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -47,7 +45,7 @@ class Test(IModule):
             )
         '''
 
-        # self.Base.db_execute_query(table_logs)
+        # self.ctx.Base.db_execute_query(table_logs)
         return None
 
     def load(self) -> None:
@@ -55,18 +53,25 @@ class Test(IModule):
         """
 
         # Create module commands (Mandatory)
-        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
-        self.Irc.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
-        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
-        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
-        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
+        self.ctx.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.ctx.Irc.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
+        self.ctx.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.ctx.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.ctx.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
 
         # Build the default configuration model (Mandatory)
-        self.ModConfig = self.ModConfModel(param_exemple1='str', param_exemple2=1)
+        self._mod_config = self.ModConfModel(param_exemple1='str', param_exemple2=1)
+
+        # Init the module (Mandatory)
+        self.init()
+
+    @property
+    def mod_config(self) -> ModConfModel:
+        return self._mod_config
 
     def unload(self) -> None:
-        """### This method is called when you unload or you reload the module (Mandatory)"""
-        self.Irc.Commands.drop_command_by_module(self.module_name)
+        """### This method is called when you unload, or you reload the module (Mandatory)"""
+        self.ctx.Irc.Commands.drop_command_by_module(self.module_name)
         return None
 
     def cmd(self, data: list[str]) -> None:
@@ -79,15 +84,14 @@ class Test(IModule):
         try:
             return None
         except Exception as err:
-            self.Logs.error(f"General Error: {err}")
+            self.ctx.Logs.error(f"General Error: {err}")
 
     async def asyncio_func(self) -> None:
-        self.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
+        self.ctx.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
         await asyncio.sleep(2)
-        await asyncio.sleep(3)
-        self.Logs.debug(f"End of the task: {self.__class__.__name__}")
+        self.ctx.Logs.debug(f"End of the task: {self.__class__.__name__}")
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
         """All messages coming from the user commands (Mandatory)
 
         Args:
@@ -96,33 +100,39 @@ class Test(IModule):
             cmd (list): The messages coming from the IRCD server.
             fullcmd (list, optional): The full messages coming from the IRCD server. Defaults to [].
         """
-        u = self.User.get_user(user)
-        c = self.Channel.get_channel(channel) if self.Channel.is_valid_channel(channel) else None
+        u = self.ctx.User.get_user(user)
+        c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
         if u is None:
             return None
 
         command = str(cmd[0]).lower()
-        dnickname = self.Config.SERVICE_NICKNAME
+        dnickname = self.ctx.Config.SERVICE_NICKNAME
 
         match command:
             
             case 'asyncio':
-                task = self.Base.create_asynctask(self.asyncio_func())
+                self.ctx.Base.create_asynctask(self.asyncio_func())
+                return None
 
             case 'test-command':
                 try:
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
-                    await self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
+                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
 
                     if c is not None:
-                        await self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
+                        await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
 
                     # How to update your module configuration
                     self.update_configuration('param_exemple2', 7)
                     self.update_configuration('param_exemple1', 'my_value')
 
                     # Log if you want the result
-                    self.Logs.debug(f"Test logs ready")
+                    self.ctx.Logs.debug(f"Test logs ready")
+                    return None
 
                 except Exception as err:
-                    self.Logs.error(f"Unknown Error: {err}")
+                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    return None
+
+            case _:
+                return None

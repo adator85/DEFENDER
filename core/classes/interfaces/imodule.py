@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
@@ -15,74 +15,38 @@ class IModule(ABC):
 
     def __init__(self, uplink: 'Loader') -> None:
 
+        # import the context
+        self.ctx = uplink
+
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = uplink.Irc
-
-        # Add Loader object to the module (Mandatory)
-        self.Loader = uplink
-
-        # Add Protocol to the module (Mandatory)
-        self.Protocol = uplink.Irc.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = uplink.Config
-
-        # Add Settings to the module (Mandatory)
-        self.Settings = uplink.Settings
-
-        # Add Base object to the module (Mandatory)
-        self.Base = uplink.Base
-
-        # Add Main Utils (Mandatory)
-        self.MainUtils = uplink.Utils
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = uplink.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = uplink.User
-
-        # Add Client object to the module (Mandatory)
-        self.Client = uplink.Client
-
-        # Add Admin object to the module (Mandatory)
-        self.Admin = uplink.Admin
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = uplink.Channel
-
-        # Add Reputation object to the module (Optional)
-        self.Reputation = uplink.Reputation
-
         # Log the module
-        self.Logs.debug(f'Loading Module {self.module_name} ...')
+        self.ctx.Logs.debug(f'Loading Module {self.module_name} ...')
 
     def init(self) -> None:
         self.load()
-        self.inspect_class()
         self.create_tables()
 
         # Sync the configuration with core configuration (Mandatory)
-        self.Base.db_sync_core_config(self.module_name, self.ModConfig)
+        self.ctx.Base.db_sync_core_config(self.module_name, self.mod_config)
         return None
 
-    def inspect_class(self):
-        if not hasattr(self, 'ModConfig'):
-            raise AttributeError("The Module must init ModConfig attribute in the load method!")
-        if not hasattr(self, 'MOD_HEADER'):
-            raise NotImplementedError(f"You must declare the header of the module in {self.__class__.__name__}!")
-
-    def update_configuration(self, param_key: str, param_value: str) -> None:
+    def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration
 
         Args:
             param_key (str): The parameter key
             param_value (str): The parameter value
         """
-        self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
+        self.ctx.Base.db_update_core_config(self.module_name, self.mod_config, param_key, param_value)
+
+    @property
+    @abstractmethod
+    def mod_config(self) -> ModConfModel:
+        """
+        The module configuration model
+        """
 
     @abstractmethod
     def create_tables(self) -> None:
