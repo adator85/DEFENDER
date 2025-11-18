@@ -582,7 +582,7 @@ class Irc:
         # Envoyer la commande aux classes dynamiquement chargées
         if command != 'notallowed':
             for module in self.ModuleUtils.DB_MODULES:
-                module.class_instance.hcmds(user, channel, cmd, fullcmd)
+                await module.class_instance.hcmds(user, channel, cmd, fullcmd)
 
         match command:
 
@@ -1048,11 +1048,11 @@ class Irc:
                 try:
                     # Load a module ex: .load mod_defender
                     if len(cmd) < 2:
-                        self.Protocol.send_notice(dnickname, fromuser, tr("Syntax. /msg %s %s MODULE_NAME", dnickname, command.upper()))
+                        await self.Protocol.send_notice(dnickname, fromuser, tr("Syntax. /msg %s %s MODULE_NAME", dnickname, command.upper()))
                         return None
 
                     mod_name = str(cmd[1])
-                    self.ModuleUtils.load_one_module(self, mod_name, fromuser)
+                    await self.ModuleUtils.load_one_module(self, mod_name, fromuser)
                     return None
                 except KeyError as ke:
                     self.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
@@ -1077,15 +1077,15 @@ class Irc:
                 try:
                     # ==> mod_defender
                     if len(cmd) < 2:
-                        self.Protocol.send_notice(dnickname, fromuser, tr("Syntax. /msg %s %s MODULE_NAME", dnickname, command.upper()))
+                        await self.Protocol.send_notice(dnickname, fromuser, tr("Syntax. /msg %s %s MODULE_NAME", dnickname, command.upper()))
                         return None
 
                     module_name = str(cmd[1]).lower()
-                    self.ModuleUtils.reload_one_module(self, module_name, fromuser)
+                    await self.ModuleUtils.reload_one_module(self, module_name, fromuser)
                     return None
                 except Exception as e:
                     self.Logs.error(f"Something went wrong with a module you want to reload: {e}")
-                    self.Protocol.send_priv_msg(
+                    await self.Protocol.send_priv_msg(
                         nick_from=dnickname,
                         msg=f"Something went wrong with the module: {e}",
                         channel=dchanlog

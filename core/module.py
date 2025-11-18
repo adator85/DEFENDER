@@ -110,7 +110,7 @@ class Module:
         try:
             loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
             my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
-            create_instance_of_the_class = my_class(uplink)       # Créer une nouvelle instance de la classe
+            create_instance_of_the_class = my_class(uplink.Loader)       # Créer une nouvelle instance de la classe
             self.create_module_header(create_instance_of_the_class.MOD_HEADER)
         except AttributeError as attr:
             red = uplink.Config.COLORS.red
@@ -151,7 +151,7 @@ class Module:
     def load_all_modules(self) -> bool:
         ...
 
-    def reload_one_module(self, uplink: 'Irc', module_name: str, nickname: str) -> bool:
+    async def reload_one_module(self, uplink: 'Irc', module_name: str, nickname: str) -> bool:
         """Reloading one module and insert it into the model as well as the database
 
         Args:
@@ -172,7 +172,7 @@ class Module:
                     self.delete_module_header(module_model.class_instance.MOD_HEADER['name'])
                     module_model.class_instance.unload()
                 else:
-                    uplink.Protocol.send_priv_msg(
+                    await uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"[ {red}RELOAD MODULE ERROR{nogc} ] Module [{module_folder}.{module_name}] hasn't been reloaded! You must use {self.__Config.SERVICE_PREFIX}load {module_name}",
                         channel=self.__Config.SERVICE_CHANLOG
@@ -186,13 +186,13 @@ class Module:
                 the_module = sys.modules[f'mods.{module_folder}.{module_name}']
                 importlib.reload(the_module)
                 my_class = getattr(the_module, class_name, None)
-                new_instance = my_class(uplink)
+                new_instance = my_class(uplink.Loader)
                 self.create_module_header(new_instance.MOD_HEADER)
                 module_model.class_instance = new_instance
 
                 # Créer le module dans la base de données
                 self.db_register_module(module_name, nickname)
-                uplink.Protocol.send_priv_msg(
+                await uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"Module [{module_folder}.{module_name}] has been reloaded!",
                         channel=self.__Config.SERVICE_CHANLOG
@@ -202,7 +202,7 @@ class Module:
             else:
                 # Module is not loaded! Nothing to reload
                 self.__Logs.debug(f"[RELOAD MODULE ERROR] [{module_folder}.{module_name}] is not loaded! You must use {self.__Config.SERVICE_PREFIX}load {module_name}")
-                uplink.Protocol.send_priv_msg(
+                await uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"[ {red}RELOAD MODULE ERROR{nogc} ] Module [{module_folder}.{module_name}] is not loaded! You must use {self.__Config.SERVICE_PREFIX}load {module_name}",
                         channel=self.__Config.SERVICE_CHANLOG
@@ -211,7 +211,7 @@ class Module:
 
         except (TypeError, AttributeError, KeyError, Exception) as err:
             self.__Logs.error(f"[RELOAD MODULE ERROR]: {err}", exc_info=True)
-            uplink.Protocol.send_priv_msg(
+            await uplink.Protocol.send_priv_msg(
                         nick_from=self.__Config.SERVICE_NICKNAME,
                         msg=f"[RELOAD MODULE ERROR]: {err}",
                         channel=self.__Config.SERVICE_CHANLOG

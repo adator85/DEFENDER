@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import json
@@ -8,7 +9,7 @@ import ipaddress
 import ast
 import requests
 from dataclasses import fields
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Callable, Iterable, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
@@ -34,6 +35,9 @@ class Base:
 
         # Liste des threads en cours
         self.running_threads: list[threading.Thread] = self.Settings.RUNNING_THREADS
+
+        # List of all async tasks
+        self.running_asynctasks: list[asyncio.Task] = self.Settings.RUNNING_ASYNCTASKS
 
         # Les sockets ouvert
         self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
@@ -357,6 +361,30 @@ class Base:
 
         except Exception as err:
             self.logs.error(err, exc_info=True)
+
+    def create_asynctask(self, func: Callable, *, async_name: str = None, run_once: bool = False) -> asyncio.Task:
+        """Create a new asynchrone and store it into running_asynctasks variable
+
+        Args:
+            func (Callable): The function you want to call in asynchrone way
+            async_name (str, optional): The task name. Defaults to None.
+            run_once (bool, optional): If true the task will be run once. Defaults to False.
+
+        Returns:
+            asyncio.Task: The Task
+        """
+        name = func.__name__ if async_name is None else async_name
+
+        if run_once:
+            for task in asyncio.all_tasks():
+                if task.get_name().lower() == async_name.lower():
+                    return None
+
+        task = asyncio.create_task(func, name=name)
+        self.running_asynctasks.append(task)
+
+        self.logs.debug(f"++ New asynchrone task created as: {task.get_name()}")
+        return task
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.

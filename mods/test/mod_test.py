@@ -1,6 +1,10 @@
-from typing import Any
+import asyncio
+from typing import Any, TYPE_CHECKING
 from core.classes.interfaces.imodule import IModule
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Test(IModule):
 
@@ -21,6 +25,10 @@ class Test(IModule):
         'core_version':'Defender-6'
     }
     """Module Header (Mandatory)"""
+
+    def __init__(self, uplink: 'Loader'):
+        super().__init__(uplink)
+        self.init()
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -48,6 +56,7 @@ class Test(IModule):
 
         # Create module commands (Mandatory)
         self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.Irc.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
         self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
         self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
         self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
@@ -72,7 +81,13 @@ class Test(IModule):
         except Exception as err:
             self.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
+    async def asyncio_func(self) -> None:
+        self.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
+        await asyncio.sleep(2)
+        await asyncio.sleep(3)
+        self.Logs.debug(f"End of the task: {self.__class__.__name__}")
+
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
         """All messages coming from the user commands (Mandatory)
 
         Args:
@@ -90,14 +105,17 @@ class Test(IModule):
         dnickname = self.Config.SERVICE_NICKNAME
 
         match command:
+            
+            case 'asyncio':
+                task = self.Base.create_asynctask(self.asyncio_func())
 
             case 'test-command':
                 try:
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
-                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
+                    await self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
 
                     if c is not None:
-                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
+                        await self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
 
                     # How to update your module configuration
                     self.update_configuration('param_exemple2', 7)

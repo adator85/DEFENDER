@@ -1,10 +1,13 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from core.classes.interfaces.imodule import IModule
 import mods.defender.schemas as schemas
 import mods.defender.utils as utils
 import mods.defender.threads as thds
 from core.utils import tr
+
+if TYPE_CHECKING:
+    from core.loader import Loader
 
 class Defender(IModule):
 
@@ -19,6 +22,9 @@ class Defender(IModule):
         'author':'Defender Team',
         'core_version':'Defender-6'
     }
+
+    def __init__(self, context: 'Loader') -> None:
+        self.ctx = context
 
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
