@@ -13,6 +13,7 @@ from core import install
 async def main():
     from core.loader import Loader
     loader = Loader()
+    await loader.start()
     await loader.Irc.run()
 
 if __name__ == "__main__":

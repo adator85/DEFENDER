@@ -24,22 +24,19 @@ class IModule(ABC):
         # Log the module
         self.ctx.Logs.debug(f'Loading Module {self.module_name} ...')
 
-    def init(self) -> None:
-        self.load()
-        self.create_tables()
-
+    async def sync_db(self) -> None:
         # Sync the configuration with core configuration (Mandatory)
-        self.ctx.Base.db_sync_core_config(self.module_name, self.mod_config)
+        await self.ctx.Base.db_sync_core_config(self.module_name, self.mod_config)
         return None
 
-    def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
+    async def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration
 
         Args:
             param_key (str): The parameter key
             param_value (str): The parameter value
         """
-        self.ctx.Base.db_update_core_config(self.module_name, self.mod_config, param_key, param_value)
+        await self.ctx.Base.db_update_core_config(self.module_name, self.mod_config, param_key, param_value)
 
     @property
     @abstractmethod
@@ -58,17 +55,17 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    def load(self) -> None:
+    async def load(self) -> None:
         """This method is executed when the module is loaded or reloaded.
         """
 
     @abstractmethod
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """This method is executed when the module is unloaded or reloaded.
         """
 
     @abstractmethod
-    def cmd(self, data: list) -> None:
+    async def cmd(self, data: list) -> None:
         """When recieving server messages.
 
         Args:
@@ -76,7 +73,7 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]] = None) -> None:
         """These are the commands recieved from a client
 
         Args:

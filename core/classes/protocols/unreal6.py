@@ -36,12 +36,12 @@ class Unrealircd6(IProtocol):
                 return index, token.upper()
         
         if log:
-            self._Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
+            self._ctx.Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
 
         return -1, None
 
     def register_command(self) -> None:
-        m = self._Irc.Loader.Definition.MIrcdCommand
+        m = self._ctx.Definition.MIrcdCommand
         self.Handler.register(m(command_name="PING", func=self.on_server_ping))
         self.Handler.register(m(command_name="UID", func=self.on_uid))
         self.Handler.register(m(command_name="QUIT", func=self.on_quit))
@@ -107,30 +107,30 @@ class Unrealircd6(IProtocol):
             print_log (bool): True print log message in the console
         """
         try:
-            with self._Base.lock:
-                self._Irc.writer.write(f"{message}\r\n".encode(self._Config.SERVEUR_CHARSET[0]))
-                await self._Irc.writer.drain()
+            async with self._ctx.Settings.AILOCK:
+                self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[0]))
+                await self._ctx.Irc.writer.drain()
                 if print_log:
-                    self._Logs.debug(f'<< {message}')
+                    self._ctx.Logs.debug(f'<< {message}')
 
         except UnicodeDecodeError as ude:
-            self._Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
-            self._Irc.writer.write(f"{message}\r\n".encode(self._Config.SERVEUR_CHARSET[1],'replace'))
-            await self._Irc.writer.drain()
+            self._ctx.Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
+            self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[1],'replace'))
+            await self._ctx.Irc.writer.drain()
         except UnicodeEncodeError as uee:
-            self._Logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
-            self._Irc.writer.write(f"{message}\r\n".encode(self._Config.SERVEUR_CHARSET[1],'replace'))
-            await self._Irc.writer.drain()
+            self._ctx.Logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
+            self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[1],'replace'))
+            await self._ctx.Irc.writer.drain()
         except AssertionError as ae:
-            self._Logs.warning(f'Assertion Error {ae} - message: {message}')
+            self._ctx.Logs.warning(f'Assertion Error {ae} - message: {message}')
         except SSLEOFError as soe:
-            self._Logs.error(f"SSLEOFError: {soe} - {message}")
+            self._ctx.Logs.error(f"SSLEOFError: {soe} - {message}")
         except SSLError as se:
-            self._Logs.error(f"SSLError: {se} - {message}")
+            self._ctx.Logs.error(f"SSLError: {se} - {message}")
         except OSError as oe:
-            self._Logs.error(f"OSError: {oe} - {message}")
+            self._ctx.Logs.error(f"OSError: {oe} - {message}")
         except AttributeError as ae:
-            self._Logs.critical(f"Attribute Error: {ae}")
+            self._ctx.Logs.critical(f"Attribute Error: {ae}")
 
     async def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
@@ -142,12 +142,12 @@ class Unrealircd6(IProtocol):
             nick_to (str, optional): The reciever nickname. Defaults to None.
         """
         try:
-            batch_size      = self._Config.BATCH_SIZE
-            user_from       = self._Irc.User.get_user(nick_from)
-            user_to         = self._Irc.User.get_user(nick_to) if not nick_to is None else None
+            batch_size      = self._ctx.Config.BATCH_SIZE
+            user_from       = self._ctx.User.get_user(nick_from)
+            user_to         = self._ctx.User.get_user(nick_to) if not nick_to is None else None
 
             if user_from is None:
-                self._Logs.error(f"The sender nickname [{nick_from}] do not exist")
+                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist")
                 return None
 
             if not channel is None:
@@ -161,8 +161,8 @@ class Unrealircd6(IProtocol):
                     await self.send2socket(f":{nick_from} PRIVMSG {user_to.uid} :{batch}")
 
         except Exception as err:
-            self._Logs.error(f"General Error: {err}")
-            self._Logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
+            self._ctx.Logs.error(f"General Error: {err}")
+            self._ctx.Logs.error(f"General Error: {nick_from} - {channel} - {nick_to}")
 
     async def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
@@ -173,12 +173,12 @@ class Unrealircd6(IProtocol):
             nick_to (str): The reciever nickname
         """
         try:
-            batch_size  = self._Config.BATCH_SIZE
-            user_from   = self._Irc.User.get_user(nick_from)
-            user_to     = self._Irc.User.get_user(nick_to)
+            batch_size  = self._ctx.Config.BATCH_SIZE
+            user_from   = self._ctx.User.get_user(nick_from)
+            user_to     = self._ctx.User.get_user(nick_to)
 
             if user_from is None or user_to is None:
-                self._Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
+                self._ctx.Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
                 return None
 
             for i in range(0, len(str(msg)), batch_size):
@@ -186,31 +186,31 @@ class Unrealircd6(IProtocol):
                 await self.send2socket(f":{user_from.uid} NOTICE {user_to.uid} :{batch}")
 
         except Exception as err:
-            self._Logs.error(f"General Error: {err}")
+            self._ctx.Logs.error(f"General Error: {err}")
 
     async def send_link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
-        service_id = self._Config.SERVICE_ID
-        service_nickname = self._Config.SERVICE_NICKNAME
-        service_username = self._Config.SERVICE_USERNAME
-        service_realname = self._Config.SERVICE_REALNAME
-        service_channel_log = self._Config.SERVICE_CHANLOG
-        service_info = self._Config.SERVICE_INFO
-        service_smodes = self._Config.SERVICE_SMODES
-        service_cmodes = self._Config.SERVICE_CMODES
-        # service_umodes = self._Config.SERVICE_UMODES
-        service_hostname = self._Config.SERVICE_HOST
-        service_name = self._Config.SERVICE_NAME
+        service_id = self._ctx.Config.SERVICE_ID
+        service_nickname = self._ctx.Config.SERVICE_NICKNAME
+        service_username = self._ctx.Config.SERVICE_USERNAME
+        service_realname = self._ctx.Config.SERVICE_REALNAME
+        service_channel_log = self._ctx.Config.SERVICE_CHANLOG
+        service_info = self._ctx.Config.SERVICE_INFO
+        service_smodes = self._ctx.Config.SERVICE_SMODES
+        service_cmodes = self._ctx.Config.SERVICE_CMODES
+        # service_umodes = self._ctx.Config.SERVICE_UMODES
+        service_hostname = self._ctx.Config.SERVICE_HOST
+        service_name = self._ctx.Config.SERVICE_NAME
         protocolversion = self.protocol_version
 
-        server_password = self._Config.SERVEUR_PASSWORD
-        server_link = self._Config.SERVEUR_LINK
-        server_id = self._Config.SERVEUR_ID
+        server_password = self._ctx.Config.SERVEUR_PASSWORD
+        server_link = self._ctx.Config.SERVEUR_LINK
+        server_id = self._ctx.Config.SERVEUR_ID
 
-        version = self._Config.CURRENT_VERSION
-        unixtime = self._Utils.get_unixtime()
+        version = self._ctx.Config.CURRENT_VERSION
+        unixtime = self._ctx.Utils.get_unixtime()
 
         await self.send2socket(f":{server_id} PASS :{server_password}", print_log=False)
         await self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
@@ -225,7 +225,7 @@ class Unrealircd6(IProtocol):
         await self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
         await self.send2socket(f":{service_id} MODE {service_channel_log} {service_cmodes}")
 
-        self._Logs.debug(f'>> {__name__} Link information sent to the server')
+        self._ctx.Logs.debug(f'>> {__name__} Link information sent to the server')
 
     async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         """Send a gline command to the server
@@ -240,7 +240,7 @@ class Unrealircd6(IProtocol):
         """
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
 
-        await self.send2socket(f":{self._Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
+        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
 
         return None
 
@@ -250,10 +250,10 @@ class Unrealircd6(IProtocol):
         Args:
             newnickname (str): New nickname of the server
         """
-        await self.send2socket(f":{self._Config.SERVICE_NICKNAME} NICK {newnickname}")
+        await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} NICK {newnickname}")
 
-        user_obj = self._Irc.User.get_user(self._Config.SERVICE_NICKNAME)
-        self._Irc.User.update_nickname(user_obj.uid, newnickname)
+        user_obj = self._ctx.User.get_user(self._ctx.Config.SERVICE_NICKNAME)
+        self._ctx.User.update_nickname(user_obj.uid, newnickname)
         return None
 
     async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
@@ -265,31 +265,31 @@ class Unrealircd6(IProtocol):
             channel_name (Optional[str]): The channel name
             params (Optional[str]): Parameters like password.
         """
-        service_id = self._Config.SERVICE_ID
+        service_id = self._ctx.Config.SERVICE_ID
 
         if modes[0] not in ['+', '-']:
-            self._Logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
+            self._ctx.Logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
             return None
 
         if nickname and channel_name:
             # :98KAAAAAB MODE #services +o defenderdev
-            if not self._Irc.Channel.is_valid_channel(channel_name):
-                self._Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+            if not self._ctx.Channel.is_valid_channel(channel_name):
+                self._ctx.Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
                 return None
             await self.send2socket(f":{service_id} MODE {channel_name} {modes} {nickname}")
             return None
-        
+
         if nickname and channel_name is None:
             await self.send2socket(f":{service_id} MODE {nickname} {modes}")
             return None
-        
+
         if nickname is None and channel_name:
-            if not self._Irc.Channel.is_valid_channel(channel_name):
-                self._Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+            if not self._ctx.Channel.is_valid_channel(channel_name):
+                self._ctx.Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
                 return None
-            await self.send2socket(f":{service_id} MODE {channel_name} {modes} {params}")
+            await self.send2socket(f":{service_id} MODE {channel_name} {modes}") if params is None else await self.send2socket(f":{service_id} MODE {channel_name} {modes} {params}")
             return None
-        
+
         return None
 
     async def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
@@ -302,20 +302,20 @@ class Unrealircd6(IProtocol):
 
     async def send_ungline(self, nickname:str, hostname: str) -> None:
 
-        await self.send2socket(f":{self._Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self._Config.SERVICE_NICKNAME}")
+        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self._ctx.Config.SERVICE_NICKNAME}")
 
         return None
 
     async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
 
-        await self.send2socket(f":{self._Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
+        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
 
         return None
 
     async def send_unkline(self, nickname:str, hostname: str) -> None:
 
-        await self.send2socket(f":{self._Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self._Config.SERVICE_NICKNAME}")
+        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self._ctx.Config.SERVICE_NICKNAME}")
 
         return None
 
@@ -325,15 +325,15 @@ class Unrealircd6(IProtocol):
         Args:
             channel (str): Channel to join
         """
-        if not self._Irc.Channel.is_valid_channel(channel):
-            self._Logs.error(f"The channel [{channel}] is not valid")
+        if not self._ctx.Channel.is_valid_channel(channel):
+            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
             return None
 
-        await self.send2socket(f":{self._Config.SERVEUR_ID} SJOIN {self._Utils.get_unixtime()} {channel} {self._Config.SERVICE_UMODES} :{self._Config.SERVICE_ID}")
-        await self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {self._Config.SERVICE_UMODES} {self._Config.SERVICE_ID}")
+        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} SJOIN {self._ctx.Utils.get_unixtime()} {channel} {self._ctx.Config.SERVICE_UMODES} :{self._ctx.Config.SERVICE_ID}")
+        await self.send2socket(f":{self._ctx.Config.SERVICE_ID} MODE {channel} {self._ctx.Config.SERVICE_UMODES} {self._ctx.Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
-        self._Irc.Channel.insert(self._Irc.Loader.Definition.MChannel(name=channel, uids=[self._Config.SERVICE_ID]))
+        self._ctx.Channel.insert(self._ctx.Definition.MChannel(name=channel, uids=[self._ctx.Config.SERVICE_ID]))
         return None
 
     async def send_sapart(self, nick_to_sapart: str, channel_name: str) -> None:
@@ -345,20 +345,20 @@ class Unrealircd6(IProtocol):
         """
         try:
 
-            user_obj = self._Irc.User.get_user(uidornickname=nick_to_sapart)
-            chan_obj = self._Irc.Channel.get_channel(channel_name)
-            service_uid = self._Config.SERVICE_ID
+            user_obj = self._ctx.User.get_user(uidornickname=nick_to_sapart)
+            chan_obj = self._ctx.Channel.get_channel(channel_name)
+            service_uid = self._ctx.Config.SERVICE_ID
 
             if user_obj is None or chan_obj is None:
                 return None
 
             await self.send2socket(f":{service_uid} SAPART {user_obj.nickname} {chan_obj.name}")
-            self._Irc.Channel.delete_user_from_channel(chan_obj.name, user_obj.uid)
+            self._ctx.Channel.delete_user_from_channel(chan_obj.name, user_obj.uid)
 
             return None
 
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def send_sajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
         """_summary_
@@ -369,9 +369,9 @@ class Unrealircd6(IProtocol):
         """
         try:
 
-            user_obj = self._Irc.User.get_user(uidornickname=nick_to_sajoin)
-            chan_obj = self._Irc.Channel.get_channel(channel_name)
-            service_uid = self._Config.SERVICE_ID
+            user_obj = self._ctx.User.get_user(uidornickname=nick_to_sajoin)
+            chan_obj = self._ctx.Channel.get_channel(channel_name)
+            service_uid = self._ctx.Config.SERVICE_ID
 
             if user_obj is None:
                 # User not exist: leave
@@ -379,53 +379,53 @@ class Unrealircd6(IProtocol):
 
             if chan_obj is None:
                 # Channel not exist
-                if not self._Irc.Channel.is_valid_channel(channel_name):
+                if not self._ctx.Channel.is_valid_channel(channel_name):
                     # Incorrect channel: leave
                     return None
 
                 # Create the new channel with the uid
-                new_chan_obj = self._Irc.Loader.Definition.MChannel(name=channel_name, uids=[user_obj.uid])
-                self._Irc.Channel.insert(new_chan_obj)
+                new_chan_obj = self._ctx.Definition.MChannel(name=channel_name, uids=[user_obj.uid])
+                self._ctx.Channel.insert(new_chan_obj)
                 await self.send2socket(f":{service_uid} SAJOIN {user_obj.nickname} {new_chan_obj.name}")
 
             else:
-                self._Irc.Channel.add_user_to_a_channel(channel_name=channel_name, uid=user_obj.uid)
+                self._ctx.Channel.add_user_to_a_channel(channel_name=channel_name, uid=user_obj.uid)
                 await self.send2socket(f":{service_uid} SAJOIN {user_obj.nickname} {chan_obj.name}")
 
             return None
 
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def send_svspart(self, nick_to_part: str, channels: list[str], reason: str) -> None:
-        user_obj = self._Irc.User.get_user(nick_to_part)
+        user_obj = self._ctx.User.get_user(nick_to_part)
 
         if user_obj is None:
-            self._Logs.debug(f"[SVSPART] The nickname {nick_to_part} do not exist!")
+            self._ctx.Logs.debug(f"[SVSPART] The nickname {nick_to_part} do not exist!")
             return None
 
-        channels_list = ','.join([channel for channel in channels if self._Irc.Channel.is_valid_channel(channel)])
-        service_id = self._Config.SERVICE_ID
+        channels_list = ','.join([channel for channel in channels if self._ctx.Channel.is_valid_channel(channel)])
+        service_id = self._ctx.Config.SERVICE_ID
         await self.send2socket(f':{service_id} SVSPART {user_obj.nickname} {channels_list} {reason}')
         return None
 
     async def send_svsjoin(self, nick_to_part: str, channels: list[str], keys: list[str]) -> None:
-        user_obj = self._Irc.User.get_user(nick_to_part)
+        user_obj = self._ctx.User.get_user(nick_to_part)
 
         if user_obj is None:
-            self._Logs.debug(f"[SVSJOIN] The nickname {nick_to_part} do not exist!")
+            self._ctx.Logs.debug(f"[SVSJOIN] The nickname {nick_to_part} do not exist!")
             return None
 
-        channels_list = ','.join([channel for channel in channels if self._Irc.Channel.is_valid_channel(channel)])
+        channels_list = ','.join([channel for channel in channels if self._ctx.Channel.is_valid_channel(channel)])
         keys_list = ','.join([key for key in keys])
-        service_id = self._Config.SERVICE_ID
+        service_id = self._ctx.Config.SERVICE_ID
         await self.send2socket(f':{service_id} SVSJOIN {user_obj.nickname} {channels_list} {keys_list}')
         return None
 
     async def send_svsmode(self, nickname: str, user_mode: str) -> None:
         try:
-            user_obj = self._Irc.User.get_user(uidornickname=nickname)
-            service_uid = self._Config.SERVICE_ID
+            user_obj = self._ctx.User.get_user(uidornickname=nickname)
+            service_uid = self._ctx.Config.SERVICE_ID
 
             if user_obj is None:
                 return None
@@ -433,16 +433,16 @@ class Unrealircd6(IProtocol):
             await self.send2socket(f':{service_uid} SVSMODE {nickname} {user_mode}')
 
             # Update new mode
-            self._Irc.User.update_mode(user_obj.uid, user_mode)
+            self._ctx.User.update_mode(user_obj.uid, user_mode)
 
             return None
         except Exception as err:
-                self._Logs.error(f"{__name__} - General Error: {err}")
+                self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def send_svs2mode(self, nickname: str, user_mode: str) -> None:
         try:
-            user_obj = self._Irc.User.get_user(uidornickname=nickname)
-            service_uid = self._Config.SERVICE_ID
+            user_obj = self._ctx.User.get_user(uidornickname=nickname)
+            service_uid = self._ctx.Config.SERVICE_ID
 
             if user_obj is None:
                 return None
@@ -450,11 +450,11 @@ class Unrealircd6(IProtocol):
             await self.send2socket(f':{service_uid} SVS2MODE {nickname} {user_mode}')
 
             # Update new mode
-            self._Irc.User.update_mode(user_obj.uid, user_mode)
+            self._ctx.User.update_mode(user_obj.uid, user_mode)
 
             return None
         except Exception as err:
-                self._Logs.error(f"{__name__} - General Error: {err}")
+                self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def send_svslogin(self, client_uid: str, user_account: str) -> None:
         """Log a client into his account.
@@ -464,9 +464,9 @@ class Unrealircd6(IProtocol):
             user_account (str): The account of the user
         """
         try:
-            await self.send2socket(f":{self._Irc.Config.SERVEUR_LINK} SVSLOGIN {self._Settings.MAIN_SERVER_HOSTNAME} {client_uid} {user_account}")
+            await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SVSLOGIN {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {client_uid} {user_account}")
         except Exception as err:
-            self._Logs.error(f'General Error: {err}')
+            self._ctx.Logs.error(f'General Error: {err}')
 
     async def send_svslogout(self, client_obj: 'MClient') -> None:
         """Logout a client from his account
@@ -477,11 +477,11 @@ class Unrealircd6(IProtocol):
         try:
             c_uid = client_obj.uid
             c_nickname = client_obj.nickname
-            await self.send2socket(f":{self._Irc.Config.SERVEUR_LINK} SVSLOGIN {self._Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
+            await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SVSLOGIN {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
             self.send_svs2mode(c_nickname, '-r')
 
         except Exception as err:
-            self._Logs.error(f'General Error: {err}')
+            self._ctx.Logs.error(f'General Error: {err}')
 
     async def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
         """Send quit message
@@ -493,18 +493,18 @@ class Unrealircd6(IProtocol):
             reason (str): The reason for the quit
             print_log (bool): Print the log
         """
-        user_obj = self._Irc.User.get_user(uidornickname=uid)
-        reputation_obj = self._Irc.Reputation.get_reputation(uidornickname=uid)
+        user_obj = self._ctx.User.get_user(uidornickname=uid)
+        reputation_obj = self._ctx.Reputation.get_reputation(uidornickname=uid)
 
         if not user_obj is None:
             await self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
-            self._Irc.User.delete(user_obj.uid)
+            self._ctx.User.delete(user_obj.uid)
 
         if not reputation_obj is None:
-            self._Irc.Reputation.delete(reputation_obj.uid)
+            self._ctx.Reputation.delete(reputation_obj.uid)
 
-        if not self._Irc.Channel.delete_user_from_all_channel(uid):
-            self._Logs.error(f"The UID [{uid}] has not been deleted from all channels")
+        if not self._ctx.Channel.delete_user_from_all_channel(uid):
+            self._ctx.Logs.error(f"The UID [{uid}] has not been deleted from all channels")
 
         return None
 
@@ -524,28 +524,28 @@ class Unrealircd6(IProtocol):
             print_log (bool, optional): print logs if true. Defaults to True.
         """
         # {self.Config.SERVEUR_ID} UID 
-        # {clone.nickname} 1 {self._Utils.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
+        # {clone.nickname} 1 {self._ctx.Utils.get_unixtime()} {clone.username} {clone.hostname} {clone.uid} * {clone.umodes}  {clone.vhost} * {self.Base.encode_ip(clone.remote_ip)} :{clone.realname}
         try:
-            unixtime = self._Utils.get_unixtime()
-            encoded_ip = self._Base.encode_ip(remote_ip)
+            unixtime = self._ctx.Utils.get_unixtime()
+            encoded_ip = self._ctx.Base.encode_ip(remote_ip)
 
             # Create the user
-            self._Irc.User.insert(
-                self._Irc.Loader.Definition.MUser(
+            self._ctx.User.insert(
+                self._ctx.Definition.MUser(
                             uid=uid, nickname=nickname, username=username, 
                             realname=realname,hostname=hostname, umodes=umodes,
                             vhost=vhost, remote_ip=remote_ip
                         )
                     )
 
-            uid_msg = f":{self._Config.SERVEUR_ID} UID {nickname} 1 {unixtime} {username} {hostname} {uid} * {umodes} {vhost} * {encoded_ip} :{realname}"
+            uid_msg = f":{self._ctx.Config.SERVEUR_ID} UID {nickname} 1 {unixtime} {username} {hostname} {uid} * {umodes} {vhost} * {encoded_ip} :{realname}"
 
             await self.send2socket(uid_msg, print_log=print_log)
 
             return None
 
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
@@ -557,34 +557,34 @@ class Unrealircd6(IProtocol):
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        user_obj = self._Irc.User.get_user(uidornickname)
+        user_obj = self._ctx.User.get_user(uidornickname)
         pwd_channel = password if not password is None else ''
 
         if user_obj is None:
             return None
 
-        if not self._Irc.Channel.is_valid_channel(channel):
-            self._Logs.error(f"The channel [{channel}] is not valid")
+        if not self._ctx.Channel.is_valid_channel(channel):
+            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         await self.send2socket(f":{user_obj.uid} JOIN {channel} {pwd_channel}", print_log=print_log)
 
-        if uidornickname == self._Config.SERVICE_NICKNAME or uidornickname == self._Config.SERVICE_ID:
-            await self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {self._Config.SERVICE_UMODES} {self._Config.SERVICE_ID}")
+        if uidornickname == self._ctx.Config.SERVICE_NICKNAME or uidornickname == self._ctx.Config.SERVICE_ID:
+            await self.send2socket(f":{self._ctx.Config.SERVICE_ID} MODE {channel} {self._ctx.Config.SERVICE_UMODES} {self._ctx.Config.SERVICE_ID}")
 
         # Add defender to the channel uids list
-        self._Irc.Channel.insert(self._Irc.Loader.Definition.MChannel(name=channel, uids=[user_obj.uid]))
+        self._ctx.Channel.insert(self._ctx.Definition.MChannel(name=channel, uids=[user_obj.uid]))
 
         # Set the automode to the user
         if 'r' not in user_obj.umodes and 'o' not in user_obj.umodes:
             return None
 
         db_data: dict[str, str] = {"nickname": user_obj.nickname, "channel": channel}
-        db_query = self._Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
+        db_query = await self._ctx.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE nickname = :nickname AND channel = :channel", db_data)
         db_result = db_query.fetchone()
         if db_result is not None:
             id_cmd_automode, mode = db_result
-            await self.send2socket(f":{self._Config.SERVICE_ID} MODE {channel} {mode} {user_obj.nickname}")
+            await self.send2socket(f":{self._ctx.Config.SERVICE_ID} MODE {channel} {mode} {user_obj.nickname}")
 
         return None
 
@@ -597,35 +597,35 @@ class Unrealircd6(IProtocol):
             print_log (bool, optional): Write logs. Defaults to True.
         """
 
-        u = self._Irc.User.get_user(uidornickname)
+        u = self._ctx.User.get_user(uidornickname)
 
         if u is None:
-            self._Logs.error(f"The user [{uidornickname}] is not valid")
+            self._ctx.Logs.error(f"The user [{uidornickname}] is not valid")
             return None
 
-        if not self._Irc.Channel.is_valid_channel(channel):
-            self._Logs.error(f"The channel [{channel}] is not valid")
+        if not self._ctx.Channel.is_valid_channel(channel):
+            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
             return None
 
         await self.send2socket(f":{u.uid} PART {channel}", print_log=print_log)
 
         # Add defender to the channel uids list
-        self._Irc.Channel.delete_user_from_channel(channel, u.uid)
+        self._ctx.Channel.delete_user_from_channel(channel, u.uid)
         return None
 
     async def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
 
-        channel = self._Irc.Channel.is_valid_channel(channel_name)
+        channel = self._ctx.Channel.is_valid_channel(channel_name)
         if not channel:
-            self._Logs.error(f'The channel [{channel_name}] is not correct')
+            self._ctx.Logs.error(f'The channel [{channel_name}] is not correct')
             return None
 
-        await self.send2socket(f":{self._Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
+        await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
         return None
 
     async def send_raw(self, raw_command: str) -> None:
 
-        await self.send2socket(f":{self._Config.SERVICE_NICKNAME} {raw_command}")
+        await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} {raw_command}")
 
         return None
 
@@ -644,7 +644,7 @@ class Unrealircd6(IProtocol):
             scopy.pop(0)
 
         uid = scopy[7]
-        return self._User.get_user(uid)
+        return self._ctx.User.get_user(uid)
 
     def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
@@ -659,7 +659,7 @@ class Unrealircd6(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
         
-        user_obj = self._User.get_user(self._Utils.clean_uid(scopy[0]))
+        user_obj = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0]))
         tmp_reason = scopy[3:]
         tmp_reason[0] = tmp_reason[0].replace(':', '')
         reason = ' '.join(tmp_reason)
@@ -682,7 +682,7 @@ class Unrealircd6(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        user_obj = self._User.get_user(self._User.clean_uid(scopy[0]))
+        user_obj = self._ctx.User.get_user(self._ctx.User.clean_uid(scopy[0]))
         newnickname = scopy[2]
         timestamp = scopy[3]
         return user_obj, newnickname, timestamp
@@ -702,9 +702,9 @@ class Unrealircd6(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        sender = self._User.get_user(self._Utils.clean_uid(scopy[0]))
-        reciever = self._User.get_user(self._Utils.clean_uid(scopy[2]))
-        channel = self._Channel.get_channel(scopy[2]) if self._Channel.is_valid_channel(scopy[2]) else None
+        sender = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0]))
+        reciever = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[2]))
+        channel = self._ctx.Channel.get_channel(scopy[2]) if self._ctx.Channel.is_valid_channel(scopy[2]) else None
 
         tmp_message = scopy[3:]
         tmp_message[0] = tmp_message[0].replace(':', '')
@@ -729,19 +729,19 @@ class Unrealircd6(IProtocol):
             uid_user_to_edit = scopy[2]
             umode = scopy[3]
 
-            u = self._Irc.User.get_user(uid_user_to_edit)
+            u = self._ctx.User.get_user(uid_user_to_edit)
 
             if u is None:
                 return None
 
-            if self._Irc.User.update_mode(u.uid, umode):
+            if self._ctx.User.update_mode(u.uid, umode):
                 return None
 
             return None
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_mode(self, server_msg: list[str]) -> None:
         """Handle mode coming from a server
@@ -764,22 +764,22 @@ class Unrealircd6(IProtocol):
         try:
             # [':adator_', 'UMODE2', '-iwx']
             scopy = server_msg.copy()
-            u  = self._Irc.User.get_user(str(scopy[0]).lstrip(':'))
+            u  = self._ctx.User.get_user(str(scopy[0]).lstrip(':'))
             user_mode = scopy[2]
 
             if u is None: # If user is not created
                 return None
 
             # TODO : User object should be able to update user modes
-            if self._Irc.User.update_mode(u.uid, user_mode):
+            if self._ctx.User.update_mode(u.uid, user_mode):
                 return None
 
             return None
 
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_quit(self, server_msg: list[str]) -> None:
         """Handle quit coming from a server
@@ -792,18 +792,18 @@ class Unrealircd6(IProtocol):
             scopy = server_msg.copy()
             uid_who_quit = str(scopy[1]).lstrip(':')
 
-            self._Irc.Channel.delete_user_from_all_channel(uid_who_quit)
-            self._Irc.User.delete(uid_who_quit)
-            self._Irc.Client.delete(uid_who_quit)
-            self._Irc.Reputation.delete(uid_who_quit)
-            self._Irc.Admin.delete(uid_who_quit)
+            self._ctx.Channel.delete_user_from_all_channel(uid_who_quit)
+            self._ctx.User.delete(uid_who_quit)
+            self._ctx.Client.delete(uid_who_quit)
+            self._ctx.Reputation.delete(uid_who_quit)
+            self._ctx.Admin.delete(uid_who_quit)
 
             return None
 
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_squit(self, server_msg: list[str]) -> None:
         """Handle squit coming from a server
@@ -815,15 +815,15 @@ class Unrealircd6(IProtocol):
         scopy = server_msg.copy()
         server_hostname = scopy[2]
         uid_to_delete = None
-        for s_user in self._Irc.User.UID_DB:
+        for s_user in self._ctx.User.UID_DB:
             if s_user.hostname == server_hostname and 'S' in s_user.umodes:
                 uid_to_delete = s_user.uid
 
         if uid_to_delete is None:
             return None
 
-        self._Irc.User.delete(uid_to_delete)
-        self._Irc.Channel.delete_user_from_all_channel(uid_to_delete)
+        self._ctx.User.delete(uid_to_delete)
+        self._ctx.Channel.delete_user_from_all_channel(uid_to_delete)
 
         return None
 
@@ -858,9 +858,9 @@ class Unrealircd6(IProtocol):
         if user_modes is None or prefix is None or host_server_id is None:
             return None
 
-        self._Config.HSID = host_server_id
-        self._Settings.PROTOCTL_USER_MODES = list(user_modes)
-        self._Settings.PROTOCTL_PREFIX = list(prefix)
+        self._ctx.Config.HSID = host_server_id
+        self._ctx.Settings.PROTOCTL_USER_MODES = list(user_modes)
+        self._ctx.Settings.PROTOCTL_PREFIX = list(prefix)
 
         return None
 
@@ -877,17 +877,17 @@ class Unrealircd6(IProtocol):
 
             uid = str(server_msg[1]).lstrip(':')
             newnickname = server_msg[3]
-            self._Irc.User.update_nickname(uid, newnickname)
-            self._Irc.Client.update_nickname(uid, newnickname)
-            self._Irc.Admin.update_nickname(uid, newnickname)
-            self._Irc.Reputation.update(uid, newnickname)
+            self._ctx.User.update_nickname(uid, newnickname)
+            self._ctx.Client.update_nickname(uid, newnickname)
+            self._ctx.Admin.update_nickname(uid, newnickname)
+            self._ctx.Reputation.update(uid, newnickname)
 
             return None
 
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_sjoin(self, server_msg: list[str]) -> None:
         """Handle sjoin coming from a server
@@ -924,13 +924,13 @@ class Unrealircd6(IProtocol):
             # Boucle qui va ajouter l'ensemble des users (UID)
             for i in range(start_boucle, len(scopy)):
                 parsed_uid = str(scopy[i])
-                clean_uid = self._Utils.clean_uid(parsed_uid)
+                clean_uid = self._ctx.Utils.clean_uid(parsed_uid)
                 if not clean_uid is None and len(clean_uid) == 9:
                     list_users.append(clean_uid)
 
             if list_users:
-                self._Irc.Channel.insert(
-                    self._Irc.Loader.Definition.MChannel(
+                self._ctx.Channel.insert(
+                    self._ctx.Definition.MChannel(
                         name=channel,
                         uids=list_users
                     )
@@ -938,9 +938,9 @@ class Unrealircd6(IProtocol):
             return None
 
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_part(self, server_msg: list[str]) -> None:
         """Handle part coming from a server
@@ -952,13 +952,13 @@ class Unrealircd6(IProtocol):
             # ['@unrealircd.org', ':001EPFBRD', 'PART', '#welcome', ':WEB', 'IRC', 'Paris']
             uid = str(server_msg[1]).lstrip(':')
             channel = str(server_msg[3]).lower()
-            self._Irc.Channel.delete_user_from_channel(channel, uid)
+            self._ctx.Channel.delete_user_from_channel(channel, uid)
             return None
 
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_eos(self, server_msg: list[str]) -> None:
         """Handle EOS coming from a server
@@ -970,71 +970,71 @@ class Unrealircd6(IProtocol):
             # [':001', 'EOS']
             server_msg_copy = server_msg.copy()
             hsid = str(server_msg_copy[0]).replace(':','')
-            if hsid == self._Config.HSID:
-                if self._Config.DEFENDER_INIT == 1:
-                    current_version = self._Config.CURRENT_VERSION
-                    latest_version = self._Config.LATEST_VERSION
-                    if self._Base.check_for_new_version(False):
+            if hsid == self._ctx.Config.HSID:
+                if self._ctx.Config.DEFENDER_INIT == 1:
+                    current_version = self._ctx.Config.CURRENT_VERSION
+                    latest_version = self._ctx.Config.LATEST_VERSION
+                    if self._ctx.Base.check_for_new_version(False):
                         version = f'{current_version} >>> {latest_version}'
                     else:
                         version = f'{current_version}'
 
                     print(f"################### DEFENDER ###################")
                     print(f"#               SERVICE CONNECTE                ")
-                    print(f"# SERVEUR  :    {self._Config.SERVEUR_IP}        ")
-                    print(f"# PORT     :    {self._Config.SERVEUR_PORT}      ")
-                    print(f"# SSL      :    {self._Config.SERVEUR_SSL}       ")
-                    print(f"# SSL VER  :    {self._Config.SSL_VERSION}       ")
-                    print(f"# NICKNAME :    {self._Config.SERVICE_NICKNAME}  ")
-                    print(f"# CHANNEL  :    {self._Config.SERVICE_CHANLOG}   ")
+                    print(f"# SERVEUR  :    {self._ctx.Config.SERVEUR_IP}        ")
+                    print(f"# PORT     :    {self._ctx.Config.SERVEUR_PORT}      ")
+                    print(f"# SSL      :    {self._ctx.Config.SERVEUR_SSL}       ")
+                    print(f"# SSL VER  :    {self._ctx.Config.SSL_VERSION}       ")
+                    print(f"# NICKNAME :    {self._ctx.Config.SERVICE_NICKNAME}  ")
+                    print(f"# CHANNEL  :    {self._ctx.Config.SERVICE_CHANLOG}   ")
                     print(f"# VERSION  :    {version}                       ")
                     print(f"################################################")
 
-                    self._Logs.info(f"################### DEFENDER ###################")
-                    self._Logs.info(f"#               SERVICE CONNECTE                ")
-                    self._Logs.info(f"# SERVEUR  :    {self._Config.SERVEUR_IP}        ")
-                    self._Logs.info(f"# PORT     :    {self._Config.SERVEUR_PORT}      ")
-                    self._Logs.info(f"# SSL      :    {self._Config.SERVEUR_SSL}       ")
-                    self._Logs.info(f"# SSL VER  :    {self._Config.SSL_VERSION}       ")
-                    self._Logs.info(f"# NICKNAME :    {self._Config.SERVICE_NICKNAME}  ")
-                    self._Logs.info(f"# CHANNEL  :    {self._Config.SERVICE_CHANLOG}   ")
-                    self._Logs.info(f"# VERSION  :    {version}                       ")
-                    self._Logs.info(f"################################################")
+                    self._ctx.Logs.info(f"################### DEFENDER ###################")
+                    self._ctx.Logs.info(f"#               SERVICE CONNECTE                ")
+                    self._ctx.Logs.info(f"# SERVEUR  :    {self._ctx.Config.SERVEUR_IP}        ")
+                    self._ctx.Logs.info(f"# PORT     :    {self._ctx.Config.SERVEUR_PORT}      ")
+                    self._ctx.Logs.info(f"# SSL      :    {self._ctx.Config.SERVEUR_SSL}       ")
+                    self._ctx.Logs.info(f"# SSL VER  :    {self._ctx.Config.SSL_VERSION}       ")
+                    self._ctx.Logs.info(f"# NICKNAME :    {self._ctx.Config.SERVICE_NICKNAME}  ")
+                    self._ctx.Logs.info(f"# CHANNEL  :    {self._ctx.Config.SERVICE_CHANLOG}   ")
+                    self._ctx.Logs.info(f"# VERSION  :    {version}                       ")
+                    self._ctx.Logs.info(f"################################################")
 
-                    await self.send_sjoin(self._Config.SERVICE_CHANLOG)
+                    await self.send_sjoin(self._ctx.Config.SERVICE_CHANLOG)
 
-                    if self._Base.check_for_new_version(False):
+                    if self._ctx.Base.check_for_new_version(False):
                         await self.send_priv_msg(
-                            nick_from=self._Config.SERVICE_NICKNAME,
+                            nick_from=self._ctx.Config.SERVICE_NICKNAME,
                             msg=f" New Version available {version}",
-                            channel=self._Config.SERVICE_CHANLOG
+                            channel=self._ctx.Config.SERVICE_CHANLOG
                         )
 
                 # Initialisation terminé aprés le premier PING
                 await self.send_priv_msg(
-                    nick_from=self._Config.SERVICE_NICKNAME,
-                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._Config.COLORS.green, self._Config.COLORS.nogc, self._Config.SERVICE_NICKNAME),
-                    channel=self._Config.SERVICE_CHANLOG
+                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Config.COLORS.green, self._ctx.Config.COLORS.nogc, self._ctx.Config.SERVICE_NICKNAME),
+                    channel=self._ctx.Config.SERVICE_CHANLOG
                 )
-                self._Config.DEFENDER_INIT = 0
+                self._ctx.Config.DEFENDER_INIT = 0
 
                 # Send EOF to other modules
-                for module in self._Irc.ModuleUtils.model_get_loaded_modules().copy():
+                for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
                     module.class_instance.cmd(server_msg_copy)
 
                 # Join saved channels & load existing modules
-                await self._Irc.join_saved_channels()
-                await self._Irc.ModuleUtils.db_load_all_existing_modules(self._Irc)
+                await self._ctx.Channel.db_join_saved_channels()
+                await self._ctx.ModuleUtils.db_load_all_existing_modules()
 
-                await self.send2socket(f":{self._Config.SERVEUR_ID} SMOD :L:Defender:1.0.0 :L:Command:1.0.0")
+                await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} SMOD :L:Defender:1.0.0 :L:Command:1.0.0")
 
                 return None
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except KeyError as ke:
-            self._Logs.error(f"{__name__} - Key Error: {ke}")
+            self._ctx.Logs.error(f"{__name__} - Key Error: {ke}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}", exc_info=True)
 
     async def on_reputation(self, server_msg: list[str]) -> None:
         """Handle REPUTATION coming from a server
@@ -1045,27 +1045,27 @@ class Unrealircd6(IProtocol):
         try:
             # :001 REPUTATION 127.0.0.1 118
             server_msg_copy = server_msg.copy()
-            self._Irc.first_connexion_ip = server_msg_copy[2]
-            self._Irc.first_score = 0
+            self._ctx.Irc.first_connexion_ip = server_msg_copy[2]
+            self._ctx.Irc.first_score = 0
 
             if str(server_msg_copy[3]).find('*') != -1:
                 # If * available, it means that an ircop changed the repurtation score
                 # means also that the user exist will try to update all users with same IP
-                self._Irc.first_score = int(str(server_msg_copy[3]).replace('*',''))
-                for user in self._Irc.User.UID_DB:
-                    if user.remote_ip == self._Irc.first_connexion_ip:
-                        user.score_connexion = self._Irc.first_score
+                self._ctx.Irc.first_score = int(str(server_msg_copy[3]).replace('*',''))
+                for user in self._ctx.User.UID_DB:
+                    if user.remote_ip == self._ctx.Irc.first_connexion_ip:
+                        user.score_connexion = self._ctx.Irc.first_score
             else:
-                self._Irc.first_score = int(server_msg_copy[3])
+                self._ctx.Irc.first_score = int(server_msg_copy[3])
 
             # Possibilité de déclancher les bans a ce niveau.
         except IndexError as ie:
-            self._Logs.error(f'Index Error {__name__}: {ie}')
+            self._ctx.Logs.error(f'Index Error {__name__}: {ie}')
         except ValueError as ve:
-            self._Irc.first_score = 0
-            self._Logs.error(f'Value Error {__name__}: {ve}', exc_info=True)
+            self._ctx.Irc.first_score = 0
+            self._ctx.Logs.error(f'Value Error {__name__}: {ve}', exc_info=True)
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_uid(self, server_msg: list[str]) -> None:
         """Handle uid message coming from the server
@@ -1087,7 +1087,7 @@ class Unrealircd6(IProtocol):
             hostname = str(scopy[7])
             umodes = str(scopy[10])
             vhost = str(scopy[11])
-            remote_ip = '127.0.0.1' if 'S' in umodes else self._Base.decode_ip(str(scopy[13]))
+            remote_ip = '127.0.0.1' if 'S' in umodes else self._ctx.Base.decode_ip(str(scopy[13]))
             
             # extract realname
             realname = ' '.join(scopy[14:]).lstrip(':')
@@ -1106,10 +1106,10 @@ class Unrealircd6(IProtocol):
             pattern = r'^.*tls_cipher=([^;]+).*$'
             tlsc_match = match(pattern, scopy[0])
             tls_cipher = tlsc_match.group(1) if tlsc_match else None
-            score_connexion = self._Irc.first_score
+            score_connexion = self._ctx.Irc.first_score
 
-            self._Irc.User.insert(
-                self._Irc.Loader.Definition.MUser(
+            self._ctx.User.insert(
+                self._ctx.Definition.MUser(
                     uid=uid,
                     nickname=nickname,
                     username=username,
@@ -1129,22 +1129,22 @@ class Unrealircd6(IProtocol):
             )
 
             # Auto Auth admin via fingerprint
-            dnickname = self._Config.SERVICE_NICKNAME
-            dchanlog  = self._Config.SERVICE_CHANLOG
-            green = self._Config.COLORS.green
-            red = self._Config.COLORS.red
-            nogc = self._Config.COLORS.nogc
+            dnickname = self._ctx.Config.SERVICE_NICKNAME
+            dchanlog  = self._ctx.Config.SERVICE_CHANLOG
+            green = self._ctx.Config.COLORS.green
+            red = self._ctx.Config.COLORS.red
+            nogc = self._ctx.Config.COLORS.nogc
 
-            # for module in self._Irc.ModuleUtils.model_get_loaded_modules().copy():
+            # for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
             #     module.class_instance.cmd(serverMsg)
 
             # SASL authentication
             # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
 
-            sasl_obj = self._Irc.Sasl.get_sasl_obj(uid)
+            sasl_obj = self._ctx.Sasl.get_sasl_obj(uid)
             if sasl_obj:
                 if sasl_obj.auth_success:
-                    self._Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
+                    self._ctx.Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
                     await self.send_priv_msg(nick_from=dnickname, 
                                         msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", green, nogc, nickname, sasl_obj.username, dnickname),
                                         channel=dchanlog)
@@ -1156,12 +1156,12 @@ class Unrealircd6(IProtocol):
                     await self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
 
                 # Delete sasl object!
-                self._Irc.Sasl.delete_sasl_client(uid)
+                self._ctx.Sasl.delete_sasl_client(uid)
                 return None
 
             # If no sasl authentication then auto connect via fingerprint
-            if self._Irc.Admin.db_auth_admin_via_fingerprint(fingerprint, uid):
-                admin = self._Irc.Admin.get_admin(uid)
+            if await self._ctx.Admin.db_auth_admin_via_fingerprint(fingerprint, uid):
+                admin = self._ctx.Admin.get_admin(uid)
                 account = admin.account if admin else ''
                 await self.send_priv_msg(nick_from=dnickname, 
                                    msg=tr("[ %sFINGERPRINT AUTH%s ] - %s (%s) is now connected successfuly to %s", green, nogc, nickname, account, dnickname),
@@ -1170,9 +1170,9 @@ class Unrealircd6(IProtocol):
 
             return None
         except IndexError as ie:
-            self._Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_privmsg(self, server_msg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
@@ -1189,31 +1189,31 @@ class Unrealircd6(IProtocol):
                 cmd.pop(0)
 
             get_uid_or_nickname = str(cmd[0].replace(':',''))
-            user_trigger = self._Irc.User.get_nickname(get_uid_or_nickname)
-            pattern = fr'(:\{self._Config.SERVICE_PREFIX})(.*)$'
+            user_trigger = self._ctx.User.get_nickname(get_uid_or_nickname)
+            pattern = fr'(:\{self._ctx.Config.SERVICE_PREFIX})(.*)$'
             hcmds = search(pattern, ' '.join(cmd)) # va matcher avec tout les caractéres aprés le .
 
             if hcmds: # Commande qui commencent par le point
                 liste_des_commandes = list(hcmds.groups())
                 convert_to_string = ' '.join(liste_des_commandes)
                 arg = convert_to_string.split()
-                arg.remove(f':{self._Config.SERVICE_PREFIX}')
-                if not self._Irc.Commands.is_command_exist(arg[0]):
-                    self._Logs.debug(f"This command {arg[0]} is not available")
+                arg.remove(f':{self._ctx.Config.SERVICE_PREFIX}')
+                if not self._ctx.Commands.is_command_exist(arg[0]):
+                    self._ctx.Logs.debug(f"This command {arg[0]} is not available")
                     await self.send_notice(
-                        nick_from=self._Config.SERVICE_NICKNAME,
+                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
                         nick_to=user_trigger,
-                        msg=f"This command [{self._Config.COLORS.bold}{arg[0]}{self._Config.COLORS.bold}] is not available"
+                        msg=f"This command [{self._ctx.Config.COLORS.bold}{arg[0]}{self._ctx.Config.COLORS.bold}] is not available"
                     )
                     return None
 
                 cmd_to_send = convert_to_string.replace(':','')
-                self._Base.log_cmd(user_trigger, cmd_to_send)
+                await self._ctx.Base.log_cmd(user_trigger, cmd_to_send)
 
-                fromchannel = str(cmd[2]).lower() if self._Irc.Channel.is_valid_channel(cmd[2]) else None
-                await self._Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                fromchannel = str(cmd[2]).lower() if self._ctx.Channel.is_valid_channel(cmd[2]) else None
+                await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
 
-            if cmd[2] == self._Config.SERVICE_ID:
+            if cmd[2] == self._ctx.Config.SERVICE_ID:
                 pattern = fr'^:.*?:(.*)$'
                 hcmds = search(pattern, ' '.join(cmd))
 
@@ -1237,26 +1237,26 @@ class Unrealircd6(IProtocol):
                         await self.on_ping(srv_msg)
                         return None
 
-                    if not self._Irc.Commands.is_command_exist(arg[0]):
-                        self._Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
+                    if not self._ctx.Commands.is_command_exist(arg[0]):
+                        self._ctx.Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
                         return None
 
                     cmd_to_send = convert_to_string.replace(':','')
-                    self._Base.log_cmd(user_trigger, cmd_to_send)
+                    await self._ctx.Base.log_cmd(user_trigger, cmd_to_send)
                     fromchannel = None
 
                     if len(arg) >= 2:
-                        fromchannel = str(arg[1]).lower() if self._Irc.Channel.is_valid_channel(arg[1]) else None
+                        fromchannel = str(arg[1]).lower() if self._ctx.Channel.is_valid_channel(arg[1]) else None
 
-                    await self._Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                    await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
             return None
 
         except KeyError as ke:
-            self._Logs.error(f"Key Error: {ke}")
+            self._ctx.Logs.error(f"Key Error: {ke}")
         except AttributeError as ae:
-            self._Logs.error(f"Attribute Error: {ae}")
+            self._ctx.Logs.error(f"Attribute Error: {ae}", exc_info=True)
         except Exception as err:
-            self._Logs.error(f"General Error: {err} - {srv_msg}" , exc_info=True)
+            self._ctx.Logs.error(f"General Error: {err} - {srv_msg}" , exc_info=True)
 
     async def on_server_ping(self, server_msg: list[str]) -> None:
         """Send a PONG message to the server
@@ -1266,11 +1266,11 @@ class Unrealircd6(IProtocol):
         """
         try:
             scopy = server_msg.copy()
-            await self.send2socket(' '.join(scopy).replace('PING', 'PONG'), print_log=True)
+            await self.send2socket(' '.join(scopy).replace('PING', 'PONG'), print_log=False)
 
             return None
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_server(self, server_msg: list[str]) -> None:
         """_summary_
@@ -1281,9 +1281,9 @@ class Unrealircd6(IProtocol):
         try:
             # ['SERVER', 'irc.local.org', '1', ':U6100-Fhn6OoE-001', 'Local', 'Server']
             scopy = server_msg.copy()
-            self._Irc.Settings.MAIN_SERVER_HOSTNAME = scopy[1]
+            self._ctx.Settings.MAIN_SERVER_HOSTNAME = scopy[1]
         except Exception as err:
-            self._Logs.error(f'General Error: {err}')
+            self._ctx.Logs.error(f'General Error: {err}')
 
     async def on_version(self, server_msg: list[str]) -> None:
         """Sending Server Version to the server
@@ -1295,19 +1295,19 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._Irc.User.get_nickname(self._Utils.clean_uid(scopy[1]))
-            dnickname = self._Config.SERVICE_NICKNAME
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            dnickname = self._ctx.Config.SERVICE_NICKNAME
             arg = scopy[4].replace(':', '')
 
             if nickname is None:
                 return None
 
             if arg == '\x01VERSION\x01':
-                await self.send2socket(f':{dnickname} NOTICE {nickname} :\x01VERSION Service {self._Config.SERVICE_NICKNAME} V{self._Config.CURRENT_VERSION}\x01')
+                await self.send2socket(f':{dnickname} NOTICE {nickname} :\x01VERSION Service {self._ctx.Config.SERVICE_NICKNAME} V{self._ctx.Config.CURRENT_VERSION}\x01')
 
             return None
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_time(self, server_msg: list[str]) -> None:
         """Sending TIME answer to a requestor
@@ -1319,10 +1319,10 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._Irc.User.get_nickname(self._Utils.clean_uid(scopy[1]))
-            dnickname = self._Config.SERVICE_NICKNAME
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            dnickname = self._ctx.Config.SERVICE_NICKNAME
             arg = scopy[4].replace(':', '')
-            current_datetime = self._Utils.get_sdatetime()
+            current_datetime = self._ctx.Utils.get_sdatetime()
 
             if nickname is None:
                 return None
@@ -1332,7 +1332,7 @@ class Unrealircd6(IProtocol):
 
             return None
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_ping(self, server_msg: list[str]) -> None:
         """Sending a PING answer to requestor
@@ -1344,30 +1344,30 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._Irc.User.get_nickname(self._Utils.clean_uid(scopy[1]))
-            dnickname = self._Config.SERVICE_NICKNAME
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            dnickname = self._ctx.Config.SERVICE_NICKNAME
             arg = scopy[4].replace(':', '')
 
             if nickname is None:
-                self._Logs.debug(scopy)
+                self._ctx.Logs.debug(scopy)
                 return None
 
             if arg == '\x01PING':
                 recieved_unixtime = int(scopy[5].replace('\x01',''))
-                current_unixtime = self._Utils.get_unixtime()
+                current_unixtime = self._ctx.Utils.get_unixtime()
                 ping_response = current_unixtime - recieved_unixtime
 
-                # self._Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
+                # self._ctx.Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
                 await self.send_notice(
                     nick_from=dnickname,
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"
                 )
-                self._Logs.debug(scopy)
+                self._ctx.Logs.debug(scopy)
 
             return None
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_version_msg(self, server_msg: list[str]) -> None:
         """Handle version coming from the server
@@ -1381,25 +1381,25 @@ class Unrealircd6(IProtocol):
             if '@' in list(scopy[0])[0]:
                 scopy.pop(0)
 
-            u = self._Irc.User.get_user(self._Utils.clean_uid(scopy[0]))
+            u = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0]))
 
             if u is None:
                 return None
 
-            response_351 = f"{self._Config.SERVICE_NAME.capitalize()}-{self._Config.CURRENT_VERSION} {self._Config.SERVICE_HOST} {self.name}"
-            await self.send2socket(f':{self._Config.SERVICE_HOST} 351 {u.nickname} {response_351}')
+            response_351 = f"{self._ctx.Config.SERVICE_NAME.capitalize()}-{self._ctx.Config.CURRENT_VERSION} {self._ctx.Config.SERVICE_HOST} {self.name}"
+            await self.send2socket(f':{self._ctx.Config.SERVICE_HOST} 351 {u.nickname} {response_351}')
 
-            modules = self._Irc.ModuleUtils.get_all_available_modules()
+            modules = self._ctx.ModuleUtils.get_all_available_modules()
             response_005 = ' | '.join(modules)
-            await self.send2socket(f':{self._Config.SERVICE_HOST} 005 {u.nickname} {response_005} are supported by this server')
+            await self.send2socket(f':{self._ctx.Config.SERVICE_HOST} 005 {u.nickname} {response_005} are supported by this server')
 
-            response_005 = ''.join(self._Settings.PROTOCTL_USER_MODES)
-            await self.send2socket(f":{self._Config.SERVICE_HOST} 005 {u.nickname} {response_005} are supported by this server")
+            response_005 = ''.join(self._ctx.Settings.PROTOCTL_USER_MODES)
+            await self.send2socket(f":{self._ctx.Config.SERVICE_HOST} 005 {u.nickname} {response_005} are supported by this server")
 
             return None
 
         except Exception as err:
-            self._Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
 
     async def on_smod(self, server_msg: list[str]) -> None:
         """Handle SMOD message coming from the server
@@ -1414,11 +1414,11 @@ class Unrealircd6(IProtocol):
 
             for smod in modules:
                 smod_split = smod.split(':')
-                smodobj = self._Irc.Loader.Definition.MSModule(type=smod_split[0], name=smod_split[1], version=smod_split[2])
-                self._Settings.SMOD_MODULES.append(smodobj)
+                smodobj = self._ctx.Definition.MSModule(type=smod_split[0], name=smod_split[1], version=smod_split[2])
+                self._ctx.Settings.SMOD_MODULES.append(smodobj)
 
         except Exception as err:
-            self._Logs.error(f'General Error: {err}')
+            self._ctx.Logs.error(f'General Error: {err}')
 
     async def on_sasl(self, server_msg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
@@ -1433,9 +1433,9 @@ class Unrealircd6(IProtocol):
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
             scopy = server_msg.copy()
-            psasl = self._Irc.Sasl
+            psasl = self._ctx.Sasl
             sasl_enabled = False
-            for smod in self._Settings.SMOD_MODULES:
+            for smod in self._ctx.Settings.SMOD_MODULES:
                 if smod.name == 'sasl':
                     sasl_enabled = True
                     break
@@ -1445,7 +1445,7 @@ class Unrealircd6(IProtocol):
 
             client_uid = scopy[3] if len(scopy) >= 6 else None
             sasl_message_type = scopy[4] if len(scopy) >= 6 else None
-            psasl.insert_sasl_client(self._Irc.Loader.Definition.MSasl(client_uid=client_uid))
+            psasl.insert_sasl_client(self._ctx.Definition.MSasl(client_uid=client_uid))
             sasl_obj = psasl.get_sasl_obj(client_uid)
 
             if sasl_obj is None:
@@ -1463,13 +1463,13 @@ class Unrealircd6(IProtocol):
                         sasl_obj.mechanisme = str(scopy[5])
 
                     if sasl_obj.mechanisme == "PLAIN":
-                        await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
+                        await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
                     elif sasl_obj.mechanisme == "EXTERNAL":
                         if str(scopy[5]) == "+":
                             return None
 
                         sasl_obj.fingerprint = str(scopy[6])
-                        await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
+                        await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
 
                     self.on_sasl_authentication_process(sasl_obj)
                     return sasl_obj
@@ -1493,20 +1493,20 @@ class Unrealircd6(IProtocol):
                         return sasl_obj
 
         except Exception as err:
-            self._Logs.error(f'General Error: {err}', exc_info=True)
+            self._ctx.Logs.error(f'General Error: {err}', exc_info=True)
 
     async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> None:
         s = sasl_model
         if sasl_model:
-            def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
+            async def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
                 if fingerprint:
                     mes_donnees = {'fingerprint': fingerprint}
-                    query = f"SELECT user, level, language FROM {self._Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
+                    query = f"SELECT user, level, language FROM {self._ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
                 else:
-                    mes_donnees = {'user': username, 'password': self._Utils.hash_password(password)}
-                    query = f"SELECT user, level, language FROM {self._Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+                    mes_donnees = {'user': username, 'password': self._ctx.Utils.hash_password(password)}
+                    query = f"SELECT user, level, language FROM {self._ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
 
-                result = self._Base.db_execute_query(query, mes_donnees)
+                result = await self._ctx.Base.db_execute_query(query, mes_donnees)
                 user_from_db = result.fetchone()
                 if user_from_db:
                     return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
@@ -1515,32 +1515,32 @@ class Unrealircd6(IProtocol):
 
             if s.message_type == 'C' and s.mechanisme == 'PLAIN':
                 # Connection via PLAIN
-                admin_info = db_get_admin_info(username=s.username, password=s.password)
+                admin_info = await db_get_admin_info(username=s.username, password=s.password)
                 if admin_info is not None:
                     s.auth_success = True
                     s.level = admin_info.get('level', 0)
                     s.language = admin_info.get('language', 'EN')
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
                 else:
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
             elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
                 # Connection using fingerprints
-                admin_info = db_get_admin_info(fingerprint=s.fingerprint)
+                admin_info = await db_get_admin_info(fingerprint=s.fingerprint)
                 
                 if admin_info is not None:
                     s.auth_success = True
                     s.level = admin_info.get('level', 0)
                     s.username = admin_info.get('user', None)
                     s.language = admin_info.get('language', 'EN')
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
                 else:
                     # "904 <nick> :SASL authentication failed"
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} SASL {self._Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-                    await self.send2socket(f":{self._Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+                    await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
     async def on_md(self, server_msg: list[str]) -> None:
         """Handle MD responses
@@ -1556,7 +1556,7 @@ class Unrealircd6(IProtocol):
             var = str(scopy[4]).lower()
             value = str(scopy[5]).replace(':', '')
 
-            user_obj = self._Irc.User.get_user(uid)
+            user_obj = self._ctx.User.get_user(uid)
             if user_obj is None:
                 return None
             
@@ -1569,7 +1569,7 @@ class Unrealircd6(IProtocol):
                     return None
 
         except Exception as e:
-            self._Logs.error(f"General Error: {e}")
+            self._ctx.Logs.error(f"General Error: {e}")
 
     async def on_kick(self, server_msg: list[str]) -> None:
         """When a user is kicked out from a channel
@@ -1583,7 +1583,7 @@ class Unrealircd6(IProtocol):
         channel = scopy[3]
 
         # Delete the user from the channel.
-        self._Irc.Channel.delete_user_from_channel(channel, uid)
+        self._ctx.Channel.delete_user_from_channel(channel, uid)
         return None
 
     async def on_sethost(self, server_msg: list[str]) -> None:
@@ -1594,7 +1594,7 @@ class Unrealircd6(IProtocol):
             server_msg (list[str]): _description_
         """
         scopy = server_msg.copy()
-        uid = self._User.clean_uid(scopy[0])
+        uid = self._ctx.User.clean_uid(scopy[0])
         vhost = scopy[2].lstrip(':')
-        user = self._User.get_user(uid)
+        user = self._ctx.User.get_user(uid)
         user.vhost = vhost

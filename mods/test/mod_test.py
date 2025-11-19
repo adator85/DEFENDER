@@ -48,7 +48,7 @@ class Test(IModule):
         # self.ctx.Base.db_execute_query(table_logs)
         return None
 
-    def load(self) -> None:
+    async def load(self) -> None:
         """### Load Module Configuration (Mandatory)
         """
 
@@ -62,8 +62,11 @@ class Test(IModule):
         # Build the default configuration model (Mandatory)
         self._mod_config = self.ModConfModel(param_exemple1='str', param_exemple2=1)
 
-        # Init the module (Mandatory)
-        self.init()
+        # sync the database with local variable (Mandatory)
+        await self.sync_db()
+
+        if self.mod_config.param_exemple2 == 1:
+            await self.ctx.Irc.Protocol.send_priv_msg(self.ctx.Config.SERVICE_NICKNAME, "Param activated", self.ctx.Config.SERVICE_CHANLOG)
 
     @property
     def mod_config(self) -> ModConfModel:
@@ -71,7 +74,7 @@ class Test(IModule):
 
     def unload(self) -> None:
         """### This method is called when you unload, or you reload the module (Mandatory)"""
-        self.ctx.Irc.Commands.drop_command_by_module(self.module_name)
+        self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
 
     def cmd(self, data: list[str]) -> None:

@@ -125,8 +125,8 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
     """
     faker = faker_instance
 
-    uid = generate_uid_for_clone(faker, uplink.Config.SERVEUR_ID)
-    umodes = uplink.Config.CLONE_UMODES
+    uid = generate_uid_for_clone(faker, uplink.ctx.Config.SERVEUR_ID)
+    umodes = uplink.ctx.Config.CLONE_UMODES
 
     # Generate Username
     username = generate_username_for_clone(faker)
@@ -153,7 +153,7 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
         checkNickname = uplink.Clone.nickname_exists(nickname)
 
     while checkUid:
-        uid = generate_uid_for_clone(faker, uplink.Config.SERVEUR_ID)
+        uid = generate_uid_for_clone(faker, uplink.ctx.Config.SERVEUR_ID)
         checkUid = uplink.Clone.uid_exists(uid=uid)
 
     clone = uplink.Schemas.MClone(
@@ -174,12 +174,12 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
     return True
 
-def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
+async def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
     
-    senderObj, recieverObj, channel, message = uplink.Protocol.parse_privmsg(srvmsg)
+    senderObj, recieverObj, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
 
     if senderObj is not None:
-        if senderObj.hostname in uplink.Config.CLONE_LOG_HOST_EXEMPT:
+        if senderObj.hostname in uplink.ctx.Config.CLONE_LOG_HOST_EXEMPT:
             return
         senderMsg = message
         clone_obj = recieverObj
@@ -187,12 +187,12 @@ def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
         if clone_obj is None:
             return
 
-        if clone_obj.uid != uplink.Config.SERVICE_ID:
+        if clone_obj.uid != uplink.ctx.Config.SERVICE_ID:
             final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
-            uplink.Protocol.send_priv_msg(
+            await uplink.ctx.Irc.Protocol.send_priv_msg(
                 nick_from=clone_obj.uid,
                 msg=final_message,
-                channel=uplink.Config.CLONE_CHANNEL
+                channel=uplink.ctx.Config.CLONE_CHANNEL
             )
     
     return None

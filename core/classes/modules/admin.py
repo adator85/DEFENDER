@@ -173,7 +173,7 @@ class Admin:
 
         return admin.language
 
-    def db_auth_admin_via_fingerprint(self, fp: str, uidornickname: str) -> bool:
+    async def db_auth_admin_via_fingerprint(self, fp: str, uidornickname: str) -> bool:
         """Check the fingerprint
 
         Args:
@@ -188,7 +188,7 @@ class Admin:
 
         query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
         data = {'fp': fp}
-        exe = self.Base.db_execute_query(query, data)
+        exe = await self.Base.db_execute_query(query, data)
         result = exe.fetchone()
         if result:
             account = result[0]
@@ -204,7 +204,7 @@ class Admin:
         
         return False
 
-    def db_is_admin_exist(self, admin_nickname: str) -> bool:
+    async def db_is_admin_exist(self, admin_nickname: str) -> bool:
         """Verify if the admin exist in the database!
 
         Args:
@@ -216,7 +216,7 @@ class Admin:
 
         mes_donnees = {'admin': admin_nickname}
         query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user = :admin"
-        r = self.Base.db_execute_query(query_search_user, mes_donnees)
+        r = await self.Base.db_execute_query(query_search_user, mes_donnees)
         exist_user = r.fetchone()
         if exist_user:
             return True

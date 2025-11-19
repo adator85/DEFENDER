@@ -14,6 +14,15 @@ import core.classes.protocols.factory as factory
 
 class Loader:
 
+    _instance = None
+
+    def __new__(cls, *agrs):
+
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+        return cls._instance
+
     def __init__(self):
 
         # Load Main Modules
@@ -70,10 +79,11 @@ class Loader:
 
         self.Irc: irc.Irc                           = irc.Irc(self)
 
-        self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self.Irc)
+        self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self)
 
-        self.RpcServer: rpc_mod.JSONRPCServer       = rpc_mod.JSONRPCServer(self)
-
-        self.Base.init()
+        self.RpcServer: rpc_mod.JSonRpcServer       = rpc_mod.JSonRpcServer(self)
 
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))
+    
+    async def start(self):
+        await self.Base.init()

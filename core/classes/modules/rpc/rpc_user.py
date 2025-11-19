@@ -6,11 +6,10 @@ if TYPE_CHECKING:
 
 class RPCUser:
     def __init__(self, loader: 'Loader'):
-        self._Loader = loader
-        self._User = loader.User
+        self._ctx = loader
     
-    def user_list(self) -> list[dict]:
-        users = self._User.UID_DB.copy()
+    def user_list(self, **kwargs) -> list[dict]:
+        users = self._ctx.User.UID_DB.copy()
         copy_users: list['MUser'] = []
 
         for user in users:
@@ -20,8 +19,9 @@ class RPCUser:
         
         return [user.to_dict() for user in copy_users]
 
-    def user_get(self, uidornickname: str) -> Optional[dict]:
-        user = self._User.get_user(uidornickname)
+    def user_get(self, **kwargs) -> Optional[dict]:
+        uidornickname = kwargs.get('uid_or_nickname', None)
+        user = self._ctx.User.get_user(uidornickname)
         if user:
             user_copy = user.copy()
             user_copy.connexion_datetime = user_copy.connexion_datetime.strftime('%d-%m-%Y')

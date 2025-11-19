@@ -4,31 +4,20 @@ from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
     from core.definition import MClient, MSasl, MUser, MChannel
-    from core.irc import Irc
+    from core.loader import Loader
 
 class IProtocol(ABC):
 
     Handler: Optional[CommandHandler] = None
 
-    def __init__(self, uplink: 'Irc'):
+    def __init__(self, context: 'Loader'):
         self.name: Optional[str] = None
         self.protocol_version: int = -1
         self.known_protocol: set[str] = set()
-
-        self._Irc = uplink
-        self._Config = uplink.Config
-        self._Base = uplink.Base
-        self._Settings = uplink.Base.Settings
-        self._Utils = uplink.Loader.Utils
-        self._Logs = uplink.Loader.Logs
-        self._User = uplink.User
-        self._Channel = uplink.Channel
-
-        self.Handler = CommandHandler(uplink.Loader)
-
+        self._ctx = context
+        self.Handler = CommandHandler(context)
         self.init_protocol()
-
-        self._Logs.info(f"[PROTOCOL] Protocol [{self.__class__.__name__}] loaded!")
+        self._ctx.Logs.info(f"[PROTOCOL] Protocol [{self.__class__.__name__}] loaded!")
 
     @abstractmethod
     def init_protocol(self):
@@ -313,7 +302,7 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    async def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
+    def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
 
         Args:
@@ -324,7 +313,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
+    def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
@@ -335,7 +324,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes and return dictionary.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
@@ -349,7 +338,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
+    def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
 

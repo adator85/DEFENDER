@@ -3,6 +3,7 @@ from json import dumps
 from dataclasses import dataclass, field, asdict, fields, replace
 from typing import Literal, Any, Optional
 from os import sep
+from core.classes.interfaces.imodule import IModule
 
 @dataclass
 class MainModel:
@@ -354,7 +355,7 @@ class MCommand(MainModel):
 class MModule(MainModel):
     module_name: str = None
     class_name: str = None
-    class_instance: Optional[Any] = None
+    class_instance: Optional[IModule] = None
 
 @dataclass
 class DefenderModuleHeader(MainModel):

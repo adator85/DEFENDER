@@ -13,6 +13,7 @@ from time import time
 from random import choice
 from hashlib import md5, sha3_512
 from core.classes.modules.settings import global_settings
+from asyncio import iscoroutinefunction
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -243,3 +244,14 @@ def hide_sensitive_data(srvmsg: list[str]) -> list[str]:
 
     except ValueError:
         return srvmsg
+
+def is_coroutinefunction(func: Any) -> bool:
+    """Check if the function is a coroutine or not
+
+    Args:
+        func (Any): an callable object
+
+    Returns:
+        bool: True if the function is a coroutine
+    """
+    return iscoroutinefunction(func)

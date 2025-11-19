@@ -15,7 +15,7 @@ class ServiceLogging:
             self.SERVER_PREFIX = None
             self.LOGGING_CONSOLE = True
 
-            self.LOG_FILTERS: list[str] = [f":{self.SERVER_PREFIX}auth", "['PASS'"]
+            self.LOG_FILTERS: list[str] = ["PING", f":{self.SERVER_PREFIX}auth", "['PASS'"]
 
             self.file_handler = None
             self.stdout_handler = None
