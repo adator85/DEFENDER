@@ -81,7 +81,7 @@ class Loader:
 
         self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self)
 
-        self.RpcServer: rpc_mod.JSonRpcServer       = rpc_mod.JSonRpcServer(self)
+        self.RpcServer: rpc_mod.JSonRpcServer       = rpc_mod.JSonRpcServer(self, hostname='0.0.0.0')
 
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))
     
