@@ -1,12 +1,17 @@
 from typing import TYPE_CHECKING
 
+from starlette.responses import JSONResponse
+from core.classes.interfaces.irpc_endpoint import IRPC
+from core.classes.modules.rpc.rpc_errors import JSONRPCErrorCode
+
 if TYPE_CHECKING:
     from core.loader import Loader
 
-class RPCChannel:
+class RPCChannel(IRPC):
     def __init__(self, loader: 'Loader'):
-        self._Loader = loader
-        self._Channel = loader.Channel
+        super().__init__(loader)
     
-    def channel_list(self, **kwargs) -> list[dict]:
-        return [chan.to_dict() for chan in self._Channel.UID_CHANNEL_DB]
+    def channel_list(self, **kwargs) -> JSONResponse:
+        self.reset()
+        self.response_model['result'] = [chan.to_dict() for chan in self.ctx.Channel.UID_CHANNEL_DB]
+        return JSONResponse(self.response_model)

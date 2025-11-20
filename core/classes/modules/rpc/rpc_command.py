@@ -1,29 +1,44 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+from starlette.responses import JSONResponse
+from core.classes.interfaces.irpc_endpoint import IRPC
+from core.classes.modules.rpc.rpc_errors import JSONRPCErrorCode
 
 if TYPE_CHECKING:
     from core.loader import Loader
 
-class RPCCommand:
+class RPCCommand(IRPC):
     def __init__(self, loader: 'Loader'):
-        self._Loader = loader
-        self._Command = loader.Commands
+        super().__init__(loader)
     
-    def command_list(self, **kwargs) -> list[dict]:
-        return [command.to_dict() for command in self._Command.DB_COMMANDS]
+    def command_list(self, **kwargs) -> JSONResponse:
+        self.reset()
+        self.response_model['result'] = [command.to_dict() for command in self.ctx.Commands.DB_COMMANDS]
+        return JSONResponse(self.response_model)
     
-    def command_get_by_module(self, **kwargs) -> list[dict]:
-        module_name = kwargs.get('module_name', None)
-        if module_name is None:
-            return []
+    def command_get_by_module(self, **kwargs) -> JSONResponse:
+        self.reset()
+        module_name: str = kwargs.get('module_name', '')
 
-        return [command.to_dict() for command in self._Command.DB_COMMANDS if command.module_name.lower() == module_name.lower()]
+        if not module_name:
+            self.response_model['error'] = self.create_error_response(JSONRPCErrorCode.INVALID_PARAMS, {'module_name': 'The param to use is module_name'})
+            return JSONResponse(self.response_model, self.http_status_code.HTTP_405_METHOD_NOT_ALLOWED)
 
-    def command_get_by_name(self, **kwargs) -> dict:
+        self.response_model['result'] = [command.to_dict() for command in self.ctx.Commands.DB_COMMANDS if command.module_name.lower() == module_name.lower()]
+        return JSONResponse(self.response_model)
+
+    def command_get_by_name(self, **kwargs) -> JSONResponse:
+        self.reset()
+
         command_name: str = kwargs.get('command_name', '')
         if not command_name:
-            return dict()
+            self.response_model['error'] = self.create_error_response(JSONRPCErrorCode.INVALID_PARAMS, {'command_name': f'The param to use is command_name'})
+            return JSONResponse(self.response_model, self.http_status_code.HTTP_405_METHOD_NOT_ALLOWED)
 
-        for command in self._Command.DB_COMMANDS:
+        command_to_return: list[dict] = []
+        for command in self.ctx.Commands.DB_COMMANDS:
             if command.command_name.lower() == command_name.lower():
-                return command.to_dict()
-        return dict()
+                command_to_return.append(command.to_dict())
+        
+        self.response_model['result'] = command_to_return
+
+        return JSONResponse(self.response_model)
