@@ -10,8 +10,8 @@ class VotekickManager:
 
     def __init__(self, uplink: 'Votekick'):
         self.uplink = uplink
-        self.Logs   = uplink.Logs
-        self.Utils  = uplink.MainUtils
+        self.Logs   = uplink.ctx.Logs
+        self.Utils  = uplink.ctx.Utils
 
     def activate_new_channel(self, channel_name: str) -> bool:
         """Activate a new channel in the votekick systeme

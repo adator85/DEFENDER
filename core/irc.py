@@ -128,6 +128,8 @@ class Irc:
             # When IRCd server is down
             # asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of undefined expected bytes
             self.ctx.Logs.critical(f"The IRCd server is no more connected! {ie}")
+        except asyncio.exceptions.CancelledError as cerr:
+            self.ctx.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
 
     ##############################################
     #               CONNEXION IRC                #
@@ -1006,9 +1008,9 @@ class Irc:
 
                 except IndexError as ie:
                     self.ctx.Logs.error(f'{ie}')
-                except ConnectionResetError as cerr:
+                except ConnectionResetError:
                     if self.writer.is_closing():
-                        self.ctx.Logs.debug(f"Defender stopped properly! {cerr}")
+                        self.ctx.Logs.debug(f"Defender stopped properly!")
 
             case 'restart':
                 final_reason = ' '.join(cmd[1:])

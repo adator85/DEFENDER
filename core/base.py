@@ -504,7 +504,15 @@ class Base:
             await self.Loader.ModuleUtils.unload_one_module(module.module_name)
 
         self.logs.debug(f"=======> Closing all Coroutines!")
-        await asyncio.gather(*self.running_asynctasks)
+        try:
+            await asyncio.wait_for(asyncio.gather(*self.running_asynctasks), timeout=5)
+        except asyncio.exceptions.TimeoutError as te:
+            self.logs.debug(f"Asyncio Timeout reached! {te}")
+            for task in self.running_asynctasks:
+                task.cancel()
+        except asyncio.exceptions.CancelledError as cerr:
+            self.logs.debug(f"Asyncio CancelledError reached! {cerr}")
+
 
         # Nettoyage des timers
         self.logs.debug(f"=======> Checking for Timers to stop")
@@ -512,7 +520,7 @@ class Base:
             while timer.is_alive():
                 self.logs.debug(f"> waiting for {timer.name} to close")
                 timer.cancel()
-                time.sleep(0.2)
+                await asyncio.sleep(0.2)
             self.running_timers.remove(timer)
             self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
 
