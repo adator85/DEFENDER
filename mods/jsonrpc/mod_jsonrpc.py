@@ -84,7 +84,7 @@ class Jsonrpc(IModule):
         await self.sync_db()
 
         if self.ctx.Config.SERVEUR_PROTOCOL.lower() != 'unreal6':
-            self.ctx.ModuleUtils.unload_one_module(self.module_name, False)
+            await self.ctx.ModuleUtils.unload_one_module(self.module_name, False)
             return None
 
         # Is RPC Active?

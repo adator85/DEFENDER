@@ -15,7 +15,7 @@ async def coro_cloudfilt_scan(uplink: 'Defender'):
     while uplink.cloudfilt_isRunning:
         list_to_remove:list = []
         for user in uplink.Schemas.DB_CLOUDFILT_USERS:
-            uplink.mod_utils.action_scan_client_with_cloudfilt(uplink, user)
+            await uplink.mod_utils.action_scan_client_with_cloudfilt(uplink, user)
             list_to_remove.append(user)
             await asyncio.sleep(1)
 
@@ -30,7 +30,7 @@ async def coro_freeipapi_scan(uplink: 'Defender'):
 
         list_to_remove: list = []
         for user in uplink.Schemas.DB_FREEIPAPI_USERS:
-            uplink.mod_utils.action_scan_client_with_freeipapi(uplink, user)
+            await uplink.mod_utils.action_scan_client_with_freeipapi(uplink, user)
             list_to_remove.append(user)
             await asyncio.sleep(1)
 
@@ -44,11 +44,13 @@ async def coro_abuseipdb_scan(uplink: 'Defender'):
     while uplink.abuseipdb_isRunning:
 
         list_to_remove: list = []
+        print(uplink.Schemas.DB_ABUSEIPDB_USERS)
         for user in uplink.Schemas.DB_ABUSEIPDB_USERS:
-            uplink.mod_utils.action_scan_client_with_abuseipdb(uplink, user)
+            await uplink.mod_utils.action_scan_client_with_abuseipdb(uplink, user)
             list_to_remove.append(user)
             await asyncio.sleep(1)
 
+        print(list_to_remove)
         for user_model in list_to_remove:
             uplink.Schemas.DB_ABUSEIPDB_USERS.remove(user_model)
 
@@ -59,7 +61,7 @@ async def coro_local_scan(uplink: 'Defender'):
     while uplink.localscan_isRunning:
         list_to_remove:list = []
         for user in uplink.Schemas.DB_LOCALSCAN_USERS:
-            uplink.mod_utils.action_scan_client_with_local_socket(uplink, user)
+            await uplink.mod_utils.action_scan_client_with_local_socket(uplink, user)
             list_to_remove.append(user)
             await asyncio.sleep(1)
 
@@ -74,7 +76,7 @@ async def coro_psutil_scan(uplink: 'Defender'):
 
             list_to_remove:list = []
             for user in uplink.Schemas.DB_PSUTIL_USERS:
-                uplink.mod_utils.action_scan_client_with_psutil(uplink, user)
+                await uplink.mod_utils.action_scan_client_with_psutil(uplink, user)
                 list_to_remove.append(user)
                 await asyncio.sleep(1)
 
