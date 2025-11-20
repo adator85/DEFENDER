@@ -1,17 +1,27 @@
 from logging import Logger
-from core.classes.settings import global_settings
-from core.classes import translation, user, admin, client, channel, reputation, settings, sasl
+from core.classes.modules.settings import global_settings
+from core.classes.modules import translation, user, admin, client, channel, reputation, settings, sasl
 import core.logs as logs
 import core.definition as df
 import core.utils as utils
 import core.base as base_mod
 import core.module as module_mod
-import core.classes.commands as commands_mod
-import core.classes.config as conf_mod
+import core.classes.modules.commands as commands_mod
+import core.classes.modules.config as conf_mod
+import core.classes.modules.rpc.rpc as rpc_mod
 import core.irc as irc
 import core.classes.protocols.factory as factory
 
 class Loader:
+
+    _instance = None
+
+    def __new__(cls, *agrs):
+
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+        return cls._instance
 
     def __init__(self):
 
@@ -25,6 +35,8 @@ class Loader:
         self.CommandModule: commands_mod            = commands_mod
 
         self.LoggingModule: logs                    = logs
+
+        self.RpcServerModule: rpc_mod               = rpc_mod
 
         self.Utils: utils                           = utils
 
@@ -67,6 +79,11 @@ class Loader:
 
         self.Irc: irc.Irc                           = irc.Irc(self)
 
-        self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self.Irc)
+        self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self)
+
+        self.RpcServer: rpc_mod.JSonRpcServer       = rpc_mod.JSonRpcServer(self)
 
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))
+    
+    async def start(self):
+        await self.Base.init()

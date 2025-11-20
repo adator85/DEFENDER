@@ -1,18 +1,15 @@
-import importlib
+import asyncio
 import os
 import re
 import json
-import sys
 import time
 import socket
 import threading
 import ipaddress
 import ast
 import requests
-from pathlib import Path
-from types import ModuleType
 from dataclasses import fields
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Callable, Iterable, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
@@ -30,7 +27,8 @@ class Base:
         self.Utils = loader.Utils
         self.logs = loader.Logs
 
-        self.check_for_new_version(True)                        # Verifier si une nouvelle version est disponible
+        # Check if new Defender version is available
+        self.check_for_new_version(True)
 
         # Liste des timers en cours
         self.running_timers: list[threading.Timer] = self.Settings.RUNNING_TIMERS
@@ -38,18 +36,26 @@ class Base:
         # Liste des threads en cours
         self.running_threads: list[threading.Thread] = self.Settings.RUNNING_THREADS
 
+        # List of all async tasks
+        self.running_asynctasks: list[asyncio.Task] = self.Settings.RUNNING_ASYNCTASKS
+
         # Les sockets ouvert
         self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
 
         # Liste des fonctions en attentes
         self.periodic_func: dict[object] = self.Settings.PERIODIC_FUNC
 
-        # Création du lock
-        self.lock = self.Settings.LOCK
+        # Init install variable
+        self.install: bool = False
+        
+        # Init database connection
+        self.engine, self.cursor = self.db_init()
+        
+        # Create the database
+        # self.__create_db()
 
-        self.install: bool = False                              # Initialisation de la variable d'installation
-        self.engine, self.cursor = self.db_init()               # Initialisation de la connexion a la base de données
-        self.__create_db()                                      # Initialisation de la base de données
+    async def init(self) -> None:
+        await self.__create_db()
 
     def __set_current_defender_version(self) -> None:
         """This will put the current version of Defender
@@ -136,7 +142,7 @@ class Base:
         except Exception as err:
             self.logs.error(f'General Error: {err}')
 
-    def create_log(self, log_message: str) -> None:
+    async def create_log(self, log_message: str) -> None:
         """Enregiste les logs
 
         Args:
@@ -147,11 +153,11 @@ class Base:
         """
         sql_insert = f"INSERT INTO {self.Config.TABLE_LOG} (datetime, server_msg) VALUES (:datetime, :server_msg)"
         mes_donnees = {'datetime': str(self.Utils.get_sdatetime()),'server_msg': f'{log_message}'}
-        self.db_execute_query(sql_insert, mes_donnees)
+        await self.db_execute_query(sql_insert, mes_donnees)
 
         return None
 
-    def log_cmd(self, user_cmd: str, cmd: str) -> None:
+    async def log_cmd(self, user_cmd: str, cmd: str) -> None:
         """Enregistre les commandes envoyées par les utilisateurs
 
         Args:
@@ -167,11 +173,11 @@ class Base:
 
         insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
         mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'commande': cmd}
-        self.db_execute_query(insert_cmd_query, mes_donnees)
+        await self.db_execute_query(insert_cmd_query, mes_donnees)
 
         return None
 
-    def db_sync_core_config(self, module_name: str, dataclassObj: object) -> bool:
+    async def db_sync_core_config(self, module_name: str, dataclassObj: object) -> bool:
         """Sync module local parameters with the database
         if new module then local param will be stored in the database
         if old module then db param will be moved to the local dataclassObj
@@ -198,7 +204,7 @@ class Base:
                 param_to_search = {'module_name': module_name, 'param_key': param_key}
 
                 search_query = f'''SELECT id FROM {core_table} WHERE module_name = :module_name AND param_key = :param_key'''
-                excecute_search_query = self.db_execute_query(search_query, param_to_search)
+                excecute_search_query = await self.db_execute_query(search_query, param_to_search)
                 result_search_query = excecute_search_query.fetchone()
 
                 if result_search_query is None:
@@ -210,7 +216,7 @@ class Base:
                     insert_query = f'''INSERT INTO {core_table} (datetime, module_name, param_key, param_value) 
                                         VALUES (:datetime, :module_name, :param_key, :param_value)
                                         '''
-                    execution = self.db_execute_query(insert_query, param_to_insert)
+                    execution = await self.db_execute_query(insert_query, param_to_insert)
 
                     if execution.rowcount > 0:
                         self.logs.debug(f'New parameter added to the database: {param_key} --> {param_value}')
@@ -218,14 +224,14 @@ class Base:
             # Delete from DB unused parameter
             query_select = f"SELECT module_name, param_key, param_value FROM {core_table} WHERE module_name = :module_name"
             parameter = {'module_name': module_name}
-            execute_query_select = self.db_execute_query(query_select, parameter)
+            execute_query_select = await self.db_execute_query(query_select, parameter)
             result_query_select = execute_query_select.fetchall()
 
             for result in result_query_select:
                 db_mod_name, db_param_key, db_param_value = result
                 if not hasattr(dataclassObj, db_param_key):
                     mes_donnees = {'param_key': db_param_key, 'module_name': db_mod_name}
-                    execute_delete = self.db_execute_query(f'DELETE FROM {core_table} WHERE module_name = :module_name and param_key = :param_key', mes_donnees)
+                    execute_delete = await self.db_execute_query(f'DELETE FROM {core_table} WHERE module_name = :module_name and param_key = :param_key', mes_donnees)
                     row_affected = execute_delete.rowcount
                     if row_affected > 0:
                         self.logs.debug(f'A parameter has been deleted from the database: {db_param_key} --> {db_param_value} | Mod: {db_mod_name}')
@@ -233,7 +239,7 @@ class Base:
             # Sync local variable with Database
             query = f"SELECT param_key, param_value FROM {core_table} WHERE module_name = :module_name"
             parameter = {'module_name': module_name}
-            response = self.db_execute_query(query, parameter)
+            response = await self.db_execute_query(query, parameter)
             result = response.fetchall()
 
             for param, value in result:
@@ -250,43 +256,43 @@ class Base:
             self.logs.error(err)
             return False
 
-    def db_update_core_config(self, module_name:str, dataclassObj: object, param_key:str, param_value: str) -> bool:
+    async def db_update_core_config(self, module_name:str, dataclass_obj: object, param_key:str, param_value: str) -> bool:
 
         core_table = self.Config.TABLE_CONFIG
         # Check if the param exist
-        if not hasattr(dataclassObj, param_key):
+        if not hasattr(dataclass_obj, param_key):
             self.logs.error(f"Le parametre {param_key} n'existe pas dans la variable global")
             return False
 
         mes_donnees = {'module_name': module_name, 'param_key': param_key, 'param_value': param_value}
         search_param_query = f"SELECT id FROM {core_table} WHERE module_name = :module_name AND param_key = :param_key"
-        result = self.db_execute_query(search_param_query, mes_donnees)
-        isParamExist = result.fetchone()
+        result = await self.db_execute_query(search_param_query, mes_donnees)
+        is_param_exist = result.fetchone()
 
-        if not isParamExist is None:
+        if not is_param_exist is None:
             mes_donnees = {'datetime': self.Utils.get_sdatetime(),
                            'module_name': module_name,
                            'param_key': param_key,
                            'param_value': param_value
                            }
             query = f'''UPDATE {core_table} SET datetime = :datetime, param_value = :param_value WHERE module_name = :module_name AND param_key = :param_key'''
-            update = self.db_execute_query(query, mes_donnees)
+            update = await self.db_execute_query(query, mes_donnees)
             updated_rows = update.rowcount
             if updated_rows > 0:
-                setattr(dataclassObj, param_key, self.int_if_possible(param_value))
+                setattr(dataclass_obj, param_key, self.int_if_possible(param_value))
                 self.logs.debug(f'Parameter updated : {param_key} - {param_value} | Module: {module_name}')
             else:
                 self.logs.error(f'Parameter NOT updated : {param_key} - {param_value} | Module: {module_name}')
         else:
             self.logs.error(f'Parameter and Module do not exist: Param ({param_key}) - Value ({param_value}) | Module ({module_name})')
 
-        self.logs.debug(dataclassObj)
+        self.logs.debug(dataclass_obj)
 
         return True
 
-    def db_create_first_admin(self) -> None:
+    async def db_create_first_admin(self) -> None:
 
-        user = self.db_execute_query(f"SELECT id FROM {self.Config.TABLE_ADMIN}")
+        user = await self.db_execute_query(f"SELECT id FROM {self.Config.TABLE_ADMIN}")
         if not user.fetchall():
             admin = self.Config.OWNER
             password = self.Utils.hash_password(self.Config.PASSWORD)
@@ -299,7 +305,7 @@ class Base:
                            'language': 'EN',
                            'level': 5
                            }
-            self.db_execute_query(f"""
+            await self.db_execute_query(f"""
                                   INSERT INTO {self.Config.TABLE_ADMIN} 
                                   (createdOn, user, password, hostname, vhost, language, level) 
                                   VALUES 
@@ -325,7 +331,7 @@ class Base:
             self.logs.error(f'Assertion Error -> {ae}')
             return None
 
-    def create_thread(self, func:object, func_args: tuple = (), run_once:bool = False, daemon: bool = True) -> None:
+    def create_thread(self, func: object, func_args: tuple = (), run_once: bool = False, daemon: bool = True) -> None:
         """Create a new thread and store it into running_threads variable
 
         Args:
@@ -334,6 +340,9 @@ class Base:
             run_once (bool, optional): If you want to ensure that this method/function run once. Defaults to False.
         """
         try:
+            # Clean unused threads first
+            self.garbage_collector_thread()
+
             func_name = func.__name__
 
             if run_once:
@@ -347,8 +356,49 @@ class Base:
             self.running_threads.append(th)
             self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.name} | Running Threads : {len(threading.enumerate())}")
 
-        except AssertionError as ae:
-            self.logs.error(f'{ae}')
+        except Exception as err:
+            self.logs.error(err, exc_info=True)
+
+    def create_asynctask(self, func: Any, *, async_name: str = None, run_once: bool = False) -> asyncio.Task:
+        """Create a new asynchrone and store it into running_asynctasks variable
+
+        Args:
+            func (Callable): The function you want to call in asynchrone way
+            async_name (str, optional): The task name. Defaults to None.
+            run_once (bool, optional): If true the task will be run once. Defaults to False.
+
+        Returns:
+            asyncio.Task: The Task
+        """
+        name = func.__name__ if async_name is None else async_name
+
+        if run_once:
+            for task in asyncio.all_tasks():
+                if task.get_name().lower() == async_name.lower():
+                    return None
+
+        task = asyncio.create_task(func, name=name)
+        task.add_done_callback(self.asynctask_done)
+        self.running_asynctasks.append(task)
+
+        self.logs.debug(f"++ New asynchrone task created as: {task.get_name()}")
+        return task
+
+    def asynctask_done(self, task: asyncio.Task):
+        """Log task when done
+
+        Args:
+            task (asyncio.Task): The Asyncio Task callback
+        """
+        try:
+            if task.exception():
+                self.logs.error(f"[ASYNCIO] Task {task.get_name()} failed with exception: {task.exception()}")
+            else:
+                self.logs.debug(f"[ASYNCIO] Task {task.get_name()} completed successfully.")
+        except asyncio.CancelledError as ce:
+            self.logs.debug(f"[ASYNCIO] Task {task.get_name()} terminated with cancelled error.")
+        except asyncio.InvalidStateError as ie:
+            self.logs.debug(f"[ASYNCIO] Task {task.get_name()} terminated with invalid state error.")
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -393,7 +443,7 @@ class Base:
         Returns:
             int: Number of threads
         """
-        with self.lock:
+        with self.Settings.LOCK:
             count = 0
 
             for thr in self.running_threads:
@@ -425,11 +475,11 @@ class Base:
                 if thread.name != 'heartbeat':
                     if not thread.is_alive():
                         self.running_threads.remove(thread)
-                        self.logs.info(f"-- Thread {str(thread.name)} {str(thread.native_id)} removed")
+                        self.logs.debug(f"-- Thread {str(thread.name)} {str(thread.native_id)} has been removed!")
 
             # print(threading.enumerate())
-        except AssertionError as ae:
-            self.logs.error(f'Assertion Error -> {ae}')
+        except Exception as err:
+            self.logs.error(err, exc_info=True)
 
     def garbage_collector_sockets(self) -> None:
 
@@ -442,16 +492,35 @@ class Base:
             self.running_sockets.remove(soc)
             self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """Methode qui va préparer l'arrêt complêt du service
         """
+        # Stop RpcServer if running
+        await self.Loader.RpcServer.stop_server()
+
+        # unload modules.
+        self.logs.debug(f"=======> Unloading all modules!")
+        for module in self.Loader.ModuleUtils.model_get_loaded_modules().copy():
+            await self.Loader.ModuleUtils.unload_one_module(module.module_name)
+
+        self.logs.debug(f"=======> Closing all Coroutines!")
+        try:
+            await asyncio.wait_for(asyncio.gather(*self.running_asynctasks), timeout=5)
+        except asyncio.exceptions.TimeoutError as te:
+            self.logs.debug(f"Asyncio Timeout reached! {te}")
+            for task in self.running_asynctasks:
+                task.cancel()
+        except asyncio.exceptions.CancelledError as cerr:
+            self.logs.debug(f"Asyncio CancelledError reached! {cerr}")
+
+
         # Nettoyage des timers
         self.logs.debug(f"=======> Checking for Timers to stop")
         for timer in self.running_timers:
             while timer.is_alive():
                 self.logs.debug(f"> waiting for {timer.name} to close")
                 timer.cancel()
-                time.sleep(0.2)
+                await asyncio.sleep(0.2)
             self.running_timers.remove(timer)
             self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
 
@@ -472,6 +541,8 @@ class Base:
             self.running_sockets.remove(soc)
             self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
 
+        self.db_close()
+
         return None
 
     def db_init(self) -> tuple[Engine, Connection]:
@@ -485,10 +556,10 @@ class Base:
 
         engine = create_engine(f'sqlite:///{full_path_db}.db', echo=False)
         cursor = engine.connect()
-        self.logs.info("-- database connexion has been initiated")
+        self.logs.info("-- Database connexion has been initiated")
         return engine, cursor
 
-    def __create_db(self) -> None:
+    async def __create_db(self) -> None:
 
         table_core_log = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_LOG} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -539,6 +610,7 @@ class Base:
             vhost TEXT,
             password TEXT,
             fingerprint TEXT,
+            language TEXT,
             level INTEGER
             )
         '''
@@ -557,27 +629,27 @@ class Base:
             )
         '''
 
-        self.db_execute_query(table_core_log)
-        self.db_execute_query(table_core_log_command)
-        self.db_execute_query(table_core_module)
-        self.db_execute_query(table_core_admin)
-        self.db_execute_query(table_core_client)
-        self.db_execute_query(table_core_channel)
-        self.db_execute_query(table_core_config)
+        await self.db_execute_query(table_core_log)
+        await self.db_execute_query(table_core_log_command)
+        await self.db_execute_query(table_core_module)
+        await self.db_execute_query(table_core_admin)
+        await self.db_execute_query(table_core_client)
+        await self.db_execute_query(table_core_channel)
+        await self.db_execute_query(table_core_config)
 
         # Patch database
-        self.db_patch(self.Config.TABLE_ADMIN, "language", "TEXT")
+        await self.db_patch(self.Config.TABLE_ADMIN, "language", "TEXT")
 
         if self.install:
-            self.Loader.ModuleUtils.db_register_module('mod_command', 'sys', True)
-            self.Loader.ModuleUtils.db_register_module('mod_defender', 'sys', True)
+            await self.Loader.ModuleUtils.db_register_module('mod_command', 'sys', True)
+            await self.Loader.ModuleUtils.db_register_module('mod_defender', 'sys', True)
             self.install = False
 
         return None
 
-    def db_execute_query(self, query:str, params:dict = {}) -> CursorResult:
+    async def db_execute_query(self, query:str, params:dict = {}) -> CursorResult:
 
-        with self.lock:
+        async with self.Loader.Settings.AILOCK:
             insert_query = text(query)
             if not params:
                 response = self.cursor.execute(insert_query)
@@ -588,8 +660,8 @@ class Base:
 
             return response
 
-    def db_is_column_exist(self, table_name: str, column_name: str) -> bool:
-        q = self.db_execute_query(f"PRAGMA table_info({table_name})")
+    async def db_is_column_exist(self, table_name: str, column_name: str) -> bool:
+        q = await self.db_execute_query(f"PRAGMA table_info({table_name})")
         existing_columns = [col[1] for col in q.fetchall()]
 
         if column_name in existing_columns:
@@ -597,12 +669,12 @@ class Base:
         else:
             return False
 
-    def db_patch(self, table_name: str, column_name: str, column_type: str) -> bool:
-        if not self.db_is_column_exist(table_name, column_name):
-            patch = f"ALTER TABLE {self.Config.TABLE_ADMIN} ADD COLUMN {column_name} {column_type}"
-            update_row = f"UPDATE {self.Config.TABLE_ADMIN} SET language = 'EN' WHERE language is null"
-            self.db_execute_query(patch)
-            self.db_execute_query(update_row)
+    async def db_patch(self, table_name: str, column_name: str, column_type: str) -> bool:
+        if not await self.db_is_column_exist(table_name, column_name):
+            patch = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+            update_row = f"UPDATE {table_name} SET language = 'EN' WHERE language is null"
+            await self.db_execute_query(patch)
+            await self.db_execute_query(update_row)
             self.logs.debug(f"The patch has been applied")
             self.logs.debug(f"Table name: {table_name}, Column name: {column_name}, Column type: {column_type}")
             return True
@@ -610,9 +682,9 @@ class Base:
             return False
 
     def db_close(self) -> None:
-
         try:
             self.cursor.close()
+            self.logs.debug("Database engine closed!")
         except AttributeError as ae:
             self.logs.error(f"Attribute Error : {ae}")
 

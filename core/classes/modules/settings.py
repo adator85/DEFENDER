@@ -1,13 +1,15 @@
 """This class should never be reloaded.
 """
+import asyncio
 from logging import Logger
 from threading import Timer, Thread, RLock
+from asyncio.locks import Lock
 from socket import socket
 from typing import Any, Optional, TYPE_CHECKING
 from core.definition import MSModule, MAdmin
 
 if TYPE_CHECKING:
-    from core.classes.user import User
+    from core.classes.modules.user import User
 
 class Settings:
     """This Class will never be reloaded. 
@@ -17,9 +19,11 @@ class Settings:
 
     RUNNING_TIMERS: list[Timer]                 = []
     RUNNING_THREADS: list[Thread]               = []
+    RUNNING_ASYNCTASKS: list[asyncio.Task]      = []
     RUNNING_SOCKETS: list[socket]               = []
     PERIODIC_FUNC: dict[str, Any]               = {}
     LOCK: RLock                                 = RLock()
+    AILOCK: Lock                                = Lock()
 
     CONSOLE: bool                               = False
 

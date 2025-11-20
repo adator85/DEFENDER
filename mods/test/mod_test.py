@@ -1,79 +1,38 @@
-from typing import TYPE_CHECKING
-from dataclasses import dataclass, fields
+import asyncio
+from typing import Any, TYPE_CHECKING, Optional
+from core.classes.interfaces.imodule import IModule
+from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from core.irc import Irc
+    from core.loader import Loader
 
-class Test():
+class Test(IModule):
 
     @dataclass
     class ModConfModel:
-        """The Model containing the module parameters
+        """The Model containing the module parameters (Mandatory)
+        you can leave it without params.
+        just use pass | if you leave it empty, in the load() method just init empty object ==> self.ModConfig = ModConfModel()
         """
         param_exemple1: str
         param_exemple2: int
 
-    def __init__(self, ircInstance: 'Irc') -> None:
+    MOD_HEADER: dict[str, str] = {
+        'name':'Test',
+        'version':'1.0.0',
+        'description':'The test module',
+        'author':'Defender Team',
+        'core_version':'Defender-6'
+    }
+    """Module Header (Mandatory)"""
 
-        # Module name (Mandatory)
-        self.module_name = 'mod_' + str(self.__class__.__name__).lower()
+    def __init__(self, uplink: 'Loader'):
+        super().__init__(uplink)
+        self._mod_config: Optional[Test.ModConfModel] = None
 
-        # Add Irc Object to the module (Mandatory)
-        self.Irc = ircInstance
-
-        # Add Loader Object to the module (Mandatory)
-        self.Loader = ircInstance.Loader
-
-        # Add server protocol Object to the module (Mandatory)
-        self.Protocol = ircInstance.Protocol
-
-        # Add Global Configuration to the module (Mandatory)
-        self.Config = ircInstance.Config
-
-        # Add Base object to the module (Mandatory)
-        self.Base = ircInstance.Base
-
-        # Add logs object to the module (Mandatory)
-        self.Logs = ircInstance.Loader.Logs
-
-        # Add User object to the module (Mandatory)
-        self.User = ircInstance.User
-
-        # Add Channel object to the module (Mandatory)
-        self.Channel = ircInstance.Channel
-
-        # Add Reputation object to the module (Optional)
-        self.Reputation = ircInstance.Reputation
-
-        # Create module commands (Mandatory)
-        self.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
-        self.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
-        self.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
-        self.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
-
-
-        # Init the module
-        self.__init_module()
-
-        # Log the module
-        self.Logs.debug(f'Module {self.module_name} loaded ...')
-
-    def __init_module(self) -> None:
-
-        # Create you own tables (Mandatory)
-        self.__create_tables()
-
-        # Load module configuration and sync with core one (Mandatory)
-        self.__load_module_configuration()
-        # End of mandatory methods you can start your customization #
-
-        return None
-
-    def __create_tables(self) -> None:
+    def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -86,72 +45,97 @@ class Test():
             )
         '''
 
-        self.Base.db_execute_query(table_logs)
+        # self.ctx.Base.db_execute_query(table_logs)
         return None
 
-    def __load_module_configuration(self) -> None:
-        """### Load Module Configuration
+    async def load(self) -> None:
+        """### Load Module Configuration (Mandatory)
         """
-        try:
-            # Build the default configuration model (Mandatory)
-            self.ModConfig = self.ModConfModel(param_exemple1='param value 1', param_exemple2=1)
 
-            # Sync the configuration with core configuration (Mandatory)
-            self.Base.db_sync_core_config(self.module_name, self.ModConfig)
+        # Create module commands (Mandatory)
+        self.ctx.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.ctx.Irc.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
+        self.ctx.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.ctx.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.ctx.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
 
-            return None
+        # Build the default configuration model (Mandatory)
+        self._mod_config = self.ModConfModel(param_exemple1='str', param_exemple2=1)
 
-        except TypeError as te:
-            self.Logs.critical(te)
+        # sync the database with local variable (Mandatory)
+        await self.sync_db()
 
-    def __update_configuration(self, param_key: str, param_value: str):
-        """Update the local and core configuration
+        if self.mod_config.param_exemple2 == 1:
+            await self.ctx.Irc.Protocol.send_priv_msg(self.ctx.Config.SERVICE_NICKNAME, "Param activated", self.ctx.Config.SERVICE_CHANLOG)
 
-        Args:
-            param_key (str): The parameter key
-            param_value (str): The parameter value
-        """
-        self.Base.db_update_core_config(self.module_name, self.ModConfig, param_key, param_value)
+    @property
+    def mod_config(self) -> ModConfModel:
+        return self._mod_config
 
     def unload(self) -> None:
-        self.Irc.Commands.drop_command_by_module(self.module_name)
+        """### This method is called when you unload, or you reload the module (Mandatory)"""
+        self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
 
-    def cmd(self, data:list) -> None:
+    def cmd(self, data: list[str]) -> None:
+        """All messages coming from the IRCD server will be handled using this method (Mandatory)
+
+        Args:
+            data (list): Messages coming from the IRCD server.
+        """
+        cmd = list(data).copy()
         try:
-            cmd = list(data).copy()
-
             return None
-        except KeyError as ke:
-            self.Logs.error(f"Key Error: {ke}")
-        except IndexError as ie:
-            self.Logs.error(f"{ie} / {cmd} / length {str(len(cmd))}")
         except Exception as err:
-            self.Logs.error(f"General Error: {err}")
+            self.ctx.Logs.error(f"General Error: {err}")
 
-    def hcmds(self, user:str, channel: any, cmd: list, fullcmd: list = []) -> None:
+    async def asyncio_func(self) -> None:
+        self.ctx.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
+        await asyncio.sleep(2)
+        self.ctx.Logs.debug(f"End of the task: {self.__class__.__name__}")
+
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+        """All messages coming from the user commands (Mandatory)
+
+        Args:
+            user (str): The user who send the request.
+            channel (Any): The channel from where is coming the message (could be None).
+            cmd (list): The messages coming from the IRCD server.
+            fullcmd (list, optional): The full messages coming from the IRCD server. Defaults to [].
+        """
+        u = self.ctx.User.get_user(user)
+        c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
+        if u is None:
+            return None
 
         command = str(cmd[0]).lower()
-        dnickname = self.Config.SERVICE_NICKNAME
-        fromuser = user
-        fromchannel = str(channel) if not channel is None else None
+        dnickname = self.ctx.Config.SERVICE_NICKNAME
 
         match command:
+            
+            case 'asyncio':
+                self.ctx.Base.create_asynctask(self.asyncio_func())
+                return None
 
             case 'test-command':
                 try:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="This is a notice to the sender ...")
+                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=u.nickname)
 
-                    self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This is a notice to the sender ...")
-                    self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", nick_to=fromuser)
-
-                    if not fromchannel is None:
-                        self.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=fromchannel)
+                    if c is not None:
+                        await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
 
                     # How to update your module configuration
-                    self.__update_configuration('param_exemple2', 7)
+                    self.update_configuration('param_exemple2', 7)
+                    self.update_configuration('param_exemple1', 'my_value')
 
                     # Log if you want the result
-                    self.Logs.debug(f"Test logs ready")
+                    self.ctx.Logs.debug(f"Test logs ready")
+                    return None
 
                 except Exception as err:
-                    self.Logs.error(f"Unknown Error: {err}")
+                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    return None
+
+            case _:
+                return None

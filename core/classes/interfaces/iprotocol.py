@@ -3,12 +3,26 @@ from typing import Optional, TYPE_CHECKING
 from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
-    from core.definition import MClient, MSasl
-
+    from core.definition import MClient, MSasl, MUser, MChannel
+    from core.loader import Loader
 
 class IProtocol(ABC):
 
     Handler: Optional[CommandHandler] = None
+
+    def __init__(self, context: 'Loader'):
+        self.name: Optional[str] = None
+        self.protocol_version: int = -1
+        self.known_protocol: set[str] = set()
+        self._ctx = context
+        self.Handler = CommandHandler(context)
+        self.init_protocol()
+        self._ctx.Logs.info(f"[PROTOCOL] Protocol [{self.__class__.__name__}] loaded!")
+
+    @abstractmethod
+    def init_protocol(self):
+        """Init protocol
+        """
 
     @abstractmethod
     def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
@@ -28,7 +42,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send2socket(self, message: str, print_log: bool = True) -> None:
+    async def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
 
         Args:
@@ -37,7 +51,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    async def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -48,7 +62,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
+    async def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
 
         Args:
@@ -58,13 +72,13 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_link(self) -> None:
+    async def send_link(self) -> None:
         """Créer le link et envoyer les informations nécessaires pour la 
         connexion au serveur.
         """
 
     @abstractmethod
-    def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         """Send a gline command to the server
 
         Args:
@@ -77,7 +91,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_set_nick(self, newnickname: str) -> None:
+    async def send_set_nick(self, newnickname: str) -> None:
         """Change nickname of the server
         \n This method will also update the User object
         Args:
@@ -85,7 +99,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
         """Set a mode to channel or to a nickname or for a user in a channel
 
         Args:
@@ -96,7 +110,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
+    async def send_squit(self, server_id: str, server_link: str, reason: str) -> None:
         """_summary_
 
         Args:
@@ -106,7 +120,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_ungline(self, nickname:str, hostname: str) -> None:
+    async def send_ungline(self, nickname:str, hostname: str) -> None:
         """_summary_
 
         Args:
@@ -115,7 +129,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         """_summary_
 
         Args:
@@ -128,7 +142,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_unkline(self, nickname:str, hostname: str) -> None:
+    async def send_unkline(self, nickname:str, hostname: str) -> None:
         """_summary_
 
         Args:
@@ -137,7 +151,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_sjoin(self, channel: str) -> None:
+    async def send_sjoin(self, channel: str) -> None:
         """Server will join a channel with pre defined umodes
 
         Args:
@@ -145,7 +159,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_sapart(self, nick_to_sapart: str, channel_name: str) -> None:
+    async def send_sapart(self, nick_to_sapart: str, channel_name: str) -> None:
         """_summary_
 
         Args:
@@ -154,7 +168,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_sajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
+    async def send_sajoin(self, nick_to_sajoin: str, channel_name: str) -> None:
         """_summary_
 
         Args:
@@ -163,7 +177,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svspart(self, nick_to_part: str, channels: list[str], reason: str) -> None:
+    async def send_svspart(self, nick_to_part: str, channels: list[str], reason: str) -> None:
         """_summary_
 
         Args:
@@ -173,7 +187,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svsjoin(self, nick_to_part: str, channels: list[str], keys: list[str]) -> None:
+    async def send_svsjoin(self, nick_to_part: str, channels: list[str], keys: list[str]) -> None:
         """_summary_
 
         Args:
@@ -183,7 +197,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svsmode(self, nickname: str, user_mode: str) -> None:
+    async def send_svsmode(self, nickname: str, user_mode: str) -> None:
         """_summary_
 
         Args:
@@ -192,7 +206,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svs2mode(self, nickname: str, user_mode: str) -> None:
+    async def send_svs2mode(self, nickname: str, user_mode: str) -> None:
         """_summary_
 
         Args:
@@ -201,7 +215,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svslogin(self, client_uid: str, user_account: str) -> None:
+    async def send_svslogin(self, client_uid: str, user_account: str) -> None:
         """Log a client into his account.
 
         Args:
@@ -210,7 +224,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_svslogout(self, client_obj: 'MClient') -> None:
+    async def send_svslogout(self, client_obj: 'MClient') -> None:
         """Logout a client from his account
 
         Args:
@@ -218,7 +232,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
+    async def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
         """Send quit message
         - Delete uid from User object
         - Delete uid from Reputation object
@@ -230,7 +244,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    async def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -246,7 +260,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    async def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -257,7 +271,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
+    async def send_part_chan(self, uidornickname:str, channel: str, print_log: bool = True) -> None:
         """Part from a channel
 
         Args:
@@ -267,7 +281,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
+    async def send_mode_chan(self, channel_name: str, channel_mode: str) -> None:
         """_summary_
 
         Args:
@@ -276,7 +290,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def send_raw(self, raw_command: str) -> None:
+    async def send_raw(self, raw_command: str) -> None:
         """Send raw message to the server
 
         Args:
@@ -288,56 +302,51 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def parse_uid(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
 
         Args:
-            serverMsg (list[str]): The UID IRCD message
+            server_msg (list[str]): The UID IRCD message
         
         Returns:
-            dict[str, str]: The response as dictionary.
+            Optional[MUser]: The MUser object or None
         """
 
     @abstractmethod
-    def parse_quit(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
         >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
+            tuple[MUser, str]: The User Who Quit Object and the reason.
         """
 
     @abstractmethod
-    def parse_nick(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes and return dictionary.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
+            tuple(MUser, newnickname(str), timestamp(str)): Tuple of the response.
+
+            >>> MUser, newnickname, timestamp
         """
 
     @abstractmethod
-    def parse_privmsg(self, serverMsg: list[str]) -> dict[str, str]:
+    def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
 
         Args:
-            serverMsg (list[str]): The server message to parse
+            server_msg (list[str]): The server message to parse
 
         Returns:
-            dict[str, str]: The response as dictionary.
-            ```python 
-            response = {
-                "uid": '97KAAAAAE',
-                "channel": '#welcome',
-                "message": 'This is my public message'
-            }
-            ```
+            tuple[MUser(Sender), MUser(Reciever), MChannel, str]: Sender user model, reciever user model, Channel model, messgae.
         """
 
     # ------------------------------------------------------------------------
@@ -345,181 +354,181 @@ class IProtocol(ABC):
     # ------------------------------------------------------------------------
 
     @abstractmethod
-    def on_svs2mode(self, serverMsg: list[str]) -> None:
+    async def on_svs2mode(self, server_msg: list[str]) -> None:
         """Handle svs2mode coming from a server
         >>> [':00BAAAAAG', 'SVS2MODE', '001U01R03', '-r']
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_mode(self, serverMsg: list[str]) -> None:
+    async def on_mode(self, server_msg: list[str]) -> None:
         """Handle mode coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_umode2(self, serverMsg: list[str]) -> None:
+    async def on_umode2(self, server_msg: list[str]) -> None:
         """Handle umode2 coming from a server
         >>> [':adator_', 'UMODE2', '-i']
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_quit(self, serverMsg: list[str]) -> None:
+    async def on_quit(self, server_msg: list[str]) -> None:
         """Handle quit coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_squit(self, serverMsg: list[str]) -> None:
+    async def on_squit(self, server_msg: list[str]) -> None:
         """Handle squit coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_protoctl(self, serverMsg: list[str]) -> None:
+    async def on_protoctl(self, server_msg: list[str]) -> None:
         """Handle protoctl coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_nick(self, serverMsg: list[str]) -> None:
+    async def on_nick(self, server_msg: list[str]) -> None:
         """Handle nick coming from a server
         new nickname
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sjoin(self, serverMsg: list[str]) -> None:
+    async def on_sjoin(self, server_msg: list[str]) -> None:
         """Handle sjoin coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_part(self, serverMsg: list[str]) -> None:
+    async def on_part(self, server_msg: list[str]) -> None:
         """Handle part coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_eos(self, serverMsg: list[str]) -> None:
+    async def on_eos(self, server_msg: list[str]) -> None:
         """Handle EOS coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_reputation(self, serverMsg: list[str]) -> None:
+    async def on_reputation(self, server_msg: list[str]) -> None:
         """Handle REPUTATION coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_uid(self, serverMsg: list[str]) -> None:
+    async def on_uid(self, server_msg: list[str]) -> None:
         """Handle uid message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_privmsg(self, serverMsg: list[str]) -> None:
+    async def on_privmsg(self, server_msg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_server_ping(self, serverMsg: list[str]) -> None:
+    async def on_server_ping(self, server_msg: list[str]) -> None:
         """Send a PONG message to the server
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_server(self, serverMsg: list[str]) -> None:
+    async def on_server(self, server_msg: list[str]) -> None:
         """_summary_
 
         Args:
-            serverMsg (list[str]): _description_
+            server_msg (list[str]): _description_
         """
 
     @abstractmethod
-    def on_version(self, serverMsg: list[str]) -> None:
+    async def on_version(self, server_msg: list[str]) -> None:
         """Sending Server Version to the server
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_time(self, serverMsg: list[str]) -> None:
+    async def on_time(self, server_msg: list[str]) -> None:
         """Sending TIME answer to a requestor
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_ping(self, serverMsg: list[str]) -> None:
+    async def on_ping(self, server_msg: list[str]) -> None:
         """Sending a PING answer to requestor
 
         Args:
-            serverMsg (list[str]): List of str coming from the server
+            server_msg (list[str]): List of str coming from the server
         """
 
     @abstractmethod
-    def on_version_msg(self, serverMsg: list[str]) -> None:
+    async def on_version_msg(self, server_msg: list[str]) -> None:
         """Handle version coming from the server
         \n ex. /version Defender
         Args:
-            serverMsg (list[str]): Original message from the server
+            server_msg (list[str]): Original message from the server
         """
 
     @abstractmethod
-    def on_smod(self, serverMsg: list[str]) -> None:
+    async def on_smod(self, server_msg: list[str]) -> None:
         """Handle SMOD message coming from the server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
         """
 
     @abstractmethod
-    def on_sasl(self, serverMsg: list[str]) -> Optional['MSasl']:
+    async def on_sasl(self, server_msg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
 
         Args:
-            serverMsg (list[str]): Original server message
+            server_msg (list[str]): Original server message
 
         Returns:
 
         """
 
     @abstractmethod
-    def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
+    async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
         """Finalize sasl authentication
 
         Args:
@@ -530,18 +539,27 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def on_md(self, serverMsg: list[str]) -> None:
+    async def on_md(self, server_msg: list[str]) -> None:
         """Handle MD responses
         [':001', 'MD', 'client', '001MYIZ03', 'certfp', ':d1235648...']
         Args:
-            serverMsg (list[str]): The server reply
+            server_msg (list[str]): The server reply
         """
 
     @abstractmethod
-    def on_kick(self, serverMsg: list[str]) -> None:
+    async def on_kick(self, server_msg: list[str]) -> None:
         """When a user is kicked out from a channel
 
         Eg. ['@unrealircd.org...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
         Args:
-            serverMsg (list[str]): The server message
+            server_msg (list[str]): The server message
+        """
+
+    @abstractmethod
+    async def on_sethost(self, server_msg: list[str]) -> None:
+        """On SETHOST command
+        >>> [':001DN7305', 'SETHOST', ':netadmin.example.org']
+
+        Args:
+            server_msg (list[str]): _description_
         """

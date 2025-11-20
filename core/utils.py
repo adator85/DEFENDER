@@ -1,19 +1,19 @@
-'''
+"""
 Main utils library.
-'''
+"""
 import gc
 import ssl
 import socket
 import sys
 from pathlib import Path
 from re import match, sub
-from base64 import b64decode
 from typing import Literal, Optional, Any, TYPE_CHECKING
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from time import time
 from random import choice
 from hashlib import md5, sha3_512
-from core.classes.settings import global_settings
+from core.classes.modules.settings import global_settings
+from asyncio import iscoroutinefunction
 
 if TYPE_CHECKING:
     from core.irc import Irc
@@ -84,9 +84,9 @@ def get_unixtime() -> int:
     Returns:
         int: Current time in seconds since the Epoch (int)
     """
-    cet_offset = timezone(timedelta(hours=2))
-    now_cet = datetime.now(cet_offset)
-    unixtime_cet = int(now_cet.timestamp())
+    # cet_offset = timezone(timedelta(hours=2))
+    # now_cet = datetime.now(cet_offset)
+    # unixtime_cet = int(now_cet.timestamp())
     return int(time())
 
 def get_sdatetime() -> str:
@@ -142,9 +142,9 @@ def create_socket(uplink: 'Irc') -> None:
     except OSError as oe:
         uplink.Logs.critical(f"[OS Error]: {oe}")
         if 'connection refused' in str(oe).lower():
-            sys.exit(oe)
+            sys.exit(oe.__str__())
         if oe.errno == 10053:
-            sys.exit(oe)
+            sys.exit(oe.__str__())
     except AttributeError as ae:
         uplink.Logs.critical(f"AttributeError: {ae}")
 
@@ -178,7 +178,7 @@ def generate_random_string(lenght: int) -> str:
 
     return randomize
 
-def hash_password(password: str, algorithm: Literal["md5, sha3_512"] = 'md5') -> str:
+def hash_password(password: str, algorithm: Literal["md5", "sha3_512"] = 'md5') -> str:
     """Return the crypted password following the selected algorithm
 
     Args:
@@ -191,16 +191,16 @@ def hash_password(password: str, algorithm: Literal["md5, sha3_512"] = 'md5') ->
 
     match algorithm:
         case 'md5':
-            password = md5(password.encode()).hexdigest()
-            return password
+            hashed_password = md5(password.encode()).hexdigest()
+            return hashed_password
 
         case 'sha3_512':
-            password = sha3_512(password.encode()).hexdigest()
-            return password
+            hashed_password = sha3_512(password.encode()).hexdigest()
+            return hashed_password
 
         case _:
-            password = md5(password.encode()).hexdigest()
-            return password
+            hashed_password = md5(password.encode()).hexdigest()
+            return hashed_password
 
 def get_all_modules() -> list[str]:
     """Get list of all main modules
@@ -225,9 +225,9 @@ def clean_uid(uid: str) -> Optional[str]:
         return None
 
     pattern = fr'[:|@|%|\+|~|\*]*'
-    parsed_UID = sub(pattern, '', uid)
+    parsed_uid = sub(pattern, '', uid)
 
-    return parsed_UID
+    return parsed_uid
 
 def hide_sensitive_data(srvmsg: list[str]) -> list[str]:
     try:
@@ -244,3 +244,14 @@ def hide_sensitive_data(srvmsg: list[str]) -> list[str]:
 
     except ValueError:
         return srvmsg
+
+def is_coroutinefunction(func: Any) -> bool:
+    """Check if the function is a coroutine or not
+
+    Args:
+        func (Any): an callable object
+
+    Returns:
+        bool: True if the function is a coroutine
+    """
+    return iscoroutinefunction(func)

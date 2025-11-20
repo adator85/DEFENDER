@@ -1,8 +1,9 @@
 from datetime import datetime
 from json import dumps
-from dataclasses import dataclass, field, asdict, fields
+from dataclasses import dataclass, field, asdict, fields, replace
 from typing import Literal, Any, Optional
 from os import sep
+from core.classes.interfaces.imodule import IModule
 
 @dataclass
 class MainModel:
@@ -14,6 +15,10 @@ class MainModel:
     def to_json(self) -> str:
         """Return the object of a dataclass a json str."""
         return dumps(self.to_dict())
+    
+    def copy(self):
+        """Return the object of a dataclass a json str."""
+        return replace(self)
 
     def get_attributes(self) -> list[str]:
         """Return a list of attributes name"""
@@ -205,6 +210,9 @@ class MConfig(MainModel):
     PASSWORD: str = "password"
     """The password of the admin of the service"""
 
+    RPC_USERS: list[dict] = field(default_factory=list)
+    """The Defender rpc users"""
+
     JSONRPC_URL: str = None
     """The RPC url, if local https://127.0.0.1:PORT/api should be fine"""
 
@@ -347,7 +355,15 @@ class MCommand(MainModel):
 class MModule(MainModel):
     module_name: str = None
     class_name: str = None
-    class_instance: Optional[Any] = None
+    class_instance: Optional[IModule] = None
+
+@dataclass
+class DefenderModuleHeader(MainModel):
+    name: str = ''
+    version: str = ''
+    description: str = ''
+    author: str = ''
+    core_version: str = ''
 
 @dataclass
 class MSModule:

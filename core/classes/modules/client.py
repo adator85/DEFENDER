@@ -201,7 +201,7 @@ class Client:
 
         return True
 
-    def db_is_account_exist(self, account: str) -> bool:
+    async def db_is_account_exist(self, account: str) -> bool:
         """Check if the account exist in the database
 
         Args:
@@ -213,7 +213,7 @@ class Client:
 
         table_client = self.Base.Config.TABLE_CLIENT
         account_to_check = {'account': account.lower()}
-        account_to_check_query = self.Base.db_execute_query(f"""
+        account_to_check_query = await self.Base.db_execute_query(f"""
                     SELECT id FROM {table_client} WHERE LOWER(account) = :account
                     """, account_to_check)
 

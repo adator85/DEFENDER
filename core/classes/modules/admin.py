@@ -93,18 +93,11 @@ class Admin:
         Returns:
             bool: True if the admin has been deleted
         """
-
-        for record in self.UID_ADMIN_DB:
-            if record.uid == uidornickname:
-                # If the admin exist, delete and do not go further
-                self.UID_ADMIN_DB.remove(record)
-                self.Logs.debug(f'UID ({record.uid}) has been deleted')
-                return True
-            if record.nickname.lower() == uidornickname.lower():
-                # If the admin exist, delete and do not go further
-                self.UID_ADMIN_DB.remove(record)
-                self.Logs.debug(f'nickname ({record.nickname}) has been deleted')
-                return True
+        admin_obj = self.get_admin(uidornickname)
+        if admin_obj:
+            self.UID_ADMIN_DB.remove(admin_obj)
+            self.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
+            return True
 
         self.Logs.debug(f'The UID {uidornickname} was not deleted')
 
@@ -180,7 +173,7 @@ class Admin:
 
         return admin.language
 
-    def db_auth_admin_via_fingerprint(self, fp: str, uidornickname: str) -> bool:
+    async def db_auth_admin_via_fingerprint(self, fp: str, uidornickname: str) -> bool:
         """Check the fingerprint
 
         Args:
@@ -190,9 +183,12 @@ class Admin:
         Returns:
             bool: True if found
         """
+        if fp is None:
+            return False
+
         query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
         data = {'fp': fp}
-        exe = self.Base.db_execute_query(query, data)
+        exe = await self.Base.db_execute_query(query, data)
         result = exe.fetchone()
         if result:
             account = result[0]
@@ -200,14 +196,15 @@ class Admin:
             language = result[2]
             user_obj = self.User.get_user(uidornickname)
             if user_obj:
-                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(),account=account, level=level, language=language)
+                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(), account=account, level=level, language=language)
                 if self.insert(admin_obj):
                     self.Setting.current_admin = admin_obj
+                    self.Logs.debug(f"[Fingerprint login] {user_obj.nickname} ({admin_obj.account}) has been logged in successfully!")
                     return True
         
-        return False            
+        return False
 
-    def db_is_admin_exist(self, admin_nickname: str) -> bool:
+    async def db_is_admin_exist(self, admin_nickname: str) -> bool:
         """Verify if the admin exist in the database!
 
         Args:
@@ -219,7 +216,7 @@ class Admin:
 
         mes_donnees = {'admin': admin_nickname}
         query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user = :admin"
-        r = self.Base.db_execute_query(query_search_user, mes_donnees)
+        r = await self.Base.db_execute_query(query_search_user, mes_donnees)
         exist_user = r.fetchone()
         if exist_user:
             return True

@@ -10,7 +10,7 @@ class CloneManager:
 
     def __init__(self, uplink: 'Clone'):
 
-        self.Logs = uplink.Logs
+        self.Logs = uplink.ctx.Logs
 
     def insert(self, new_clone_object: MClone) -> bool:
         """Create new Clone object

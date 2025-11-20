@@ -1,0 +1,8 @@
+Faker==37.12.0
+psutil==7.1.2
+PyYAML==6.0.3
+requests==2.32.5
+SQLAlchemy==2.0.44
+unrealircd_rpc_py==3.0.2
+starlette==0.50.0
+uvicorn==0.38.0
