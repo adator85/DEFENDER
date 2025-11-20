@@ -3,7 +3,7 @@
 
     "requests": "2.32.5",
     "psutil": "7.1.2",
-    "unrealircd_rpc_py": "3.0.1",
+    "unrealircd_rpc_py": "3.0.3",
     "sqlalchemy": "2.0.44",
     "faker": "37.12.0",
     "pyyaml": "6.0.3",
