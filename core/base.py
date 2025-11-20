@@ -495,6 +495,11 @@ class Base:
     async def shutdown(self) -> None:
         """Methode qui va préparer l'arrêt complêt du service
         """
+        # unload modules.
+        self.logs.debug(f"=======> Unloading all modules!")
+        for module in self.Loader.ModuleUtils.model_get_loaded_modules().copy():
+            await self.Loader.ModuleUtils.unload_one_module(module.module_name)
+
         # Nettoyage des timers
         self.logs.debug(f"=======> Checking for Timers to stop")
         for timer in self.running_timers:
@@ -521,8 +526,9 @@ class Base:
 
             self.running_sockets.remove(soc)
             self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
-        
+
         await self.Loader.RpcServer.stop_server()
+
         self.db_close()
 
         return None
