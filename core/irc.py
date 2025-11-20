@@ -121,8 +121,13 @@ class Irc:
             await self.send_response(data.splitlines())
 
     async def run(self):
-        await self.connect()
-        await self.listen()
+        try:
+            await self.connect()
+            await self.listen()
+        except asyncio.exceptions.IncompleteReadError as ie:
+            # When IRCd server is down
+            # asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of undefined expected bytes
+            self.ctx.Logs.critical(f"The IRCd server is no more connected! {ie}")
 
     ##############################################
     #               CONNEXION IRC                #
