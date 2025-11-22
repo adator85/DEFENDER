@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 class JSonRpcServer:
 
-    def __init__(self, context: 'Loader', *, hostname: str = 'localhost', port: int = 5000):
+    def __init__(self, context: 'Loader', *, hostname: str = '0.0.0.0', port: int = 5000):
         self._ctx = context
         self.live: bool = False
         self.host = hostname
@@ -77,10 +77,10 @@ class JSonRpcServer:
 
         response_data = {
             "jsonrpc": "2.0",
+            "method": method,
             "id": request_data.get('id', 123)
         }
 
-        response_data['method'] = method
         rip = request.client.host
         rport = request.client.port
         http_code = http_status_code.HTTP_200_OK
@@ -89,6 +89,7 @@ class JSonRpcServer:
             r: JSONResponse = self.methods[method](**params)
             resp = json.loads(r.body)
             resp['id'] = request_data.get('id', 123)
+            resp['method'] = method
             return JSONResponse(resp, r.status_code)
 
         response_data['error'] = rpcerr.create_error_response(rpcerr.JSONRPCErrorCode.METHOD_NOT_FOUND)

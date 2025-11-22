@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING
-
 from starlette.responses import JSONResponse
 from core.classes.interfaces.irpc_endpoint import IRPC
 from core.classes.modules.rpc.rpc_errors import JSONRPCErrorCode

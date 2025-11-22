@@ -12,12 +12,14 @@ class IRPC:
         self.http_status_code = http_status_code
         self.response_model = {
             "jsonrpc": "2.0",
+            "method": 'unknown',
             "id": 123
         }
     
     def reset(self):
         self.response_model = {
             "jsonrpc": "2.0",
+            "method": 'unknown',
             "id": 123
         }
 
