@@ -88,7 +88,7 @@ class Votekick(IModule):
             self.VoteKickManager.VOTE_CHANNEL_DB = metadata
 
         # Créer les nouvelles commandes du module
-        self.ctx.Irc.build_command(1, self.module_name, 'vote', 'The kick vote module')
+        self.ctx.Commands.build_command(1, self.module_name, 'vote', 'The kick vote module')
 
     async def unload(self) -> None:
         try:
