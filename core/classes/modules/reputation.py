@@ -14,9 +14,7 @@ class Reputation:
         Args:
             loader (Loader): The Loader instance.
         """
-
-        self.Logs = loader.Logs
-        self.MReputation: Optional[MReputation] = None
+        self._ctx = loader
 
     def insert(self, new_reputation_user: MReputation) -> bool:
         """Insert a new Reputation User object
@@ -34,16 +32,16 @@ class Reputation:
             if record.uid == new_reputation_user.uid:
                 # If the user exist then return False and do not go further
                 exist = True
-                self.Logs.debug(f'{record.uid} already exist')
+                self._ctx.Logs.debug(f'{record.uid} already exist')
                 return result
 
         if not exist:
             self.UID_REPUTATION_DB.append(new_reputation_user)
             result = True
-            self.Logs.debug(f'New Reputation User Captured: ({new_reputation_user})')
+            self._ctx.Logs.debug(f'New Reputation User Captured: ({new_reputation_user})')
 
         if not result:
-            self.Logs.critical(f'The Reputation User Object was not inserted {new_reputation_user}')
+            self._ctx.Logs.critical(f'The Reputation User Object was not inserted {new_reputation_user}')
 
         return result
 
@@ -86,11 +84,11 @@ class Reputation:
                 # If the user exist then remove and return True and do not go further
                 self.UID_REPUTATION_DB.remove(record)
                 result = True
-                self.Logs.debug(f'UID ({record.uid}) has been deleted')
+                self._ctx.Logs.debug(f'UID ({record.uid}) has been deleted')
                 return result
 
         if not result:
-            self.Logs.critical(f'The UID {uid} was not deleted')
+            self._ctx.Logs.critical(f'The UID {uid} was not deleted')
 
         return result
 

@@ -1,3 +1,7 @@
+import asyncio
+import concurrent
+import concurrent.futures
+import threading
 from datetime import datetime
 from json import dumps
 from dataclasses import dataclass, field, asdict, fields, replace
@@ -210,6 +214,12 @@ class MConfig(MainModel):
     PASSWORD: str = "password"
     """The password of the admin of the service"""
 
+    RPC_HOST: str = "127.0.0.1"
+    """The host to bind. Default: 127.0.0.1"""
+
+    RPC_PORT: int = 5000
+    """The port of the defender json rpc. Default: 5000"""
+
     RPC_USERS: list[dict] = field(default_factory=list)
     """The Defender rpc users"""
 
@@ -343,6 +353,15 @@ class MConfig(MainModel):
 
         self.SERVEUR_CHARSET: list = ["utf-8", "iso-8859-1"]
         """0: utf-8 | 1: iso-8859-1"""
+
+@dataclass
+class MThread(MainModel):
+    name: str
+    thread_id: Optional[int]
+    thread_event: Optional[threading.Event]
+    thread_obj: threading.Thread
+    executor: concurrent.futures.ThreadPoolExecutor
+    future: asyncio.Future
 
 @dataclass
 class MCommand(MainModel):
