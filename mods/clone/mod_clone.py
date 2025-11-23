@@ -73,7 +73,7 @@ class Clone(IModule):
             self.ctx.Logs.debug(f"Cache Size = {self.ctx.Settings.get_cache_size()}")
 
         # Créer les nouvelles commandes du module
-        self.ctx.Irc.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
+        self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
 
         await self.ctx.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_sjoin(self.ctx.Config.CLONE_CHANNEL)

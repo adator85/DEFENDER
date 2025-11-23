@@ -91,9 +91,9 @@ class Jsonrpc(IModule):
         self.is_streaming = False
 
         # Create module commands (Mandatory)
-        self.ctx.Irc.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
-        self.ctx.Irc.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
-        self.ctx.Irc.build_command(1, self.module_name, 'jrinstances', 'Get number of instances')
+        self.ctx.Commands.build_command(1, self.module_name, 'jsonrpc', 'Activate the JSON RPC Live connection [ON|OFF]')
+        self.ctx.Commands.build_command(1, self.module_name, 'jruser', 'Get Information about a user using JSON RPC')
+        self.ctx.Commands.build_command(1, self.module_name, 'jrinstances', 'Get number of instances')
 
         try:
             self.Rpc = ConnectionFactory(self.ctx.Config.DEBUG_LEVEL).get(self.ctx.Config.JSONRPC_METHOD)
@@ -138,7 +138,6 @@ class Jsonrpc(IModule):
                         channel=self.ctx.Config.SERVICE_CHANLOG
                     )
         self.ctx.Base.create_asynctask(thds.thread_unsubscribe(self))
-        # await self.update_configuration('jsonrpc', 0)
         self.ctx.Commands.drop_command_by_module(self.module_name)
         self.ctx.Logs.debug(f"Unloading {self.module_name}")
         return None
