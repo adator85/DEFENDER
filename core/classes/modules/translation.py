@@ -93,4 +93,4 @@ class Translation:
 
         except Exception as err:
             self.Logs.error(f'General Error: {err}')
-            return {}
+            return dict()
