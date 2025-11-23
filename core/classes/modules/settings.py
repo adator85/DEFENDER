@@ -6,7 +6,7 @@ from threading import Timer, Thread, RLock
 from asyncio.locks import Lock
 from socket import socket
 from typing import Any, Optional, TYPE_CHECKING
-from core.definition import MSModule, MAdmin
+from core.definition import MSModule, MAdmin, MThread
 
 if TYPE_CHECKING:
     from core.classes.modules.user import User
@@ -19,10 +19,12 @@ class Settings:
 
     RUNNING_TIMERS: list[Timer]                 = []
     RUNNING_THREADS: list[Thread]               = []
-    RUNNING_ASYNCTASKS: list[asyncio.Task]      = []
     RUNNING_SOCKETS: list[socket]               = []
+    RUNNING_ASYNC_TASKS: list[asyncio.Task]     = []
+    RUNNING_ASYNC_THREADS: list[MThread]        = []
     PERIODIC_FUNC: dict[str, Any]               = {}
-    LOCK: RLock                                 = RLock()
+
+    THLOCK: RLock                               = RLock()
     AILOCK: Lock                                = Lock()
 
     CONSOLE: bool                               = False

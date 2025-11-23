@@ -14,12 +14,7 @@ class Admin:
         Args:
             loader (Loader): The Loader Instance.
         """
-        self.Logs = loader.Logs
-        self.Base = loader.Base
-        self.Setting = loader.Settings
-        self.Config = loader.Config
-        self.User = loader.User
-        self.Definition = loader.Definition
+        self._ctx = loader
 
     def insert(self, new_admin: MAdmin) -> bool:
         """Insert a new admin object model
@@ -33,11 +28,11 @@ class Admin:
 
         for record in self.UID_ADMIN_DB:
             if record.uid == new_admin.uid:
-                self.Logs.debug(f'{record.uid} already exist')
+                self._ctx.Logs.debug(f'{record.uid} already exist')
                 return False
 
         self.UID_ADMIN_DB.append(new_admin)
-        self.Logs.debug(f'A new admin ({new_admin.nickname}) has been created')
+        self._ctx.Logs.debug(f'A new admin ({new_admin.nickname}) has been created')
         return True
 
     def update_nickname(self, uid: str, new_admin_nickname: str) -> bool:
@@ -55,11 +50,11 @@ class Admin:
             if record.uid == uid:
                 # If the admin exist, update and do not go further
                 record.nickname = new_admin_nickname
-                self.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {new_admin_nickname}')
+                self._ctx.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {new_admin_nickname}')
                 return True
 
 
-        self.Logs.debug(f'The new nickname {new_admin_nickname} was not updated, uid = {uid} - The Client is not an admin')
+        self._ctx.Logs.debug(f'The new nickname {new_admin_nickname} was not updated, uid = {uid} - The Client is not an admin')
         return False
 
     def update_level(self, nickname: str, new_admin_level: int) -> bool:
@@ -77,10 +72,10 @@ class Admin:
             if record.nickname == nickname:
                 # If the admin exist, update and do not go further
                 record.level = new_admin_level
-                self.Logs.debug(f'Admin ({record.nickname}) has been updated with new level {new_admin_level}')
+                self._ctx.Logs.debug(f'Admin ({record.nickname}) has been updated with new level {new_admin_level}')
                 return True
 
-        self.Logs.debug(f'The new level {new_admin_level} was not updated, nickname = {nickname} - The Client is not an admin')
+        self._ctx.Logs.debug(f'The new level {new_admin_level} was not updated, nickname = {nickname} - The Client is not an admin')
 
         return False
 
@@ -96,10 +91,10 @@ class Admin:
         admin_obj = self.get_admin(uidornickname)
         if admin_obj:
             self.UID_ADMIN_DB.remove(admin_obj)
-            self.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
+            self._ctx.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
             return True
 
-        self.Logs.debug(f'The UID {uidornickname} was not deleted')
+        self._ctx.Logs.debug(f'The UID {uidornickname} was not deleted')
 
         return False
 
@@ -186,20 +181,20 @@ class Admin:
         if fp is None:
             return False
 
-        query = f"SELECT user, level, language FROM {self.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
+        query = f"SELECT user, level, language FROM {self._ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
         data = {'fp': fp}
-        exe = await self.Base.db_execute_query(query, data)
+        exe = await self._ctx.Base.db_execute_query(query, data)
         result = exe.fetchone()
         if result:
             account = result[0]
             level = result[1]
             language = result[2]
-            user_obj = self.User.get_user(uidornickname)
+            user_obj = self._ctx.User.get_user(uidornickname)
             if user_obj:
-                admin_obj = self.Definition.MAdmin(**user_obj.to_dict(), account=account, level=level, language=language)
+                admin_obj = self._ctx.Definition.MAdmin(**user_obj.to_dict(), account=account, level=level, language=language)
                 if self.insert(admin_obj):
-                    self.Setting.current_admin = admin_obj
-                    self.Logs.debug(f"[Fingerprint login] {user_obj.nickname} ({admin_obj.account}) has been logged in successfully!")
+                    self._ctx.Settings.current_admin = admin_obj
+                    self._ctx.Logs.debug(f"[Fingerprint login] {user_obj.nickname} ({admin_obj.account}) has been logged in successfully!")
                     return True
         
         return False
@@ -215,8 +210,8 @@ class Admin:
         """
 
         mes_donnees = {'admin': admin_nickname}
-        query_search_user = f"SELECT id FROM {self.Config.TABLE_ADMIN} WHERE user = :admin"
-        r = await self.Base.db_execute_query(query_search_user, mes_donnees)
+        query_search_user = f"SELECT id FROM {self._ctx.Config.TABLE_ADMIN} WHERE user = :admin"
+        r = await self._ctx.Base.db_execute_query(query_search_user, mes_donnees)
         exist_user = r.fetchone()
         if exist_user:
             return True

@@ -2,17 +2,18 @@ import asyncio
 import os
 import re
 import json
-import time
 import socket
 import threading
 import ipaddress
 import ast
 import requests
+import concurrent.futures
 from dataclasses import fields
-from typing import Any, Callable, Iterable, Optional, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING, Union
 from base64 import b64decode, b64encode
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
+import core.definition as dfn
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -36,11 +37,14 @@ class Base:
         # Liste des threads en cours
         self.running_threads: list[threading.Thread] = self.Settings.RUNNING_THREADS
 
-        # List of all async tasks
-        self.running_asynctasks: list[asyncio.Task] = self.Settings.RUNNING_ASYNCTASKS
-
         # Les sockets ouvert
         self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
+
+        # List of all asyncio tasks
+        self.running_iotasks: list[asyncio.Task] = self.Settings.RUNNING_ASYNC_TASKS
+
+        # List of all asyncio threads pool executors
+        self.running_iothreads: list[dfn.MThread] = self.Settings.RUNNING_ASYNC_THREADS
 
         # Liste des fonctions en attentes
         self.periodic_func: dict[object] = self.Settings.PERIODIC_FUNC
@@ -71,32 +75,32 @@ class Base:
         return None
 
     def __get_latest_defender_version(self) -> None:
-        try:
-            self.logs.debug(f'-- Looking for a new version available on Github')
-            token = ''
-            json_url = f'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3.raw'  # Indique à GitHub que nous voulons le contenu brut du fichier
-            }
+        self.logs.debug(f'-- Looking for a new version available on Github')
+        token = ''
+        json_url = f'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
+        headers = {
+            'Authorization': f'token {token}',
+            'Accept': 'application/vnd.github.v3.raw'  # Indique à GitHub que nous voulons le contenu brut du fichier
+        }
 
-            if token == '':
-                response = requests.get(json_url, timeout=self.Config.API_TIMEOUT)
-            else:
-                response = requests.get(json_url, headers=headers, timeout=self.Config.API_TIMEOUT)
+        with requests.Session() as sess:
+            try:
+                if token == '':
+                    response = sess.get(json_url, timeout=self.Config.API_TIMEOUT)
+                else:
+                    response = sess.get(json_url, headers=headers, timeout=self.Config.API_TIMEOUT)
 
-            response.raise_for_status()  # Vérifie si la requête a réussi
-            json_response:dict = response.json()
-            # self.LATEST_DEFENDER_VERSION = json_response["version"]
-            self.Config.LATEST_VERSION = json_response['version']
+                response.raise_for_status()  # Vérifie si la requête a réussi
+                json_response:dict = response.json()
+                self.Config.LATEST_VERSION = json_response.get('version', '')
+                return None
 
-            return None
-        except requests.HTTPError as err:
-            self.logs.error(f'Github not available to fetch latest version: {err}')
-        except:
-            self.logs.warning(f'Github not available to fetch latest version')
+            except requests.HTTPError as err:
+                self.logs.error(f'Github not available to fetch latest version: {err}')
+            except:
+                self.logs.warning(f'Github not available to fetch latest version')
 
-    def check_for_new_version(self, online:bool) -> bool:
+    def check_for_new_version(self, online: bool) -> bool:
         """Check if there is a new version available
 
         Args:
@@ -359,8 +363,8 @@ class Base:
         except Exception as err:
             self.logs.error(err, exc_info=True)
 
-    def create_asynctask(self, func: Any, *, async_name: str = None, run_once: bool = False) -> asyncio.Task:
-        """Create a new asynchrone and store it into running_asynctasks variable
+    def create_asynctask(self, func: Callable[..., Awaitable[Any]], *, async_name: str = None, run_once: bool = False) -> Optional[asyncio.Task]:
+        """Create a new asynchrone and store it into running_iotasks variable
 
         Args:
             func (Callable): The function you want to call in asynchrone way
@@ -379,26 +383,71 @@ class Base:
 
         task = asyncio.create_task(func, name=name)
         task.add_done_callback(self.asynctask_done)
-        self.running_asynctasks.append(task)
+        self.running_iotasks.append(task)
 
-        self.logs.debug(f"++ New asynchrone task created as: {task.get_name()}")
+        self.logs.debug(f"=== New IO task created as: {task.get_name()}")
         return task
 
-    def asynctask_done(self, task: asyncio.Task):
+    async def create_thread_io(self, func: Callable[..., Any], *args, run_once: bool = False, thread_flag: bool = False) -> Optional[Any]:
+        """Run threads via asyncio.
+
+        Args:
+            func (Callable[..., Any]): The blocking IO function
+            run_once (bool, optional): If it should be run once.. Defaults to False.
+            thread_flag (bool, optional): If you are using a endless loop, use the threading Event object. Defaults to False.
+
+        Returns:
+            Any: The final result of the blocking IO function
+        """
+        if run_once:
+            for iothread in self.running_iothreads:
+                if func.__name__.lower() == iothread.name.lower():
+                    return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix=func.__name__) as executor:
+            loop = asyncio.get_event_loop()
+            largs = list(args)
+            thread_event: Optional[threading.Event] = None
+            if thread_flag:
+                thread_event = threading.Event()
+                thread_event.set()
+                largs.insert(0, thread_event)
+
+            future = loop.run_in_executor(executor, func, *tuple(largs))
+            future.add_done_callback(self.asynctask_done)
+
+            id_obj = self.Loader.Definition.MThread(
+                name=func.__name__,
+                thread_id=list(executor._threads)[0].native_id,
+                thread_event=thread_event, 
+                thread_obj=list(executor._threads)[0], 
+                executor=executor, 
+                future=future)
+
+            self.running_iothreads.append(id_obj)
+            self.logs.debug(f"=== New thread started {func.__name__} with max workers set to: {executor._max_workers}")
+            result = await future
+
+            self.running_iothreads.remove(id_obj)
+            return result
+
+    def asynctask_done(self, task: Union[asyncio.Task, asyncio.Future]):
         """Log task when done
 
         Args:
             task (asyncio.Task): The Asyncio Task callback
         """
+        name = task.get_name() if isinstance(task, asyncio.Task) else "Thread"
+        task_or_future = "Task" if isinstance(task, asyncio.Task) else "Future"
         try:
             if task.exception():
-                self.logs.error(f"[ASYNCIO] Task {task.get_name()} failed with exception: {task.exception()}")
+                self.logs.error(f"[ASYNCIO] {task_or_future} {name} failed with exception: {task.exception()}")
             else:
-                self.logs.debug(f"[ASYNCIO] Task {task.get_name()} completed successfully.")
+                self.logs.debug(f"[ASYNCIO] {task_or_future} {name} completed successfully.")
         except asyncio.CancelledError as ce:
-            self.logs.debug(f"[ASYNCIO] Task {task.get_name()} terminated with cancelled error.")
+            self.logs.debug(f"[ASYNCIO] {task_or_future} {name} terminated with cancelled error. {ce}")
         except asyncio.InvalidStateError as ie:
-            self.logs.debug(f"[ASYNCIO] Task {task.get_name()} terminated with invalid state error.")
+            self.logs.debug(f"[ASYNCIO] {task_or_future} {name} terminated with invalid state error. {ie}")
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -491,59 +540,6 @@ class Base:
             soc.close()
             self.running_sockets.remove(soc)
             self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
-
-    async def shutdown(self) -> None:
-        """Methode qui va préparer l'arrêt complêt du service
-        """
-        # Stop RpcServer if running
-        await self.Loader.RpcServer.stop_server()
-
-        # unload modules.
-        self.logs.debug(f"=======> Unloading all modules!")
-        for module in self.Loader.ModuleUtils.model_get_loaded_modules().copy():
-            await self.Loader.ModuleUtils.unload_one_module(module.module_name)
-
-        self.logs.debug(f"=======> Closing all Coroutines!")
-        try:
-            await asyncio.wait_for(asyncio.gather(*self.running_asynctasks), timeout=5)
-        except asyncio.exceptions.TimeoutError as te:
-            self.logs.debug(f"Asyncio Timeout reached! {te}")
-            for task in self.running_asynctasks:
-                task.cancel()
-        except asyncio.exceptions.CancelledError as cerr:
-            self.logs.debug(f"Asyncio CancelledError reached! {cerr}")
-
-
-        # Nettoyage des timers
-        self.logs.debug(f"=======> Checking for Timers to stop")
-        for timer in self.running_timers:
-            while timer.is_alive():
-                self.logs.debug(f"> waiting for {timer.name} to close")
-                timer.cancel()
-                await asyncio.sleep(0.2)
-            self.running_timers.remove(timer)
-            self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
-
-        self.logs.debug(f"=======> Checking for Threads to stop")
-        for thread in self.running_threads:
-            if thread.name == 'heartbeat' and thread.is_alive():
-                self.execute_periodic_action()
-                self.logs.debug(f"> Running the last periodic action")
-            self.running_threads.remove(thread)
-            self.logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
-
-        self.logs.debug(f"=======> Checking for Sockets to stop")
-        for soc in self.running_sockets:
-            soc.close()
-            while soc.fileno() != -1:
-                soc.close()
-
-            self.running_sockets.remove(soc)
-            self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
-
-        self.db_close()
-
-        return None
 
     def db_init(self) -> tuple[Engine, Connection]:
 

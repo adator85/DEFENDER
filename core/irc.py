@@ -1,8 +1,7 @@
 import asyncio
-import socket
 import re
-import time
-from ssl import SSLSocket
+import ssl
+import threading
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
 from core.classes.modules import rehash
@@ -29,6 +28,10 @@ class Irc:
 
         # Load Context class (Loader)
         self.ctx = loader
+
+        # Define Reader and Writer
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
 
         # Date et heure de la premiere connexion de Defender
         self.defender_connexion_datetime = self.ctx.Config.DEFENDER_CONNEXION_DATETIME
@@ -58,50 +61,56 @@ class Irc:
         # Load Commands Utils
         # self.Commands = self.Loader.Commands
         """Command utils"""
+        self.ctx.Commands.build_command(0, 'core', 'help', 'This provide the help')
+        self.ctx.Commands.build_command(0, 'core', 'auth', 'Login to the IRC Service')
+        self.ctx.Commands.build_command(0, 'core', 'copyright', 'Give some information about the IRC Service')
+        self.ctx.Commands.build_command(0, 'core', 'uptime', 'Give you since when the service is connected')
+        self.ctx.Commands.build_command(0, 'core', 'firstauth', 'First authentication of the Service')
+        self.ctx.Commands.build_command(0, 'core', 'register', f'Register your nickname /msg {self.ctx.Config.SERVICE_NICKNAME} REGISTER <password> <email>')
+        self.ctx.Commands.build_command(0, 'core', 'identify', f'Identify yourself with your password /msg {self.ctx.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>')
+        self.ctx.Commands.build_command(0, 'core', 'logout', 'Reverse the effect of the identify command')
+        self.ctx.Commands.build_command(1, 'core', 'load', 'Load an existing module')
+        self.ctx.Commands.build_command(1, 'core', 'unload', 'Unload a module')
+        self.ctx.Commands.build_command(1, 'core', 'reload', 'Reload a module')
+        self.ctx.Commands.build_command(1, 'core', 'deauth', 'Deauth from the irc service')
+        self.ctx.Commands.build_command(1, 'core', 'checkversion', 'Check the version of the irc service')
+        self.ctx.Commands.build_command(2, 'core', 'show_modules', 'Display a list of loaded modules')
+        self.ctx.Commands.build_command(2, 'core', 'show_timers', 'Display active timers')
+        self.ctx.Commands.build_command(2, 'core', 'show_threads', 'Display active threads in the system')
+        self.ctx.Commands.build_command(2, 'core', 'show_asyncio', 'Display active asyncio')
+        self.ctx.Commands.build_command(2, 'core', 'show_channels', 'Display a list of active channels')
+        self.ctx.Commands.build_command(2, 'core', 'show_users', 'Display a list of connected users')
+        self.ctx.Commands.build_command(2, 'core', 'show_clients', 'Display a list of connected clients')
+        self.ctx.Commands.build_command(2, 'core', 'show_admins', 'Display a list of administrators')
+        self.ctx.Commands.build_command(2, 'core', 'show_configuration', 'Display the current configuration settings')
+        self.ctx.Commands.build_command(2, 'core', 'show_cache', 'Display the current cache')
+        self.ctx.Commands.build_command(2, 'core', 'clear_cache', 'Clear the cache!')
+        self.ctx.Commands.build_command(3, 'core', 'quit', 'Disconnect the bot or user from the server.')
+        self.ctx.Commands.build_command(3, 'core', 'restart', 'Restart the bot or service.')
+        self.ctx.Commands.build_command(3, 'core', 'addaccess', 'Add a user or entity to an access list with specific permissions.')
+        self.ctx.Commands.build_command(3, 'core', 'editaccess', 'Modify permissions for an existing user or entity in the access list.')
+        self.ctx.Commands.build_command(3, 'core', 'delaccess', 'Remove a user or entity from the access list.')
+        self.ctx.Commands.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
+        self.ctx.Commands.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
+        self.ctx.Commands.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
+        self.ctx.Commands.build_command(4, 'core', 'print_vars', 'Print users in a file.')
+        self.ctx.Commands.build_command(4, 'core', 'start_rpc', 'Start defender jsonrpc server')
+        self.ctx.Commands.build_command(4, 'core', 'stop_rpc', 'Stop defender jsonrpc server')
 
-        self.build_command(0, 'core', 'help', 'This provide the help')
-        self.build_command(0, 'core', 'auth', 'Login to the IRC Service')
-        self.build_command(0, 'core', 'copyright', 'Give some information about the IRC Service')
-        self.build_command(0, 'core', 'uptime', 'Give you since when the service is connected')
-        self.build_command(0, 'core', 'firstauth', 'First authentication of the Service')
-        self.build_command(0, 'core', 'register', f'Register your nickname /msg {self.ctx.Config.SERVICE_NICKNAME} REGISTER <password> <email>')
-        self.build_command(0, 'core', 'identify', f'Identify yourself with your password /msg {self.ctx.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>')
-        self.build_command(0, 'core', 'logout', 'Reverse the effect of the identify command')
-        self.build_command(1, 'core', 'load', 'Load an existing module')
-        self.build_command(1, 'core', 'unload', 'Unload a module')
-        self.build_command(1, 'core', 'reload', 'Reload a module')
-        self.build_command(1, 'core', 'deauth', 'Deauth from the irc service')
-        self.build_command(1, 'core', 'checkversion', 'Check the version of the irc service')
-        self.build_command(2, 'core', 'show_modules', 'Display a list of loaded modules')
-        self.build_command(2, 'core', 'show_timers', 'Display active timers')
-        self.build_command(2, 'core', 'show_threads', 'Display active threads in the system')
-        self.build_command(2, 'core', 'show_asyncio', 'Display active asyncio')
-        self.build_command(2, 'core', 'show_channels', 'Display a list of active channels')
-        self.build_command(2, 'core', 'show_users', 'Display a list of connected users')
-        self.build_command(2, 'core', 'show_clients', 'Display a list of connected clients')
-        self.build_command(2, 'core', 'show_admins', 'Display a list of administrators')
-        self.build_command(2, 'core', 'show_configuration', 'Display the current configuration settings')
-        self.build_command(2, 'core', 'show_cache', 'Display the current cache')
-        self.build_command(2, 'core', 'clear_cache', 'Clear the cache!')
-        self.build_command(3, 'core', 'quit', 'Disconnect the bot or user from the server.')
-        self.build_command(3, 'core', 'restart', 'Restart the bot or service.')
-        self.build_command(3, 'core', 'addaccess', 'Add a user or entity to an access list with specific permissions.')
-        self.build_command(3, 'core', 'editaccess', 'Modify permissions for an existing user or entity in the access list.')
-        self.build_command(3, 'core', 'delaccess', 'Remove a user or entity from the access list.')
-        self.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
-        self.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
-        self.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
-        self.build_command(4, 'core', 'print_vars', 'Print users in a file.')
-        self.build_command(4, 'core', 'start_rpc', 'Start defender jsonrpc server')
-        self.build_command(4, 'core', 'stop_rpc', 'Stop defender jsonrpc server')
+    ##############################################
+    #               CONNEXION IRC                #
+    ##############################################
 
-        # Define the IrcSocket object
-        self.IrcSocket: Optional[Union[socket.socket, SSLSocket]] = None
-
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
-
-        self.ctx.Base.create_asynctask(self.heartbeat(self.beat))
+    async def run(self):
+        try:
+            await self.connect()
+            await self.listen()
+        except asyncio.exceptions.IncompleteReadError as ie:
+            # When IRCd server is down
+            # asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of undefined expected bytes
+            self.ctx.Logs.critical(f"The IRCd server is no more connected! {ie}")
+        except asyncio.exceptions.CancelledError as cerr:
+            self.ctx.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
 
     async def connect(self):
 
@@ -116,24 +125,36 @@ class Irc:
         await self.Protocol.send_link()
 
     async def listen(self):
+        self.ctx.Base.create_asynctask(
+            self.ctx.Base.create_thread_io(
+                self.ctx.Utils.heartbeat, 
+                self.ctx, self.beat, 
+                run_once=True, thread_flag=True
+                )
+        )
+
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
             await self.send_response(data.splitlines())
 
-    async def run(self):
+    async def send_response(self, responses:list[bytes]) -> None:
         try:
-            await self.connect()
-            await self.listen()
-        except asyncio.exceptions.IncompleteReadError as ie:
-            # When IRCd server is down
-            # asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of undefined expected bytes
-            self.ctx.Logs.critical(f"The IRCd server is no more connected! {ie}")
-        except asyncio.exceptions.CancelledError as cerr:
-            self.ctx.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
+            for data in responses:
+                response = data.decode(self.CHARSET[0]).split()
+                await self.cmd(response)
 
-    ##############################################
-    #               CONNEXION IRC                #
-    ##############################################
+        except (UnicodeEncodeError, UnicodeDecodeError) as ue:
+            for data in responses:
+                response = data.decode(self.CHARSET[1], 'replace').split()
+                await self.cmd(response)
+            self.ctx.Logs.error(f'UnicodeEncodeError: {ue}')
+            self.ctx.Logs.error(responses)
+        except AssertionError as ae:
+            self.ctx.Logs.error(f"Assertion error : {ae}")
+
+    # --------------------------------------------
+    #             FIN CONNEXION IRC              #
+    # --------------------------------------------
 
     def init_service_user(self) -> None:
 
@@ -156,51 +177,6 @@ class Irc:
             for chan_name in result_query:
                 chan = chan_name[0]
                 await self.Protocol.send_sjoin(channel=chan)
-
-    async def send_response(self, responses:list[bytes]) -> None:
-        try:
-            for data in responses:
-                response = data.decode(self.CHARSET[0]).split()
-                await self.cmd(response)
-
-        except UnicodeEncodeError as ue:
-            for data in responses:
-                response = data.decode(self.CHARSET[1],'replace').split()
-                await self.cmd(response)
-            self.ctx.Logs.error(f'UnicodeEncodeError: {ue}')
-            self.ctx.Logs.error(response)
-
-        except UnicodeDecodeError as ud:
-            for data in responses:
-                response = data.decode(self.CHARSET[1],'replace').split()
-                await self.cmd(response)
-            self.ctx.Logs.error(f'UnicodeDecodeError: {ud}')
-            self.ctx.Logs.error(response)
-
-        except AssertionError as ae:
-            self.ctx.Logs.error(f"Assertion error : {ae}")
-
-    def unload(self) -> None:
-        # This is only to reference the method
-        return None
-
-    # --------------------------------------------
-    #             FIN CONNEXION IRC              #
-    # --------------------------------------------
-
-    def build_command(self, level: int, module_name: str, command_name: str, command_description: str) -> None:
-        """This method build the commands variable
-
-        Args:
-            level (int): The Level of the command
-            module_name (str): The module name
-            command_name (str): The command name
-            command_description (str): The description of the command
-        """
-        # Build Model.
-        self.ctx.Commands.build(self.ctx.Definition.MCommand(module_name, command_name, command_description, level))
-
-        return None
 
     async def generate_help_menu(self, nickname: str, module: Optional[str] = None) -> None:
 
@@ -289,17 +265,6 @@ class Irc:
 
         return uptime
 
-    async def heartbeat(self, beat: float) -> None:
-        """Execute certaines commandes de nettoyage toutes les x secondes
-        x étant définit a l'initialisation de cette class (self.beat)
-
-        Args:
-            beat (float): Nombre de secondes entre chaque exécution
-        """
-        while self.hb_active:
-            await asyncio.sleep(beat)
-            self.ctx.Base.execute_periodic_action()
-
     def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
         user_obj = self.ctx.User.get_user(uid)
 
@@ -382,8 +347,13 @@ class Irc:
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.ctx.Config.SERVICE_NICKNAME
+        response = self.ctx.Base.create_asynctask(
+            self.ctx.Base.create_thread_io(
+                self.ctx.Base.check_for_new_version, True
+            )
+        )
 
-        if self.ctx.Base.check_for_new_version(True):
+        if response:
             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.ctx.Config.CURRENT_VERSION} >>> {self.ctx.Config.LATEST_VERSION}")
             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
         else:
@@ -413,12 +383,6 @@ class Irc:
                     for module in modules:
                         await module.class_instance.cmd(original_response) if self.ctx.Utils.is_coroutinefunction(module.class_instance.cmd) else module.class_instance.cmd(original_response)
 
-            # if len(original_response) > 2:
-            #     if original_response[2] != 'UID':
-            #         # Envoyer la commande aux classes dynamiquement chargées
-            #         for module in self.ctx.ModuleUtils.model_get_loaded_modules().copy():
-            #             module.class_instance.cmd(original_response)
-
         except IndexError as ie:
             self.ctx.Logs.error(f"IndexError: {ie}")
         except Exception as err:
@@ -441,7 +405,7 @@ class Irc:
         if u is None:
             return None
 
-        c = self.ctx.Client.get_Client(u.uid)
+        c = self.ctx.Client.get_client(u.uid)
         """The Client Object"""
 
         fromuser = u.nickname
@@ -627,7 +591,7 @@ class Irc:
                     level = self.ctx.Base.int_if_possible(cmd[2])
                     password = str(cmd[3])
 
-                    self.create_defender_user(fromuser, new_admin, level, password)
+                    await self.create_defender_user(fromuser, new_admin, level, password)
                     return None
 
                 except IndexError as ie:
@@ -982,13 +946,12 @@ class Irc:
                 try:
                     final_reason = ' '.join(cmd[1:])
                     self.hb_active = False
-                    await self.ctx.Base.shutdown()
+                    await rehash.shutdown(self.ctx)
                     self.ctx.Base.execute_periodic_action()
 
                     for chan_name in self.ctx.Channel.UID_CHANNEL_DB:
-                        # self.Protocol.send_mode_chan(chan_name.name, '-l')
                         await self.Protocol.send_set_mode('-l', channel_name=chan_name.name)
-                    
+
                     for client in self.ctx.Client.CLIENT_DB:
                         await self.Protocol.send_svslogout(client)
 
@@ -1002,7 +965,6 @@ class Irc:
                     self.ctx.Logs.info(f'Arrêt du server {dnickname}')
                     self.ctx.Config.DEFENDER_RESTART = 0
 
-                    await self.writer.drain()
                     self.writer.close()
                     await self.writer.wait_closed()
 
@@ -1011,6 +973,8 @@ class Irc:
                 except ConnectionResetError:
                     if self.writer.is_closing():
                         self.ctx.Logs.debug(f"Defender stopped properly!")
+                except ssl.SSLError as serr:
+                    self.ctx.Logs.error(f"Defender has ended with an SSL Error! - {serr}")
 
             case 'restart':
                 final_reason = ' '.join(cmd[1:])
@@ -1078,6 +1042,13 @@ class Irc:
                         nick_from=dnickname,
                         nick_to=fromuser,
                         msg=f">> {thread.name} ({thread.is_alive()})"
+                    )
+                
+                for thread in threading.enumerate():
+                    await self.Protocol.send_notice(
+                        nick_from=dnickname,
+                        nick_to=fromuser,
+                        msg=f">> Thread name: {thread.name} - Is alive: {thread.is_alive()} - Daemon: {thread.daemon}"
                     )
 
                 return None
@@ -1209,10 +1180,10 @@ class Irc:
                 return None
 
             case 'start_rpc':
-                self.ctx.Base.create_asynctask(self.ctx.RpcServer.start_server())
+                self.ctx.Base.create_asynctask(self.ctx.RpcServer.start_rpc_server())
 
             case 'stop_rpc':
-                self.ctx.Base.create_asynctask(self.ctx.RpcServer.stop_server())
+                self.ctx.Base.create_asynctask(self.ctx.RpcServer.stop_rpc_server())
 
             case _:
                 pass

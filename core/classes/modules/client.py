@@ -15,8 +15,7 @@ class Client:
         Args:
             loader (Loader): The Loader instance.
         """
-        self.Logs = loader.Logs
-        self.Base = loader.Base
+        self._ctx = loader
 
     def insert(self, new_client: 'MClient') -> bool:
         """Insert a new User object
@@ -28,7 +27,7 @@ class Client:
             bool: True if inserted
         """
 
-        client_obj = self.get_Client(new_client.uid)
+        client_obj = self.get_client(new_client.uid)
 
         if not client_obj is None:
             # User already created return False
@@ -48,7 +47,7 @@ class Client:
         Returns:
             bool: True if updated
         """
-        user_obj = self.get_Client(uidornickname=uid)
+        user_obj = self.get_client(uidornickname=uid)
 
         if user_obj is None:
             return False
@@ -68,7 +67,7 @@ class Client:
             bool: True if user mode has been updaed
         """
         response = True
-        user_obj = self.get_Client(uidornickname=uidornickname)
+        user_obj = self.get_client(uidornickname=uidornickname)
 
         if user_obj is None:
             return False
@@ -93,7 +92,7 @@ class Client:
             return False
 
         liste_umodes = list(umodes)
-        final_umodes_liste = [x for x in self.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
+        final_umodes_liste = [x for x in self._ctx.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
         final_umodes = ''.join(final_umodes_liste)
 
         user_obj.umodes = f"+{final_umodes}"
@@ -110,7 +109,7 @@ class Client:
             bool: True if deleted
         """
 
-        user_obj = self.get_Client(uidornickname=uid)
+        user_obj = self.get_client(uidornickname=uid)
 
         if user_obj is None:
             return False
@@ -119,7 +118,7 @@ class Client:
 
         return True
 
-    def get_Client(self, uidornickname: str) -> Optional['MClient']:
+    def get_client(self, uidornickname: str) -> Optional['MClient']:
         """Get The Client Object model
 
         Args:
@@ -146,7 +145,7 @@ class Client:
             str|None: Return the UID
         """
 
-        client_obj = self.get_Client(uidornickname=uidornickname)
+        client_obj = self.get_client(uidornickname=uidornickname)
 
         if client_obj is None:
             return None
@@ -162,28 +161,12 @@ class Client:
         Returns:
             str|None: the nickname
         """
-        client_obj = self.get_Client(uidornickname=uidornickname)
+        client_obj = self.get_client(uidornickname=uidornickname)
 
         if client_obj is None:
             return None
 
         return client_obj.nickname
-
-    def get_client_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
-        """Transform User Object to a dictionary
-
-        Args:
-            uidornickname (str): The UID or The nickname
-
-        Returns:
-            Union[dict[str, any], None]: User Object as a dictionary or None
-        """
-        client_obj = self.get_Client(uidornickname=uidornickname)
-
-        if client_obj is None:
-            return None
-
-        return client_obj.to_dict()
 
     def is_exist(self, uidornickname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB
@@ -194,7 +177,7 @@ class Client:
         Returns:
             bool: True if exist
         """
-        user_obj = self.get_Client(uidornickname=uidornickname)
+        user_obj = self.get_client(uidornickname=uidornickname)
 
         if user_obj is None:
             return False
@@ -211,15 +194,15 @@ class Client:
             bool: True if exist
         """
 
-        table_client = self.Base.Config.TABLE_CLIENT
+        table_client = self._ctx.Base.Config.TABLE_CLIENT
         account_to_check = {'account': account.lower()}
-        account_to_check_query = await self.Base.db_execute_query(f"""
+        account_to_check_query = await self._ctx.Base.db_execute_query(f"""
                     SELECT id FROM {table_client} WHERE LOWER(account) = :account
                     """, account_to_check)
 
         account_to_check_result = account_to_check_query.fetchone()
         if account_to_check_result:
-            self.Logs.error(f"Account ({account}) already exist")
+            self._ctx.Logs.error(f"Account ({account}) already exist")
             return True
 
         return False

@@ -42,4 +42,4 @@ class RPCUser(IRPC):
             return JSONResponse(self.response_model)
         
         self.response_model['result'] = 'User not found!'
-        return JSONResponse(self.response_model, self.http_status_code.HTTP_204_NO_CONTENT)
+        return JSONResponse(self.response_model, self.http_status_code.HTTP_404_NOT_FOUND)

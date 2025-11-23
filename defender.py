@@ -1,6 +1,5 @@
 import asyncio
 from core import install
-
 #############################################
 #       @Version : 6.4                      #
 #       Requierements :                     #
@@ -19,4 +18,4 @@ async def main():
     await loader.Irc.run()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(), debug=False)

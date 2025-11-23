@@ -12,7 +12,7 @@ async def timer_vote_verdict(uplink: 'Votekick', channel: str) -> None:
     if not uplink.VoteKickManager.is_vote_ongoing(channel):
         return None
 
-    asyncio.sleep(60)
+    await asyncio.sleep(60)
 
     votec = uplink.VoteKickManager.get_vote_channel_model(channel)
     if votec:

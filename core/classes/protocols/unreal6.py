@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
 from core.classes.interfaces.iprotocol import IProtocol
-from core.utils import tr
+from core.utils import is_coroutinefunction, tr
 
 if TYPE_CHECKING:
     from core.definition import MClient, MSasl, MUser, MChannel
@@ -258,6 +258,7 @@ class Unrealircd6(IProtocol):
 
     async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
         """Set a mode to channel or to a nickname or for a user in a channel
+        This method will always send as the command as Defender's nickname (service_id)
 
         Args:
             modes (str): The selected mode
@@ -478,7 +479,7 @@ class Unrealircd6(IProtocol):
             c_uid = client_obj.uid
             c_nickname = client_obj.nickname
             await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SVSLOGIN {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
-            self.send_svs2mode(c_nickname, '-r')
+            await self.send_svs2mode(c_nickname, '-r')
 
         except Exception as err:
             self._ctx.Logs.error(f'General Error: {err}')
@@ -1020,7 +1021,7 @@ class Unrealircd6(IProtocol):
 
                 # Send EOF to other modules
                 for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
-                    module.class_instance.cmd(server_msg_copy)
+                    await module.class_instance.cmd(server_msg_copy) if self._ctx.Utils.is_coroutinefunction(module.class_instance.cmd) else module.class_instance.cmd(server_msg_copy)
 
                 # Join saved channels & load existing modules
                 await self._ctx.Channel.db_join_saved_channels()

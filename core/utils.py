@@ -3,20 +3,20 @@ Main utils library.
 """
 import gc
 import ssl
-import socket
-import sys
 from pathlib import Path
 from re import match, sub
+import threading
 from typing import Literal, Optional, Any, TYPE_CHECKING
 from datetime import datetime
-from time import time
+from time import time, sleep
 from random import choice
 from hashlib import md5, sha3_512
 from core.classes.modules.settings import global_settings
 from asyncio import iscoroutinefunction
 
 if TYPE_CHECKING:
-    from core.irc import Irc
+    from threading import Event
+    from core.loader import Loader
 
 def tr(message: str, *args) -> str:
     """Translation Engine system
@@ -115,39 +115,6 @@ def get_ssl_context() -> ssl.SSLContext:
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
-def create_socket(uplink: 'Irc') -> None:
-    """Create a socket to connect SSL or Normal connection
-    """
-    try:
-        soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK)
-        connexion_information = (uplink.Config.SERVEUR_IP, uplink.Config.SERVEUR_PORT)
-
-        if uplink.Config.SERVEUR_SSL:
-            # Create SSL Context object
-            ssl_context = get_ssl_context()
-            ssl_connexion = ssl_context.wrap_socket(soc, server_hostname=uplink.Config.SERVEUR_HOSTNAME)
-            ssl_connexion.connect(connexion_information)
-            uplink.IrcSocket = ssl_connexion
-            uplink.Config.SSL_VERSION = uplink.IrcSocket.version()
-            uplink.Logs.info(f"-- Connected using SSL : Version = {uplink.Config.SSL_VERSION}")
-        else:
-            soc.connect(connexion_information)
-            uplink.IrcSocket = soc
-            uplink.Logs.info("-- Connected in a normal mode!")
-
-        return None
-
-    except (ssl.SSLEOFError, ssl.SSLError) as soe:
-        uplink.Logs.critical(f"[SSL ERROR]: {soe}")
-    except OSError as oe:
-        uplink.Logs.critical(f"[OS Error]: {oe}")
-        if 'connection refused' in str(oe).lower():
-            sys.exit(oe.__str__())
-        if oe.errno == 10053:
-            sys.exit(oe.__str__())
-    except AttributeError as ae:
-        uplink.Logs.critical(f"AttributeError: {ae}")
-
 def run_python_garbage_collector() -> int:
     """Run Python garbage collector
 
@@ -166,6 +133,21 @@ def get_number_gc_objects(your_object_to_count: Optional[Any] = None) -> int:
         return len(gc.get_objects())
     
     return sum(1 for obj in gc.get_objects() if isinstance(obj, your_object_to_count))
+
+def heartbeat(event: 'Event', loader: 'Loader', beat: float) -> None:
+    """Execute certaines commandes de nettoyage toutes les x secondes
+    x étant définit a l'initialisation de cette class (self.beat)
+
+    Args:
+        beat (float): Nombre de secondes entre chaque exécution
+    """
+
+    while event.is_set():
+        loader.Base.execute_periodic_action()
+        sleep(beat)
+
+    loader.Logs.debug("Heartbeat is off!")
+    return None
 
 def generate_random_string(lenght: int) -> str:
     """Retourn une chaîne aléatoire en fonction de la longueur spécifiée.

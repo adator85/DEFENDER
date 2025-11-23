@@ -11,14 +11,16 @@ class User:
     UID_DB: list['MUser'] = []
 
     @property
-    def get_current_user(self) -> 'MUser':
-        return self.current_user
+    def current_user(self) -> 'MUser':
+        return self._current_user
+
+    @current_user.setter
+    def current_user(self, muser: 'MUser') -> None:
+        self._current_user = muser
 
     def __init__(self, loader: 'Loader'):
-
-        self.Logs = loader.Logs
-        self.Base = loader.Base
-        self.current_user: Optional['MUser'] = None
+        self._ctx = loader
+        self._current_user: Optional['MUser'] = None
 
     def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object
@@ -55,7 +57,7 @@ class User:
             return False
 
         user_obj.nickname = new_nickname
-        self.Logs.debug(f"UID ({uid}) has benn update with new nickname ({new_nickname}).")
+        self._ctx.Logs.debug(f"UID ({uid}) has benn update with new nickname ({new_nickname}).")
         return True
 
     def update_mode(self, uidornickname: str, modes: str) -> bool:
@@ -94,7 +96,7 @@ class User:
             return False
 
         liste_umodes = list(umodes)
-        final_umodes_liste = [x for x in self.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
+        final_umodes_liste = [x for x in self._ctx.Base.Settings.PROTOCTL_USER_MODES if x in liste_umodes]
         final_umodes = ''.join(final_umodes_liste)
 
         user_obj.umodes = f"+{final_umodes}"

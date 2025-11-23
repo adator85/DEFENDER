@@ -13,11 +13,21 @@ class Command:
         Args:
             loader (Loader): The Loader instance.
         """
-        self.Loader = loader
-        self.Base = loader.Base
-        self.Logs = loader.Logs
+        self._ctx = loader
 
-    def build(self, new_command_obj: MCommand) -> bool:
+    def build_command(self, level: int, module_name: str, command_name: str, command_description: str) -> bool:
+        """This method build the commands variable
+
+        Args:
+            level (int): The Level of the command
+            module_name (str): The module name
+            command_name (str): The command name
+            command_description (str): The description of the command
+        """
+        # Build Model.
+        return self._build(self._ctx.Definition.MCommand(module_name, command_name, command_description, level))
+
+    def _build(self, new_command_obj: MCommand) -> bool:
 
         command = self.get_command(new_command_obj.command_name, new_command_obj.module_name)
         if command is None:
@@ -68,7 +78,7 @@ class Command:
         for c in tmp_model:
             self.DB_COMMANDS.remove(c)
 
-        self.Logs.debug(f"[COMMAND] Drop command for module {module_name}")
+        self._ctx.Logs.debug(f"[COMMAND] Drop command for module {module_name}")
         return True       
 
     def get_ordered_commands(self) -> list[MCommand]:
@@ -86,7 +96,7 @@ class Command:
         return new_list
 
     def is_client_allowed_to_run_command(self, nickname: str, command_name: str) -> bool:
-        admin = self.Loader.Admin.get_admin(nickname)
+        admin = self._ctx.Admin.get_admin(nickname)
         admin_level = admin.level if admin else 0
         commands = self.get_commands_by_level(admin_level)
 

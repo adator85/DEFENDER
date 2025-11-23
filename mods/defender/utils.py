@@ -267,6 +267,7 @@ async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
 ####################
 # [:<sid>] UID <uid> <ts> <nick> <real-host> <displayed-host> <real-user> <ip> <signon> <modes> [<mode-parameters>]+ :<real>
 # [:<sid>] UID nickname hopcount timestamp username hostname uid servicestamp umodes virthost cloakedhost ip :gecos
+
 async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
 
     confmodel = uplink.mod_config
@@ -316,17 +317,16 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
         fu.nbr_msg = 0
         get_diff_secondes = unixtime - fu.first_msg_time
     elif fu.nbr_msg > flood_message:
-        uplink.ctx.Logs.info('system de flood detecté')
+        await p.send_set_mode('+m', channel_name=channel)
         await p.send_priv_msg(
             nick_from=dnickname,
             msg=f"{color_red} {color_bold} Flood detected. Apply the +m mode (Ô_o)",
             channel=channel
         )
-        await p.send2socket(f":{service_id} MODE {channel} +m")
-        uplink.ctx.Logs.info(f'FLOOD Détecté sur {get_detected_nickname} mode +m appliqué sur le salon {channel}')
+        uplink.ctx.Logs.debug(f'[FLOOD] {get_detected_nickname} triggered +m mode on the channel {channel}')
         fu.nbr_msg = 0
         fu.first_msg_time = unixtime
-        uplink.ctx.Base.create_asynctask(dthreads.coro_release_mode_mute(uplink, 'mode-m', channel))
+        uplink.ctx.Base.create_asynctask(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
 
 async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
 
@@ -336,10 +336,14 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
     confmodel = uplink.mod_config
 
     get_reputation = uplink.ctx.Reputation.get_reputation(jailed_uid)
-
     if get_reputation is None:
         uplink.ctx.Logs.warning(f'UID {jailed_uid} has not been found')
-        return
+        return None
+
+    if get_reputation.isWebirc or get_reputation.isWebsocket:
+        uplink.ctx.Logs.debug(f'This nickname is exampted from the reputation system (Webirc or Websocket). {get_reputation.nickname} ({get_reputation.uid})')
+        uplink.ctx.Reputation.delete(get_reputation.uid)
+        return None
 
     salon_logs = gconfig.SERVICE_CHANLOG
     salon_jail = gconfig.SALON_JAIL
@@ -360,7 +364,7 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
         # Si le user ne vient pas de webIrc
         await p.send_sajoin(nick_to_sajoin=jailed_nickname, channel_name=salon_jail)
         await p.send_priv_msg(nick_from=gconfig.SERVICE_NICKNAME,
-            msg=f" [{color_red} REPUTATION {nogc}] : Connexion de {jailed_nickname} ({jailed_score}) ==> {salon_jail}",
+            msg=f" [ {color_red}REPUTATION{nogc} ]: The nickname {jailed_nickname} has been sent to {salon_jail} because his reputation score is ({jailed_score})",
             channel=salon_logs
             )
         await p.send_notice(
@@ -371,7 +375,7 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
         if reputation_ban_all_chan == 1:
             for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
                 if chan.name != salon_jail:
-                    await p.send2socket(f":{service_id} MODE {chan.name} +b {jailed_nickname}!*@*")
+                    await p.send_set_mode('+b', channel_name=chan.name, params=f'{jailed_nickname}!*@*')
                     await p.send2socket(f":{service_id} KICK {chan.name} {jailed_nickname}")
 
         uplink.ctx.Logs.info(f"[REPUTATION] {jailed_nickname} jailed (UID: {jailed_uid}, score: {jailed_score})")
@@ -419,14 +423,14 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
         for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
             if chan.name != salon_jail and ban_all_chan == 1:
                 get_user_reputation = uplink.ctx.Reputation.get_reputation(uid)
-                await p.send2socket(f":{service_id} MODE {chan.name} -b {get_user_reputation.nickname}!*@*")
+                await p.send_set_mode('-b', channel_name=chan.name, params=f"{get_user_reputation.nickname}!*@*")
 
         # Lorsqu'un utilisateur quitte, il doit être supprimé de {UID_DB}.
         uplink.ctx.Channel.delete_user_from_all_channel(uid)
         uplink.ctx.Reputation.delete(uid)
         uplink.ctx.User.delete(uid)
 
-async def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
+def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
     """Analyse l'ip avec cloudfilt
         Cette methode devra etre lancer toujours via un thread ou un timer.
     Args:
@@ -438,11 +442,6 @@ async def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUs
     """
 
     remote_ip = user_model.remote_ip
-    username = user_model.username
-    hostname = user_model.hostname
-    nickname = user_model.nickname
-    p = uplink.ctx.Irc.Protocol
-
     if remote_ip in uplink.ctx.Config.WHITELISTED_IP:
         return None
     if uplink.mod_config.cloudfilt_scan == 0:
@@ -450,52 +449,28 @@ async def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUs
     if uplink.cloudfilt_key == '':
         return None
 
-    service_id = uplink.ctx.Config.SERVICE_ID
-    service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
-
     url = "https://developers18334.cloudfilt.com/"
+    data = {'ip': remote_ip, 'key': uplink.cloudfilt_key}
+    with requests.Session() as sess:
+        response = sess.post(url=url, data=data)
 
-    data = {
-        'ip': remote_ip,
-        'key': uplink.cloudfilt_key
-    }
+        # Formatted output
+        decoded_response: dict = loads(response.text)
+        status_code = response.status_code
+        if status_code != 200:
+            uplink.ctx.Logs.warning(f'Error connecting to cloudfilt API | Code: {str(status_code)}')
+            return
 
-    response = requests.post(url=url, data=data)
-    # Formatted output
-    decoded_response: dict = loads(response.text)
-    status_code = response.status_code
-    if status_code != 200:
-        uplink.ctx.Logs.warning(f'Error connecting to cloudfilt API | Code: {str(status_code)}')
-        return
+        result = {
+            'countryiso': decoded_response.get('countryiso', None),
+            'listed': decoded_response.get('listed', False),
+            'listed_by': decoded_response.get('listed_by', None),
+            'host': decoded_response.get('host', None)
+        }
 
-    result = {
-        'countryiso': decoded_response.get('countryiso', None),
-        'listed': decoded_response.get('listed', None),
-        'listed_by': decoded_response.get('listed_by', None),
-        'host': decoded_response.get('host', None)
-    }
+        return result
 
-    # pseudo!ident@host
-    fullname = f'{nickname}!{username}@{hostname}'
-
-    await p.send_priv_msg(
-        nick_from=service_id,
-        msg=f"[ {color_red}CLOUDFILT_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Host: {str(result['host'])} | country: {str(result['countryiso'])} | listed: {str(result['listed'])} | listed by : {str(result['listed_by'])}",
-        channel=service_chanlog)
-    
-    uplink.ctx.Logs.debug(f"[CLOUDFILT SCAN] ({fullname}) connected from ({result['countryiso']}), Listed: {result['listed']}, by: {result['listed_by']}")    
-
-    if result['listed']:
-        await p.send2socket(f":{service_id} GLINE +*@{remote_ip} {uplink.ctx.Config.GLINE_DURATION} Your connexion is listed as dangerous {str(result['listed'])} {str(result['listed_by'])} - detected by cloudfilt")
-        uplink.ctx.Logs.debug(f"[CLOUDFILT SCAN GLINE] Dangerous connection ({fullname}) from ({result['countryiso']}) Listed: {result['listed']}, by: {result['listed_by']}")
-
-    response.close()
-
-    return result
-
-async def action_scan_client_with_freeipapi(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
+def action_scan_client_with_freeipapi(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
     """Analyse l'ip avec Freeipapi
         Cette methode devra etre lancer toujours via un thread ou un timer.
     Args:
@@ -505,64 +480,35 @@ async def action_scan_client_with_freeipapi(uplink: 'Defender', user_model: 'MUs
         dict[str, any] | None: les informations du provider
         keys : 'countryCode', 'isProxy'
     """
-    p = uplink.ctx.Irc.Protocol
     remote_ip = user_model.remote_ip
-    username = user_model.username
-    hostname = user_model.hostname
-    nickname = user_model.nickname
-
     if remote_ip in uplink.ctx.Config.WHITELISTED_IP:
         return None
     if uplink.mod_config.freeipapi_scan == 0:
         return None
 
-    service_id = uplink.ctx.Config.SERVICE_ID
-    service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
+    with requests.Session() as sess:
+        url = f'https://freeipapi.com/api/json/{remote_ip}'
+        headers = {'Accept': 'application/json'}
+        response = sess.request(method='GET', url=url, headers=headers, timeout=uplink.timeout)
 
-    url = f'https://freeipapi.com/api/json/{remote_ip}'
+        # Formatted output
+        decoded_response: dict = loads(response.text)
 
-    headers = {
-        'Accept': 'application/json',
-    }
+        status_code = response.status_code
+        if status_code == 429:
+            uplink.ctx.Logs.warning('Too Many Requests - The rate limit for the API has been exceeded.')
+            return None
+        elif status_code != 200:
+            uplink.ctx.Logs.warning(f'status code = {str(status_code)}')
+            return None
 
-    response = requests.request(method='GET', url=url, headers=headers, timeout=uplink.timeout)
+        result = {
+            'countryCode': decoded_response.get('countryCode', None),
+            'isProxy': decoded_response.get('isProxy', None)
+        }
+        return result
 
-    # Formatted output
-    decoded_response: dict = loads(response.text)
-
-    status_code = response.status_code
-    if status_code == 429:
-        uplink.ctx.Logs.warning('Too Many Requests - The rate limit for the API has been exceeded.')
-        return None
-    elif status_code != 200:
-        uplink.ctx.Logs.warning(f'status code = {str(status_code)}')
-        return None
-
-    result = {
-        'countryCode': decoded_response.get('countryCode', None),
-        'isProxy': decoded_response.get('isProxy', None)
-    }
-
-    # pseudo!ident@host
-    fullname = f'{nickname}!{username}@{hostname}'
-
-    await p.send_priv_msg(
-        nick_from=service_id,
-        msg=f"[ {color_red}FREEIPAPI_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Proxy: {str(result['isProxy'])} | Country : {str(result['countryCode'])}",
-        channel=service_chanlog)    
-    uplink.ctx.Logs.debug(f"[FREEIPAPI SCAN] ({fullname}) connected from ({result['countryCode']}), Proxy: {result['isProxy']}") 
-
-    if result['isProxy']:
-        await p.send2socket(f":{service_id} GLINE +*@{remote_ip} {uplink.ctx.Config.GLINE_DURATION} This server do not allow proxy connexions {str(result['isProxy'])} - detected by freeipapi")
-        uplink.ctx.Logs.debug(f"[FREEIPAPI SCAN GLINE] Server do not allow proxy connexions {result['isProxy']}")
-
-    response.close()
-
-    return result
-
-async def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
+def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
     """Analyse l'ip avec AbuseIpDB
         Cette methode devra etre lancer toujours via un thread ou un timer.
     Args:
@@ -572,121 +518,81 @@ async def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUs
     Returns:
         dict[str, str] | None: les informations du provider
     """
-    p = uplink.ctx.Irc.Protocol
     remote_ip = user_model.remote_ip
-    username = user_model.username
-    hostname = user_model.hostname
-    nickname = user_model.nickname
 
     if remote_ip in uplink.ctx.Config.WHITELISTED_IP:
         return None
     if uplink.mod_config.abuseipdb_scan == 0:
         return None
-
     if uplink.abuseipdb_key == '':
         return None
 
-    url = 'https://api.abuseipdb.com/api/v2/check'
-    querystring = {
-        'ipAddress': remote_ip,
-        'maxAgeInDays': '90'
-    }
+    with requests.Session() as sess:
+        url = 'https://api.abuseipdb.com/api/v2/check'
+        querystring = {'ipAddress': remote_ip, 'maxAgeInDays': '90'}
+        headers = {
+            'Accept': 'application/json',
+            'Key': uplink.abuseipdb_key
+        }
 
-    headers = {
-        'Accept': 'application/json',
-        'Key': uplink.abuseipdb_key
-    }
+        response = sess.request(method='GET', url=url, headers=headers, params=querystring, timeout=uplink.timeout)
 
-    response = requests.request(method='GET', url=url, headers=headers, params=querystring, timeout=uplink.timeout)
+        if response.status_code != 200:
+            uplink.ctx.Logs.warning(f'status code = {str(response.status_code)}')
+            return None
 
-    # Formatted output
-    decoded_response: dict[str, dict] = loads(response.text)
+        # Formatted output
+        decoded_response: dict[str, dict] = loads(response.text)
 
-    if 'data' not in decoded_response:
-        return None
+        if 'data' not in decoded_response:
+            return None
 
-    result = {
-        'score': decoded_response.get('data', {}).get('abuseConfidenceScore', 0),
-        'country': decoded_response.get('data', {}).get('countryCode', None),
-        'isTor': decoded_response.get('data', {}).get('isTor', None),
-        'totalReports': decoded_response.get('data', {}).get('totalReports', 0)
-    }
-
-    service_id = uplink.ctx.Config.SERVICE_ID
-    service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
-
-    # pseudo!ident@host
-    fullname = f'{nickname}!{username}@{hostname}'
-
-    await p.send_priv_msg(
-        nick_from=service_id,
-        msg=f"[ {color_red}ABUSEIPDB_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Score: {str(result['score'])} | Country : {result['country']} | Tor : {str(result['isTor'])} | Total Reports : {str(result['totalReports'])}",
-        channel=service_chanlog
-        )
-    uplink.ctx.Logs.debug(f"[ABUSEIPDB SCAN] ({fullname}) connected from ({result['country']}), Score: {result['score']}, Tor: {result['isTor']}")
-
-    if result['isTor']:
-        await p.send2socket(f":{service_id} GLINE +*@{remote_ip} {uplink.ctx.Config.GLINE_DURATION} This server do not allow Tor connexions {str(result['isTor'])} - Detected by Abuseipdb")
-        uplink.ctx.Logs.debug(f"[ABUSEIPDB SCAN GLINE] Server do not allow Tor connections Tor: {result['isTor']}, Score: {result['score']}")
-    elif result['score'] >= 95:
-        await p.send2socket(f":{service_id} GLINE +*@{remote_ip} {uplink.ctx.Config.GLINE_DURATION} You were banned from this server because your abuse score is = {str(result['score'])} - Detected by Abuseipdb")
-        uplink.ctx.Logs.debug(f"[ABUSEIPDB SCAN GLINE] Server do not high risk connections Country: {result['country']}, Score: {result['score']}")
-
-    response.close()
+        result = {
+            'score': decoded_response.get('data', {}).get('abuseConfidenceScore', 0),
+            'country': decoded_response.get('data', {}).get('countryCode', None),
+            'isTor': decoded_response.get('data', {}).get('isTor', None),
+            'totalReports': decoded_response.get('data', {}).get('totalReports', 0)
+        }
 
     return result
 
-async def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser'):
+def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
     """local_scan
 
     Args:
         uplink (Defender): Defender instance object
         user_model (MUser): l'objet User qui contient l'ip
     """
-    p = uplink.ctx.Irc.Protocol
     remote_ip = user_model.remote_ip
-    username = user_model.username
-    hostname = user_model.hostname
-    nickname = user_model.nickname
-    fullname = f'{nickname}!{username}@{hostname}'
-
     if remote_ip in uplink.ctx.Config.WHITELISTED_IP:
         return None
 
+    result = {'opened_ports': [], 'closed_ports': []}
+
     for port in uplink.ctx.Config.PORTS_TO_SCAN:
-        try:
-            newSocket = ''
-            newSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK)
-            newSocket.settimeout(0.5)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK) as sock:
+            try:
+                sock.settimeout(0.5)
+                connection = (remote_ip, uplink.ctx.Base.int_if_possible(port))
+                sock.connect(connection)
 
-            connection = (remote_ip, uplink.ctx.Base.int_if_possible(port))
-            newSocket.connect(connection)
+                result['opened_ports'].append(port)
+                uplink.ctx.Base.running_sockets.append(sock)
+                sock.shutdown(socket.SHUT_RDWR)
+                uplink.ctx.Base.running_sockets.remove(sock)
+                return result
 
-            await p.send_priv_msg(
-                nick_from=uplink.ctx.Config.SERVICE_NICKNAME,
-                msg=f"[ {uplink.ctx.Config.COLORS.red}PROXY_SCAN{uplink.ctx.Config.COLORS.nogc} ] {fullname} ({remote_ip}) :     Port [{str(port)}] ouvert sur l'adresse ip [{remote_ip}]",
-                channel=uplink.ctx.Config.SERVICE_CHANLOG
-                )
-            # print(f"=======> Le port {str(port)} est ouvert !!")
-            uplink.ctx.Base.running_sockets.append(newSocket)
-            # print(newSocket)
-            newSocket.shutdown(socket.SHUT_RDWR)
-            newSocket.close()
+            except (socket.timeout, ConnectionRefusedError):
+                uplink.ctx.Logs.debug(f"[LOCAL SCAN] Port {remote_ip}:{str(port)} is close.")
+                result['closed_ports'].append(port)
+            except AttributeError as ae:
+                uplink.ctx.Logs.warning(f"AttributeError ({remote_ip}): {ae}")
+            except socket.gaierror as err:
+                uplink.ctx.Logs.warning(f"Address Info Error ({remote_ip}): {err}")
 
-        except (socket.timeout, ConnectionRefusedError):
-            uplink.ctx.Logs.info(f"Le port {remote_ip}:{str(port)} est fermé")
-        except AttributeError as ae:
-            uplink.ctx.Logs.warning(f"AttributeError ({remote_ip}): {ae}")
-        except socket.gaierror as err:
-            uplink.ctx.Logs.warning(f"Address Info Error ({remote_ip}): {err}")
-        finally:
-            # newSocket.shutdown(socket.SHUT_RDWR)
-            newSocket.close()
-            uplink.ctx.Logs.info('=======> Fermeture de la socket')
+    return result
 
-async def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser') -> list[int]:
+def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser') -> list[int]:
     """psutil_scan for Linux (should be run on the same location as the unrealircd server)
 
     Args:
@@ -695,28 +601,16 @@ async def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser'
     Returns:
         list[int]: list of ports
     """
-    p = uplink.ctx.Irc.Protocol
     remote_ip = user_model.remote_ip
-    username = user_model.username
-    hostname = user_model.hostname
-    nickname = user_model.nickname
-
     if remote_ip in uplink.ctx.Config.WHITELISTED_IP:
+        return None
+    if uplink.mod_config.psutil_scan == 0:
         return None
 
     try:
         connections = psutil.net_connections(kind='inet')
-        fullname = f'{nickname}!{username}@{hostname}'
-
         matching_ports = [conn.raddr.port for conn in connections if conn.raddr and conn.raddr.ip == remote_ip]
-        uplink.ctx.Logs.info(f"Connexion of {fullname} ({remote_ip}) using ports : {str(matching_ports)}")
-
-        if matching_ports:
-            await p.send_priv_msg(
-                    nick_from=uplink.ctx.Config.SERVICE_NICKNAME,
-                    msg=f"[ {uplink.ctx.Config.COLORS.red}PSUTIL_SCAN{uplink.ctx.Config.COLORS.black} ] {fullname} ({remote_ip}) : is using ports {matching_ports}",
-                    channel=uplink.ctx.Config.SERVICE_CHANLOG
-                )
+        uplink.ctx.Logs.debug(f"Connexion of ({remote_ip}) using ports : {str(matching_ports)}")
 
         return matching_ports
 

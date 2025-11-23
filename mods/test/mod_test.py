@@ -53,11 +53,11 @@ class Test(IModule):
         """
 
         # Create module commands (Mandatory)
-        self.ctx.Irc.build_command(0, self.module_name, 'test-command', 'Execute a test command')
-        self.ctx.Irc.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
-        self.ctx.Irc.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
-        self.ctx.Irc.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
-        self.ctx.Irc.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
+        self.ctx.Commands.build_command(0, self.module_name, 'test-command', 'Execute a test command')
+        self.ctx.Commands.build_command(0, self.module_name, 'asyncio', 'Create a new asynchron task!')
+        self.ctx.Commands.build_command(1, self.module_name, 'test_level_1', 'Execute a level 1 test command')
+        self.ctx.Commands.build_command(2, self.module_name, 'test_level_2', 'Execute a level 2 test command')
+        self.ctx.Commands.build_command(3, self.module_name, 'test_level_3', 'Execute a level 3 test command')
 
         # Build the default configuration model (Mandatory)
         self._mod_config = self.ModConfModel(param_exemple1='str', param_exemple2=1)
