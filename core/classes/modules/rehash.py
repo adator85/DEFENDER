@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import sys
 import time
@@ -25,7 +26,6 @@ REHASH_MODULES = [
     'core.classes.protocols.unreal6',
     'core.classes.protocols.inspircd'
 ]
-
 
 async def restart_service(uplink: 'Loader', reason: str = "Restarting with no reason!") -> None:
     """
@@ -69,7 +69,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
     uplink.Settings.set_cache('db_commands', uplink.Commands.DB_COMMANDS)
     
-    await uplink.RpcServer.stop_server()
+    await uplink.RpcServer.stop_rpc_server()
 
     restart_flag = False
     config_model_bakcup = uplink.Config
@@ -122,10 +122,68 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Irc.Protocol.register_command()
 
     uplink.RpcServer = uplink.RpcServerModule.JSonRpcServer(uplink)
-    uplink.Base.create_asynctask(uplink.RpcServer.start_server())
+    uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, nickname)
 
     return None
+
+async def shutdown(uplink: 'Loader') -> None:
+        """Methode qui va préparer l'arrêt complêt du service
+        """
+        # Stop RpcServer if running
+        await uplink.RpcServer.stop_rpc_server()
+
+        # unload modules.
+        uplink.Logs.debug(f"=======> Unloading all modules!")
+        for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
+            await uplink.ModuleUtils.unload_one_module(module.module_name)
+
+        # Nettoyage des timers
+        uplink.Logs.debug(f"=======> Closing all timers!")
+        for timer in uplink.Base.running_timers:
+            while timer.is_alive():
+                uplink.Logs.debug(f"> waiting for {timer.name} to close")
+                timer.cancel()
+                await asyncio.sleep(0.2)
+            uplink.Logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
+
+        uplink.Logs.debug(f"=======> Closing all Threads!")
+        for thread in uplink.Base.running_threads:
+            if thread.name == 'heartbeat' and thread.is_alive():
+                uplink.Base.execute_periodic_action()
+                uplink.Logs.debug(f"> Running the last periodic action")
+            uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
+
+        uplink.Logs.debug(f"=======> Closing all IO Threads!")
+        [th.thread_event.clear() for th in uplink.Base.running_iothreads]
+
+        uplink.Logs.debug(f"=======> Closing all IO TASKS!")
+        try:
+            await asyncio.wait_for(asyncio.gather(*uplink.Base.running_iotasks), timeout=5)
+        except asyncio.exceptions.TimeoutError as te:
+            uplink.Logs.debug(f"Asyncio Timeout reached! {te}")
+            for task in uplink.Base.running_iotasks:
+                task.cancel()
+        except asyncio.exceptions.CancelledError as cerr:
+            uplink.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
+
+        uplink.Logs.debug(f"=======> Closing all Sockets!")
+        for soc in uplink.Base.running_sockets:
+            soc.close()
+            while soc.fileno() != -1:
+                soc.close()
+            uplink.Base.running_sockets.remove(soc)
+            uplink.Logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
+
+        uplink.Base.running_timers.clear()
+        uplink.Base.running_threads.clear()
+        uplink.Base.running_iotasks.clear()
+        uplink.Base.running_iothreads.clear()
+        uplink.Base.running_sockets.clear()
+
+        uplink.Base.db_close()
+
+        return None

@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 
 class JSonRpcServer:
 
-    def __init__(self, context: 'Loader', *, hostname: str = '0.0.0.0', port: int = 5000):
+    def __init__(self, context: 'Loader'):
         self._ctx = context
         self.live: bool = False
-        self.host = hostname
-        self.port = port
+        self.host = context.Config.RPC_HOST
+        self.port = context.Config.RPC_PORT
         self.routes: list[Route] = []
         self.server: Optional[uvicorn.Server] = None
 
@@ -34,12 +34,12 @@ class JSonRpcServer:
             'command.get.by.module': RPCCommand(context).command_get_by_module
         }
 
-    async def start_server(self):
+    async def start_rpc_server(self):
 
         if not self.live:
             self.routes = [Route('/api', self.request_handler, methods=['POST'])]
             self.app_jsonrpc = Starlette(debug=False, routes=self.routes)
-            config = uvicorn.Config(self.app_jsonrpc, host=self.host, port=self.port, log_level=self._ctx.Config.DEBUG_LEVEL)
+            config = uvicorn.Config(self.app_jsonrpc, host=self.host, port=self.port, log_level=self._ctx.Config.DEBUG_LEVEL+10)
             self.server = uvicorn.Server(config)
             self.live = True
             await self._ctx.Irc.Protocol.send_priv_msg(
@@ -52,7 +52,7 @@ class JSonRpcServer:
         else:
             self._ctx.Logs.debug("Server already running")
     
-    async def stop_server(self):
+    async def stop_rpc_server(self):
         
         if self.server:
             self.server.should_exit = True

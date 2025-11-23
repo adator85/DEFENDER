@@ -28,9 +28,11 @@ class FloodUser(MainModel):
     nbr_msg: int = 0
     first_msg_time: int = 0
 
-DB_FLOOD_USERS: list[FloodUser] = []
-DB_ABUSEIPDB_USERS: list[MUser] = []
-DB_FREEIPAPI_USERS: list[MUser] = []
-DB_CLOUDFILT_USERS: list[MUser] = []
-DB_PSUTIL_USERS: list[MUser]    = []
-DB_LOCALSCAN_USERS: list[MUser] = []
+
+class RepDB:
+    DB_FLOOD_USERS: list[FloodUser] = []
+    DB_ABUSEIPDB_USERS: list[MUser] = []
+    DB_FREEIPAPI_USERS: list[MUser] = []
+    DB_CLOUDFILT_USERS: list[MUser] = []
+    DB_PSUTIL_USERS: list[MUser]    = []
+    DB_LOCALSCAN_USERS: list[MUser] = []

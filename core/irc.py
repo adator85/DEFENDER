@@ -126,7 +126,11 @@ class Irc:
 
     async def listen(self):
         self.ctx.Base.create_asynctask(
-            self.ctx.Base.create_thread_io(self.ctx.Utils.heartbeat, True, self.ctx, self.beat)
+            self.ctx.Base.create_thread_io(
+                self.ctx.Utils.heartbeat, 
+                self.ctx, self.beat, 
+                run_once=True, thread_flag=True
+                )
         )
 
         while self.signal:
@@ -343,8 +347,13 @@ class Irc:
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.ctx.Config.SERVICE_NICKNAME
+        response = self.ctx.Base.create_asynctask(
+            self.ctx.Base.create_thread_io(
+                self.ctx.Base.check_for_new_version, True
+            )
+        )
 
-        if self.ctx.Base.check_for_new_version(True):
+        if response:
             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.ctx.Config.CURRENT_VERSION} >>> {self.ctx.Config.LATEST_VERSION}")
             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
         else:
