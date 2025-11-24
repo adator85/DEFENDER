@@ -11,7 +11,7 @@ from core import install
 #############################################
 
 async def main():
-    install.update_packages()
+    # install.update_packages()
     from core.loader import Loader
     loader = Loader()
     await loader.start()

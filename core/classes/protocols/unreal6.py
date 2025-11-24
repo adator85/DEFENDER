@@ -510,7 +510,7 @@ class Unrealircd6(IProtocol):
         return None
 
     async def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str,
-                 vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+                 vhost: str, remote_ip: str, realname: str, geoip: str, print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -535,7 +535,7 @@ class Unrealircd6(IProtocol):
                 self._ctx.Definition.MUser(
                             uid=uid, nickname=nickname, username=username, 
                             realname=realname,hostname=hostname, umodes=umodes,
-                            vhost=vhost, remote_ip=remote_ip
+                            vhost=vhost, remote_ip=remote_ip, geoip=geoip
                         )
                     )
 
@@ -1472,7 +1472,7 @@ class Unrealircd6(IProtocol):
                         sasl_obj.fingerprint = str(scopy[6])
                         await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SASL {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {sasl_obj.client_uid} C +")
 
-                    self.on_sasl_authentication_process(sasl_obj)
+                    await self.on_sasl_authentication_process(sasl_obj)
                     return sasl_obj
 
                 case 'C':

@@ -126,8 +126,8 @@ class Test(IModule):
                         await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"This is private message to the sender ...", channel=c.name)
 
                     # How to update your module configuration
-                    self.update_configuration('param_exemple2', 7)
-                    self.update_configuration('param_exemple1', 'my_value')
+                    await self.update_configuration('param_exemple2', 7)
+                    await self.update_configuration('param_exemple1', 'my_value')
 
                     # Log if you want the result
                     self.ctx.Logs.debug(f"Test logs ready")

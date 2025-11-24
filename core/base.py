@@ -378,7 +378,7 @@ class Base:
 
         if run_once:
             for task in asyncio.all_tasks():
-                if task.get_name().lower() == async_name.lower():
+                if task.get_name().lower() == name.lower():
                     return None
 
         task = asyncio.create_task(func, name=name)
