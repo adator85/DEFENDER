@@ -22,6 +22,25 @@ class Module:
     def __init__(self, loader: 'Loader') -> None:
         self._ctx = loader
 
+    def is_module_compliant(self, obj: object) -> bool:
+        class_name = obj.__name__
+        is_compliant = True
+        attributs = {'MOD_HEADER', 'mod_config'}
+        methods = {'load', 'unload', 'create_tables', 'cmd', 'hcmds', 'ModConfModel'}
+
+        obj_attributs: set = set([attribut for attribut in dir(obj) if not callable(getattr(obj, attribut)) and not attribut.startswith('__')])
+        obj_methods: set = set([method for method in dir(obj) if callable(getattr(obj, method)) and not method.startswith('__')])
+
+        if not attributs.issubset(obj_attributs):
+            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
+            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
+
+        if not methods.issubset(obj_methods):
+            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
+            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
+
+        return is_compliant
+
     def get_all_available_modules(self) -> list[str]:
         """Get list of all main modules
         using this pattern mod_*.py
@@ -100,13 +119,14 @@ class Module:
                     channel=self._ctx.Config.SERVICE_CHANLOG
                 )
                 return False
-
-            return self.reload_one_module(module_name, nickname)
+            reload_mod = await self.reload_one_module(module_name, nickname)
+            return reload_mod
         
         # Charger le module
         try:
             loaded_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
             my_class = getattr(loaded_module, class_name, None)         # Récuperer le nom de classe
+            self.is_module_compliant(my_class)
             create_instance_of_the_class: 'IModule' = my_class(self._ctx)       # Créer une nouvelle instance de la classe
             await create_instance_of_the_class.load() if self._ctx.Utils.is_coroutinefunction(create_instance_of_the_class.load) else create_instance_of_the_class.load()
             self.create_module_header(create_instance_of_the_class.MOD_HEADER)
@@ -118,17 +138,9 @@ class Module:
                     msg=tr("[%sMODULE ERROR%s] Module %s is facing issues! %s", red, nogc, module_name, attr),
                     channel=self._ctx.Config.SERVICE_CHANLOG
                 )
-            self._ctx.Logs.error(msg=attr, exc_info=True)
-            return False
-
-        if not hasattr(create_instance_of_the_class, 'cmd'):
-            await self._ctx.Irc.Protocol.send_priv_msg(
-                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=tr("cmd method is not available in the module (%s)", module_name),
-                    channel=self._ctx.Config.SERVICE_CHANLOG
-                )
-            self._ctx.Logs.critical(f"The Module {module_name} has not been loaded because cmd method is not available")
+            self.drop_module_from_sys_modules(module_name)
             await self.db_delete_module(module_name)
+            self._ctx.Logs.error(msg=attr, exc_info=True)
             return False
 
         # Charger la nouvelle class dans la variable globale
@@ -184,6 +196,7 @@ class Module:
                 the_module = sys.modules[f'mods.{module_folder}.{module_name}']
                 importlib.reload(the_module)
                 my_class = getattr(the_module, class_name, None)
+                self.is_module_compliant(my_class)
                 new_instance: 'IModule' = my_class(self._ctx)
                 await new_instance.load() if self._ctx.Utils.is_coroutinefunction(new_instance.load) else new_instance.load()
                 self.create_module_header(new_instance.MOD_HEADER)
@@ -215,7 +228,9 @@ class Module:
                         msg=f"[RELOAD MODULE ERROR]: {err}",
                         channel=self._ctx.Config.SERVICE_CHANLOG
                     )
+            self.drop_module_from_sys_modules(module_name)
             await self.db_delete_module(module_name)
+            return False
 
     def reload_all_modules(self) -> bool:
         ...
@@ -323,6 +338,24 @@ class Module:
         self._ctx.Logs.debug(f"[SYS MODULE] (mods.{module_folder}.{module_name}) not found in sys.modules")
         return False
 
+    def drop_module_from_sys_modules(self, module_name: str) -> bool:
+        """_summary_
+
+        Args:
+            module_name (str): _description_
+
+        Returns:
+            bool: _description_
+        """
+        module_folder, module_name, class_name = self.get_module_information(module_name)
+        full_module_name = "mods." + module_folder + "." + module_name
+        del sys.modules[full_module_name]
+
+        if not self.is_module_exist_in_sys_module(module_name):
+            return True
+
+        return False
+
     '''
         ALL METHODS RELATED TO THE MModule MODEL DATACLASS
     '''
@@ -342,6 +375,22 @@ class Module:
         
         self._ctx.Logs.debug(f"[MODEL MODULE GET] The module {module_name} not found in the model DB_MODULES")
         return None
+
+    def model_drop_module(self, module_name: str) -> bool:
+        """Drop a module model object from DB_MODULES
+
+        Args:
+            module_name (str): The module name you want to drop
+
+        Returns:
+            bool: True if the model has been dropped
+        """
+        module = self.model_get_module(module_name)
+        if module:
+            self.DB_MODULES.remove(module)
+            return True
+
+        return False
 
     def model_get_loaded_modules(self) -> list[MModule]:
         """Get the instance of DB_MODULES.

@@ -1,9 +1,11 @@
 import asyncio
 import importlib
 import sys
-import time
+import threading
 from typing import TYPE_CHECKING
-import socket
+import core.module as module_mod
+from core.classes.modules import user, admin, client, channel, reputation, sasl
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -12,9 +14,16 @@ if TYPE_CHECKING:
 REHASH_MODULES = [
     'core.definition',
     'core.utils',
-    'core.classes.modules.config',
     'core.base',
+    'core.module',
+    'core.classes.modules.config',
     'core.classes.modules.commands',
+    'core.classes.modules.user',
+    'core.classes.modules.admin',
+    'core.classes.modules.client',
+    'core.classes.modules.channel',
+    'core.classes.modules.reputation',
+    'core.classes.modules.sasl',
     'core.classes.modules.rpc.rpc_channel',
     'core.classes.modules.rpc.rpc_command',
     'core.classes.modules.rpc.rpc_user',
@@ -61,26 +70,30 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, uplink.Settings.current_admin)
 
-    uplink.Irc.signal = True
     await uplink.Irc.run()
     uplink.Config.DEFENDER_RESTART = 0
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
-    uplink.Settings.set_cache('db_commands', uplink.Commands.DB_COMMANDS)
-    
+    uplink.Settings.set_cache('commands', uplink.Commands.DB_COMMANDS)
+    uplink.Settings.set_cache('users', uplink.User.UID_DB)
+    uplink.Settings.set_cache('clients', uplink.Client.CLIENT_DB)
+    uplink.Settings.set_cache('admins', uplink.Admin.UID_ADMIN_DB)
+    uplink.Settings.set_cache('reputations', uplink.Reputation.UID_REPUTATION_DB)
+    uplink.Settings.set_cache('channels', uplink.Channel.UID_CHANNEL_DB)
+    uplink.Settings.set_cache('sasl', uplink.Sasl.DB_SASL)
+    uplink.Settings.set_cache('modules', uplink.ModuleUtils.DB_MODULES)
+    uplink.Settings.set_cache('module_headers', uplink.ModuleUtils.DB_MODULE_HEADERS)
+
     await uplink.RpcServer.stop_rpc_server()
 
     restart_flag = False
     config_model_bakcup = uplink.Config
     mods = REHASH_MODULES
+    _count_reloaded_modules = len(mods)
     for mod in mods:
         importlib.reload(sys.modules[mod])
-        await uplink.Irc.Protocol.send_priv_msg(
-            nick_from=uplink.Config.SERVICE_NICKNAME,
-            msg=f'[REHASH] Module [{mod}] reloaded', 
-            channel=uplink.Config.SERVICE_CHANLOG
-            )
+
     uplink.Utils = sys.modules['core.utils']
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
@@ -115,9 +128,27 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     # Reload Main Commands Module
     uplink.Commands = uplink.CommandModule.Command(uplink)
-    uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('db_commands')
-
+    uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('commands')
     uplink.Base = uplink.BaseModule.Base(uplink)
+
+    uplink.User = user.User(uplink)
+    uplink.Client = client.Client(uplink)
+    uplink.Admin = admin.Admin(uplink)
+    uplink.Channel = channel.Channel(uplink)
+    uplink.Reputation = reputation.Reputation(uplink)
+    uplink.ModuleUtils = module_mod.Module(uplink)
+    uplink.Sasl = sasl.Sasl(uplink)
+
+    # Backup data
+    uplink.User.UID_DB = uplink.Settings.get_cache('users')
+    uplink.Client.CLIENT_DB = uplink.Settings.get_cache('clients')
+    uplink.Admin.UID_ADMIN_DB = uplink.Settings.get_cache('admins')
+    uplink.Channel.UID_CHANNEL_DB = uplink.Settings.get_cache('channels')
+    uplink.Reputation.UID_REPUTATION_DB = uplink.Settings.get_cache('reputations')
+    uplink.Sasl.DB_SASL = uplink.Settings.get_cache('sasl')
+    uplink.ModuleUtils.DB_MODULE_HEADERS = uplink.Settings.get_cache('module_headers')
+    uplink.ModuleUtils.DB_MODULES = uplink.Settings.get_cache('modules')
+
     uplink.Irc.Protocol = uplink.PFactory.get()
     uplink.Irc.Protocol.register_command()
 
@@ -127,6 +158,15 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, nickname)
+
+    color_green = uplink.Config.COLORS.green
+    color_reset = uplink.Config.COLORS.nogc
+
+    await uplink.Irc.Protocol.send_priv_msg(
+        uplink.Config.SERVICE_NICKNAME,
+        tr("[ %sREHASH INFO%s ] Rehash completed! %s modules reloaded.", color_green, color_reset, _count_reloaded_modules),
+        uplink.Config.SERVICE_CHANLOG
+    )
 
     return None
 
@@ -140,6 +180,14 @@ async def shutdown(uplink: 'Loader') -> None:
         uplink.Logs.debug(f"=======> Unloading all modules!")
         for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
             await uplink.ModuleUtils.unload_one_module(module.module_name)
+
+        uplink.Logs.debug(f"=======> Closing all Sockets!")
+        for soc in uplink.Base.running_sockets:
+            soc.close()
+            while soc.fileno() != -1:
+                soc.close()
+            uplink.Base.running_sockets.remove(soc)
+            uplink.Logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
 
         # Nettoyage des timers
         uplink.Logs.debug(f"=======> Closing all timers!")
@@ -158,25 +206,37 @@ async def shutdown(uplink: 'Loader') -> None:
             uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
 
         uplink.Logs.debug(f"=======> Closing all IO Threads!")
-        [th.thread_event.clear() for th in uplink.Base.running_iothreads]
+        [th.thread_event.clear() for th in uplink.Base.running_iothreads if isinstance(th.thread_event, threading.Event)]
 
         uplink.Logs.debug(f"=======> Closing all IO TASKS!")
-        try:
-            await asyncio.wait_for(asyncio.gather(*uplink.Base.running_iotasks), timeout=5)
-        except asyncio.exceptions.TimeoutError as te:
-            uplink.Logs.debug(f"Asyncio Timeout reached! {te}")
-            for task in uplink.Base.running_iotasks:
-                task.cancel()
-        except asyncio.exceptions.CancelledError as cerr:
-            uplink.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
+        t = None
+        for task in uplink.Base.running_iotasks:
+            if 'force_shutdown' == task.get_name():
+                t = task
+        if t:
+            uplink.Base.running_iotasks.remove(t)
 
-        uplink.Logs.debug(f"=======> Closing all Sockets!")
-        for soc in uplink.Base.running_sockets:
-            soc.close()
-            while soc.fileno() != -1:
-                soc.close()
-            uplink.Base.running_sockets.remove(soc)
-            uplink.Logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
+        task_already_canceled: list = []
+        for task in uplink.Base.running_iotasks:
+            try:
+                if not task.cancel():
+                    print(task.get_name())
+                    task_already_canceled.append(task)
+            except asyncio.exceptions.CancelledError as cerr:
+                uplink.Logs.debug(f"Asyncio CancelledError reached! {task}")
+
+        for task in task_already_canceled:
+            uplink.Base.running_iotasks.remove(task)
+        
+            for task in uplink.Base.running_iotasks:
+                try:
+                    await asyncio.wait_for(asyncio.gather(task), timeout=5)
+                except asyncio.exceptions.TimeoutError as te:
+                    uplink.Logs.debug(f"Asyncio Timeout reached! {te} {task}")
+                    for task in uplink.Base.running_iotasks:
+                        task.cancel()
+                except asyncio.exceptions.CancelledError as cerr:
+                    uplink.Logs.debug(f"Asyncio CancelledError reached! {cerr} {task}")
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()
@@ -187,3 +247,9 @@ async def shutdown(uplink: 'Loader') -> None:
         uplink.Base.db_close()
 
         return None
+
+async def force_shutdown(uplink: 'Loader') -> None:
+    await asyncio.sleep(10)
+    uplink.Logs.critical("The system has been killed because something is blocking the loop")
+    uplink.Logs.critical(asyncio.all_tasks())        
+    sys.exit('The system has been killed')

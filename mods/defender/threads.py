@@ -227,6 +227,7 @@ async def coro_psutil_scan(uplink: 'Defender'):
             for user in uplink.Schemas.DB_PSUTIL_USERS:
                 result = await uplink.ctx.Base.create_thread_io(uplink.mod_utils.action_scan_client_with_psutil, uplink, user)
                 list_to_remove.append(user)
+
                 if not result:
                     continue
                 

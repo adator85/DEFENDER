@@ -17,6 +17,7 @@ class MClone(MainModel):
     hostname: str = 'localhost'
     umodes: str = None
     remote_ip: str = '127.0.0.1'
-    group: str = 'Default'
+    group: str = 'Default',
+    geoip: str = 'XX'
 
 # DB_CLONES: list[MClone] = []

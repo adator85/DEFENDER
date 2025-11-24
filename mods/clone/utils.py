@@ -103,6 +103,17 @@ def generate_ipv4_for_clone(faker_instance: 'Faker', auto: bool = True) -> str:
     """
     return faker_instance.ipv4_private() if auto else '127.0.0.1'
 
+def generate_country_code_for_clone(faker_instance: 'Faker') -> str:
+    """Generate the alpha-2 country code for clone
+
+    Args:
+        faker_instance (Faker): The Faker Instance
+
+    Returns:
+        str: The Country Code
+    """
+    return faker_instance.country_code('alpha-2')
+
 def generate_hostname_for_clone(faker_instance: 'Faker') -> str:
     """Generate hostname for clone
 
@@ -143,6 +154,8 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
     hostname = generate_hostname_for_clone(faker)
     vhost = generate_vhost_for_clone(faker)
 
+    geoip = generate_country_code_for_clone(faker)
+
     checkNickname = uplink.Clone.nickname_exists(nickname)
     checkUid = uplink.Clone.uid_exists(uid=uid)
 
@@ -167,7 +180,8 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
                 remote_ip=decoded_ip,
                 vhost=vhost,
                 group=group,
-                channels=[]
+                channels=[],
+                geoip=geoip
                 )
 
     uplink.Clone.insert(clone)

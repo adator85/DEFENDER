@@ -75,9 +75,6 @@ class Irc:
         self.ctx.Commands.build_command(1, 'core', 'deauth', 'Deauth from the irc service')
         self.ctx.Commands.build_command(1, 'core', 'checkversion', 'Check the version of the irc service')
         self.ctx.Commands.build_command(2, 'core', 'show_modules', 'Display a list of loaded modules')
-        self.ctx.Commands.build_command(2, 'core', 'show_timers', 'Display active timers')
-        self.ctx.Commands.build_command(2, 'core', 'show_threads', 'Display active threads in the system')
-        self.ctx.Commands.build_command(2, 'core', 'show_asyncio', 'Display active asyncio')
         self.ctx.Commands.build_command(2, 'core', 'show_channels', 'Display a list of active channels')
         self.ctx.Commands.build_command(2, 'core', 'show_users', 'Display a list of connected users')
         self.ctx.Commands.build_command(2, 'core', 'show_clients', 'Display a list of connected clients')
@@ -85,15 +82,18 @@ class Irc:
         self.ctx.Commands.build_command(2, 'core', 'show_configuration', 'Display the current configuration settings')
         self.ctx.Commands.build_command(2, 'core', 'show_cache', 'Display the current cache')
         self.ctx.Commands.build_command(2, 'core', 'clear_cache', 'Clear the cache!')
-        self.ctx.Commands.build_command(3, 'core', 'quit', 'Disconnect the bot or user from the server.')
-        self.ctx.Commands.build_command(3, 'core', 'restart', 'Restart the bot or service.')
         self.ctx.Commands.build_command(3, 'core', 'addaccess', 'Add a user or entity to an access list with specific permissions.')
         self.ctx.Commands.build_command(3, 'core', 'editaccess', 'Modify permissions for an existing user or entity in the access list.')
         self.ctx.Commands.build_command(3, 'core', 'delaccess', 'Remove a user or entity from the access list.')
         self.ctx.Commands.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
+        self.ctx.Commands.build_command(4, 'core', 'quit', 'Disconnect the bot or user from the server.')
         self.ctx.Commands.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
+        self.ctx.Commands.build_command(4, 'core', 'restart', 'Restart the bot or service.')
         self.ctx.Commands.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
         self.ctx.Commands.build_command(4, 'core', 'print_vars', 'Print users in a file.')
+        self.ctx.Commands.build_command(4, 'core', 'show_timers', 'Display active timers')
+        self.ctx.Commands.build_command(4, 'core', 'show_threads', 'Display active threads in the system')
+        self.ctx.Commands.build_command(4, 'core', 'show_asyncio', 'Display active asyncio')
         self.ctx.Commands.build_command(4, 'core', 'start_rpc', 'Start defender jsonrpc server')
         self.ctx.Commands.build_command(4, 'core', 'stop_rpc', 'Stop defender jsonrpc server')
 
@@ -103,6 +103,7 @@ class Irc:
 
     async def run(self):
         try:
+            self.signal = True
             await self.connect()
             await self.listen()
         except asyncio.exceptions.IncompleteReadError as ie:
@@ -206,64 +207,52 @@ class Irc:
         
         return None
 
-    async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
-        s = sasl_model
-        if sasl_model:
-            async def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
-                if fingerprint:
-                    mes_donnees = {'fingerprint': fingerprint}
-                    query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
-                else:
-                    mes_donnees = {'user': username, 'password': self.ctx.Utils.hash_password(password)}
-                    query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+    # async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
+    #     s = sasl_model
+    #     if sasl_model:
+    #         async def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
+    #             if fingerprint:
+    #                 mes_donnees = {'fingerprint': fingerprint}
+    #                 query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
+    #             else:
+    #                 mes_donnees = {'user': username, 'password': self.ctx.Utils.hash_password(password)}
+    #                 query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
 
-                result = await self.ctx.Base.db_execute_query(query, mes_donnees)
-                user_from_db = result.fetchone()
-                if user_from_db:
-                    return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
-                else:
-                    return None
+    #             result = await self.ctx.Base.db_execute_query(query, mes_donnees)
+    #             user_from_db = result.fetchone()
+    #             if user_from_db:
+    #                 return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
+    #             else:
+    #                 return None
 
-            if s.message_type == 'C' and s.mechanisme == 'PLAIN':
-                # Connection via PLAIN
-                admin_info = await db_get_admin_info(username=s.username, password=s.password)
-                if admin_info is not None:
-                    s.auth_success = True
-                    s.level = admin_info.get('level', 0)
-                    s.language = admin_info.get('language', 'EN')
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
-                else:
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
+    #         if s.message_type == 'C' and s.mechanisme == 'PLAIN':
+    #             # Connection via PLAIN
+    #             admin_info = await db_get_admin_info(username=s.username, password=s.password)
+    #             if admin_info is not None:
+    #                 s.auth_success = True
+    #                 s.level = admin_info.get('level', 0)
+    #                 s.language = admin_info.get('language', 'EN')
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+    #             else:
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
-            elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
-                # Connection using fingerprints
-                admin_info = await db_get_admin_info(fingerprint=s.fingerprint)
+    #         elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
+    #             # Connection using fingerprints
+    #             admin_info = await db_get_admin_info(fingerprint=s.fingerprint)
                 
-                if admin_info is not None:
-                    s.auth_success = True
-                    s.level = admin_info.get('level', 0)
-                    s.username = admin_info.get('user', None)
-                    s.language = admin_info.get('language', 'EN')
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
-                else:
-                    # "904 <nick> :SASL authentication failed"
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-                    await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
-
-    def get_defender_uptime(self) -> str:
-        """Savoir depuis quand Defender est connecté
-
-        Returns:
-            str: L'écart entre la date du jour et celle de la connexion de Defender
-        """
-        current_datetime = datetime.now()
-        diff_date = current_datetime - self.defender_connexion_datetime
-        uptime = timedelta(days=diff_date.days, seconds=diff_date.seconds)
-
-        return uptime
+    #             if admin_info is not None:
+    #                 s.auth_success = True
+    #                 s.level = admin_info.get('level', 0)
+    #                 s.username = admin_info.get('user', None)
+    #                 s.language = admin_info.get('language', 'EN')
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
+    #             else:
+    #                 # "904 <nick> :SASL authentication failed"
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
+    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
 
     def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
         user_obj = self.ctx.User.get_user(uid)
@@ -946,6 +935,7 @@ class Irc:
                 try:
                     final_reason = ' '.join(cmd[1:])
                     self.hb_active = False
+                    self.ctx.Base.create_asynctask(rehash.force_shutdown(self.ctx), run_once=True)
                     await rehash.shutdown(self.ctx)
                     self.ctx.Base.execute_periodic_action()
 
@@ -1135,7 +1125,7 @@ class Irc:
                 return None
 
             case 'uptime':
-                uptime = self.get_defender_uptime()
+                uptime = self.ctx.Utils.get_defender_uptime()
                 await self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,

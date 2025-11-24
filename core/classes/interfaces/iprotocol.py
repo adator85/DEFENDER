@@ -244,7 +244,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, print_log: bool = True) -> None:
+    async def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, geoip: str, print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -256,6 +256,7 @@ class IProtocol(ABC):
             vhost (str): vhost of the client you want to create
             remote_ip (str): remote_ip of the client you want to create
             realname (str): realname of the client you want to create
+            geoip (str): The country code of the client you want to create
             print_log (bool, optional): print logs if true. Defaults to True.
         """
 

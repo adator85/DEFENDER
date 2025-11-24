@@ -5,9 +5,8 @@ import gc
 import ssl
 from pathlib import Path
 from re import match, sub
-import threading
 from typing import Literal, Optional, Any, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import time, sleep
 from random import choice
 from hashlib import md5, sha3_512
@@ -114,6 +113,18 @@ def get_ssl_context() -> ssl.SSLContext:
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
+
+def get_defender_uptime(loader: 'Loader') -> str:
+    """Savoir depuis quand Defender est connecté
+
+    Returns:
+        str: L'écart entre la date du jour et celle de la connexion de Defender
+    """
+    current_datetime = datetime.now()
+    diff_date = current_datetime - loader.Irc.defender_connexion_datetime
+    uptime = timedelta(days=diff_date.days, seconds=diff_date.seconds)
+
+    return uptime
 
 def run_python_garbage_collector() -> int:
     """Run Python garbage collector

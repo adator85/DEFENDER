@@ -534,8 +534,14 @@ def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUser') -
             'Accept': 'application/json',
             'Key': uplink.abuseipdb_key
         }
-
-        response = sess.request(method='GET', url=url, headers=headers, params=querystring, timeout=uplink.timeout)
+        try:
+            response = sess.request(method='GET', url=url, headers=headers, params=querystring, timeout=uplink.timeout)
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as err:
+            uplink.ctx.Logs.error(f"Time-out Error: {err}")
+            return None
+        except Exception as e:
+            uplink.ctx.Logs.error(f"Time-out Error: {e}")
+            return None
 
         if response.status_code != 200:
             uplink.ctx.Logs.warning(f'status code = {str(response.status_code)}')
