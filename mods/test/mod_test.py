@@ -26,11 +26,15 @@ class Test(IModule):
     }
     """Module Header (Mandatory)"""
 
+    @property
+    def mod_config(self) -> ModConfModel:
+        return self._mod_config
+
     def __init__(self, uplink: 'Loader'):
         super().__init__(uplink)
         self._mod_config: Optional[Test.ModConfModel] = None
 
-    def create_tables(self) -> None:
+    async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
 
@@ -45,12 +49,14 @@ class Test(IModule):
             )
         '''
 
-        # self.ctx.Base.db_execute_query(table_logs)
+        # await self.ctx.Base.db_execute_query(table_logs)
         return None
 
     async def load(self) -> None:
         """### Load Module Configuration (Mandatory)
         """
+        # Create tables if any (Mandatory)
+        await self.create_tables()
 
         # Create module commands (Mandatory)
         self.ctx.Commands.build_command(0, self.module_name, 'test-command', 'Execute a test command')
@@ -68,14 +74,15 @@ class Test(IModule):
         if self.mod_config.param_exemple2 == 1:
             await self.ctx.Irc.Protocol.send_priv_msg(self.ctx.Config.SERVICE_NICKNAME, "Param activated", self.ctx.Config.SERVICE_CHANLOG)
 
-    @property
-    def mod_config(self) -> ModConfModel:
-        return self._mod_config
-
     def unload(self) -> None:
         """### This method is called when you unload, or you reload the module (Mandatory)"""
         self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
+
+    async def asyncio_func(self) -> None:
+        self.ctx.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
+        await asyncio.sleep(2)
+        self.ctx.Logs.debug(f"End of the task: {self.__class__.__name__}")
 
     def cmd(self, data: list[str]) -> None:
         """All messages coming from the IRCD server will be handled using this method (Mandatory)
@@ -88,11 +95,6 @@ class Test(IModule):
             return None
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}")
-
-    async def asyncio_func(self) -> None:
-        self.ctx.Logs.debug(f"Starting async method in a task: {self.__class__.__name__}")
-        await asyncio.sleep(2)
-        self.ctx.Logs.debug(f"End of the task: {self.__class__.__name__}")
 
     async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
         """All messages coming from the user commands (Mandatory)

@@ -43,7 +43,7 @@ class Votekick(IModule):
     def mod_config(self) -> ModConfModel:
         return self._mod_config
 
-    def create_tables(self) -> None:
+    async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
 
@@ -65,15 +65,18 @@ class Votekick(IModule):
             )
         '''
 
-        self.ctx.Base.db_execute_query(table_logs)
-        self.ctx.Base.db_execute_query(table_vote)
+        await self.ctx.Base.db_execute_query(table_logs)
+        await self.ctx.Base.db_execute_query(table_vote)
         return None
 
     async def load(self) -> None:
 
+        # Create tables.
+        await self.create_tables()
+
         self._mod_config = self.ModConfModel()
         await self.sync_db()
-        
+
         # Add VoteKick Manager
         self.VoteKickManager = VotekickManager(self)
 

@@ -46,7 +46,7 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    def create_tables(self) -> None:
+    async def create_tables(self) -> None:
         """Method that will create the database if it does not exist.
         A single Session for this class will be created, which will be used within this class/module.
 
