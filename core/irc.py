@@ -133,7 +133,7 @@ class Irc:
                 run_once=True, thread_flag=True
                 )
         )
-        print("start_heartbeat.................")
+        # print("start_heartbeat.................")
         
         # await self.ctx.Base.create_thread_io(
         #     self.ctx.Utils.heartbeat, 
