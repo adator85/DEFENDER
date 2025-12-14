@@ -901,7 +901,7 @@ class Defender(IModule):
                     UserObject = self.ctx.User.get_user(nickoruid)
 
                     if UserObject is not None:
-                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.ctx.mod_utils.clean_uid(uid_in_chan) == UserObject.uid]
+                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.ctx.User.clean_uid(uid_in_chan) == UserObject.uid]
 
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {UserObject.uid}')
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {UserObject.nickname}')
@@ -925,6 +925,10 @@ class Defender(IModule):
 
             case 'sentinel':
                 # .sentinel on
+                if len(cmd) < 2:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} sentinel [ON | OFF]")
+                    return None
+
                 activation = str(cmd[1]).lower()
                 channel_to_dont_quit = [self.ctx.Config.SALON_JAIL, self.ctx.Config.SERVICE_CHANLOG]
 

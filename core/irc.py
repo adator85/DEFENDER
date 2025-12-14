@@ -133,10 +133,19 @@ class Irc:
                 run_once=True, thread_flag=True
                 )
         )
-
+        print("start_heartbeat.................")
+        
+        # await self.ctx.Base.create_thread_io(
+        #     self.ctx.Utils.heartbeat, 
+        #     self.ctx, self.beat, 
+        #     run_once=True, thread_flag=True
+        # )
+        
+        
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
             await self.send_response(data.splitlines())
+
 
     async def send_response(self, responses:list[bytes]) -> None:
         try:
@@ -1125,7 +1134,7 @@ class Irc:
                 return None
 
             case 'uptime':
-                uptime = self.ctx.Utils.get_defender_uptime()
+                uptime = self.ctx.Utils.get_defender_uptime(self.ctx)
                 await self.Protocol.send_notice(
                     nick_from=dnickname,
                     nick_to=fromuser,
