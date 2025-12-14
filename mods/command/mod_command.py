@@ -31,7 +31,7 @@ class Command(IModule):
     def mod_config(self) -> ModConfModel:
         return self._mod_config
 
-    def create_tables(self) -> None:
+    async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
         Args:
@@ -51,10 +51,14 @@ class Command(IModule):
             )
         '''
 
-        self.ctx.Base.db_execute_query(table_automode)
+        await self.ctx.Base.db_execute_query(table_automode)
         return None
 
-    def load(self) -> None:
+    async def load(self) -> None:
+
+        # Create the database
+        await self.create_tables()
+
         # Module Utils
         self.mod_utils = utils
         self.user_to_notice: str = ''
