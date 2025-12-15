@@ -1,6 +1,6 @@
 from logging import Logger
 from core.classes.modules.settings import global_settings
-from core.classes.modules import translation, user, admin, client, channel, reputation, settings, sasl
+from core.classes.modules import translation, user, admin, channel, reputation, settings, sasl
 import core.logs as logs
 import core.definition as df
 import core.utils as utils
@@ -62,8 +62,6 @@ class Loader:
         self.User: user.User                        = user.User(self)
 
         self.Settings.global_user                   = self.User
-
-        self.Client: client.Client                  = client.Client(self)
 
         self.Admin: admin.Admin                     = admin.Admin(self)
 
