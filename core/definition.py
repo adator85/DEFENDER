@@ -29,26 +29,6 @@ class MainModel:
         return [f.name for f in fields(self)]
 
 @dataclass
-class MClient(MainModel):
-    """Model Client for registred nickname"""
-    uid: str = None
-    account: str = None
-    nickname: str = None
-    username: str = None
-    realname: str = None
-    hostname: str = None
-    umodes: str = None
-    vhost: str = None
-    fingerprint: str = None
-    tls_cipher: str = None
-    isWebirc: bool = False
-    isWebsocket: bool = False
-    remote_ip: str = None
-    score_connexion: int = 0
-    geoip: str = None
-    connexion_datetime: datetime = field(default=datetime.now())
-
-@dataclass
 class MUser(MainModel):
     """Model User"""
 
@@ -282,9 +262,6 @@ class MConfig(MainModel):
 
     LOGGING_NAME: str = "defender"
     """The name of the Logging instance"""
-
-    TABLE_CLIENT: str = "core_client"
-    """Core Client table"""
 
     TABLE_ADMIN: str = "core_admin"
     """Core Admin table"""
