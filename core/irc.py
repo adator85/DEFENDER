@@ -2,14 +2,12 @@ import asyncio
 import re
 import ssl
 import threading
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 from core.classes.modules import rehash
 from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
-    from core.definition import MSasl
     from core.loader import Loader
 
 class Irc:
@@ -66,18 +64,11 @@ class Irc:
         self.ctx.Commands.build_command(0, 'core', 'copyright', 'Give some information about the IRC Service')
         self.ctx.Commands.build_command(0, 'core', 'uptime', 'Give you since when the service is connected')
         self.ctx.Commands.build_command(0, 'core', 'firstauth', 'First authentication of the Service')
-        self.ctx.Commands.build_command(0, 'core', 'register', f'Register your nickname /msg {self.ctx.Config.SERVICE_NICKNAME} REGISTER <password> <email>')
-        self.ctx.Commands.build_command(0, 'core', 'identify', f'Identify yourself with your password /msg {self.ctx.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>')
-        self.ctx.Commands.build_command(0, 'core', 'logout', 'Reverse the effect of the identify command')
-        self.ctx.Commands.build_command(1, 'core', 'load', 'Load an existing module')
-        self.ctx.Commands.build_command(1, 'core', 'unload', 'Unload a module')
-        self.ctx.Commands.build_command(1, 'core', 'reload', 'Reload a module')
         self.ctx.Commands.build_command(1, 'core', 'deauth', 'Deauth from the irc service')
         self.ctx.Commands.build_command(1, 'core', 'checkversion', 'Check the version of the irc service')
         self.ctx.Commands.build_command(2, 'core', 'show_modules', 'Display a list of loaded modules')
         self.ctx.Commands.build_command(2, 'core', 'show_channels', 'Display a list of active channels')
         self.ctx.Commands.build_command(2, 'core', 'show_users', 'Display a list of connected users')
-        self.ctx.Commands.build_command(2, 'core', 'show_clients', 'Display a list of connected clients')
         self.ctx.Commands.build_command(2, 'core', 'show_admins', 'Display a list of administrators')
         self.ctx.Commands.build_command(2, 'core', 'show_configuration', 'Display the current configuration settings')
         self.ctx.Commands.build_command(2, 'core', 'show_cache', 'Display the current cache')
@@ -96,6 +87,9 @@ class Irc:
         self.ctx.Commands.build_command(4, 'core', 'show_asyncio', 'Display active asyncio')
         self.ctx.Commands.build_command(4, 'core', 'start_rpc', 'Start defender jsonrpc server')
         self.ctx.Commands.build_command(4, 'core', 'stop_rpc', 'Stop defender jsonrpc server')
+        self.ctx.Commands.build_command(4, 'core', 'load', 'Load an existing module')
+        self.ctx.Commands.build_command(4, 'core', 'unload', 'Unload a module')
+        self.ctx.Commands.build_command(4, 'core', 'reload', 'Reload a module')
 
     ##############################################
     #               CONNEXION IRC                #
@@ -133,14 +127,6 @@ class Irc:
                 run_once=True, thread_flag=True
                 )
         )
-        # print("start_heartbeat.................")
-        
-        # await self.ctx.Base.create_thread_io(
-        #     self.ctx.Utils.heartbeat, 
-        #     self.ctx, self.beat, 
-        #     run_once=True, thread_flag=True
-        # )
-        
         
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
@@ -216,53 +202,6 @@ class Irc:
         
         return None
 
-    # async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> bool:
-    #     s = sasl_model
-    #     if sasl_model:
-    #         async def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
-    #             if fingerprint:
-    #                 mes_donnees = {'fingerprint': fingerprint}
-    #                 query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fingerprint"
-    #             else:
-    #                 mes_donnees = {'user': username, 'password': self.ctx.Utils.hash_password(password)}
-    #                 query = f"SELECT user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
-
-    #             result = await self.ctx.Base.db_execute_query(query, mes_donnees)
-    #             user_from_db = result.fetchone()
-    #             if user_from_db:
-    #                 return {'user': user_from_db[0], 'level': user_from_db[1], 'language': user_from_db[2]}
-    #             else:
-    #                 return None
-
-    #         if s.message_type == 'C' and s.mechanisme == 'PLAIN':
-    #             # Connection via PLAIN
-    #             admin_info = await db_get_admin_info(username=s.username, password=s.password)
-    #             if admin_info is not None:
-    #                 s.auth_success = True
-    #                 s.level = admin_info.get('level', 0)
-    #                 s.language = admin_info.get('language', 'EN')
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
-    #             else:
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
-
-    #         elif s.message_type == 'S' and s.mechanisme == 'EXTERNAL':
-    #             # Connection using fingerprints
-    #             admin_info = await db_get_admin_info(fingerprint=s.fingerprint)
-                
-    #             if admin_info is not None:
-    #                 s.auth_success = True
-    #                 s.level = admin_info.get('level', 0)
-    #                 s.username = admin_info.get('user', None)
-    #                 s.language = admin_info.get('language', 'EN')
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D S")
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 903 {s.username} :SASL authentication successful")
-    #             else:
-    #                 # "904 <nick> :SASL authentication failed"
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} SASL {self.ctx.Settings.MAIN_SERVER_HOSTNAME} {s.client_uid} D F")
-    #                 await self.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_LINK} 904 {s.username} :SASL authentication failed")
-
     def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
         user_obj = self.ctx.User.get_user(uid)
 
@@ -328,7 +267,7 @@ class Irc:
         spassword = self.ctx.Utils.hash_password(password)
 
         # Check if the user already exist
-        if not self.ctx.Admin.db_is_admin_exist(nickname):
+        if not await self.ctx.Admin.db_is_admin_exist(nickname):
             mes_donnees = {'datetime': self.ctx.Utils.get_sdatetime(), 'user': nickname, 'password': spassword, 'hostname': hostname, 'vhost': vhost, 'level': level, 'language': self.ctx.Config.LANG}
             await self.ctx.Base.db_execute_query(f'''INSERT INTO {self.ctx.Config.TABLE_ADMIN} 
                     (createdOn, user, password, hostname, vhost, level, language) VALUES
@@ -345,7 +284,7 @@ class Irc:
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.ctx.Config.SERVICE_NICKNAME
-        response = self.ctx.Base.create_asynctask(
+        response = await self.ctx.Base.create_asynctask(
             self.ctx.Base.create_thread_io(
                 self.ctx.Base.check_for_new_version, True
             )
@@ -402,9 +341,6 @@ class Irc:
         """The User Object"""
         if u is None:
             return None
-
-        c = self.ctx.Client.get_client(u.uid)
-        """The Client Object"""
 
         fromuser = u.nickname
         uid = u.uid
@@ -607,10 +543,19 @@ class Irc:
                         await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
                         return None
 
+                    if len(cmd) == 4:
+                        user_new_level = int(cmd[3])
+                        if user_new_level > 5:
+                            await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Maximum authorized level is 5")
+                            return None
+                        if user_new_level == 0:
+                            await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You must provide a valid level [1 to 4]")
+                            return None
+
                     user_to_edit = cmd[1]
                     user_password = self.ctx.Utils.hash_password(cmd[2])
-
                     get_admin = self.ctx.Admin.get_admin(fromuser)
+
                     if get_admin is None:
                         await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no Admin access")
                         return None
@@ -619,14 +564,8 @@ class Irc:
                     current_uid = uid
                     current_user_level = get_admin.level
 
-                    user_new_level = int(cmd[3]) if len(cmd) == 4 else get_admin.level
-
-                    if current_user == fromuser:
+                    if current_user == user_to_edit:
                         user_new_level = get_admin.level
-
-                    if user_new_level > 5:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Maximum authorized level is 5")
-                        return None
 
                     # Rechercher le user dans la base de données.
                     mes_donnees = {'user': user_to_edit}
@@ -662,16 +601,16 @@ class Irc:
 
             case 'delaccess':
                 # .delaccess [USER] [CONFIRMUSER]
+                if len(cmd) < 3:
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} delaccess [nickname] [CONFIRMNICKNAME]")
+                    return None
+
                 user_to_del = cmd[1]
                 user_confirmation = cmd[2]
 
                 if user_to_del != user_confirmation:
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer")
                     self.ctx.Logs.warning(f':{dnickname} NOTICE {fromuser} : Les user ne sont pas les mêmes, tu dois confirmer le user que tu veux supprimer')
-                    return None
-
-                if len(cmd) < 3:
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{self.ctx.Config.SERVICE_PREFIX}delaccess [USER] [CONFIRMUSER]")
                     return None
 
                 get_admin = self.ctx.Admin.get_admin(fromuser)
@@ -745,147 +684,6 @@ class Irc:
                 except Exception as e:
                     self.ctx.Logs.error(e)
 
-            case 'register':
-                # Syntax. Register PASSWORD EMAIL
-                try:
-
-                    if len(cmd) < 3:
-                        await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.ctx.Config.SERVICE_NICKNAME} {command.upper()} <PASSWORD> <EMAIL>'
-                        )
-                        return None
-
-                    password = cmd[1]
-                    email = cmd[2]
-
-                    if not self.ctx.Base.is_valid_email(email_to_control=email):
-                        await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg='The email is not valid. You must provide a valid email address (first.name@email.extension)'
-                        )
-                        return None
-
-                    user_obj = u
-
-                    if user_obj is None:
-                        self.ctx.Logs.error(f"Nickname ({fromuser}) doesn't exist, it is impossible to register this nickname")
-                        return None
-
-                    # If the account already exist.
-                    if self.ctx.Client.db_is_account_exist(fromuser):
-                        await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f"Your account already exist, please try to login instead /msg {self.ctx.Config.SERVICE_NICKNAME} IDENTIFY <account> <password>"
-                        )
-                        return None
-
-                    # If the account doesn't exist then insert into database
-                    data_to_record = {
-                        'createdOn': self.ctx.Utils.get_sdatetime(), 'account': fromuser,
-                        'nickname': user_obj.nickname, 'hostname': user_obj.hostname, 'vhost': user_obj.vhost, 'realname': user_obj.realname, 'email': email,
-                        'password': self.ctx.Utils.hash_password(password=password), 'level': 0
-                    }
-
-                    insert_to_db = await self.ctx.Base.db_execute_query(f"""
-                                                            INSERT INTO {self.ctx.Config.TABLE_CLIENT} 
-                                                            (createdOn, account, nickname, hostname, vhost, realname, email, password, level)
-                                                            VALUES
-                                                            (:createdOn, :account, :nickname, :hostname, :vhost, :realname, :email, :password, :level)
-                                                            """, data_to_record)
-
-                    if insert_to_db.rowcount > 0:
-                        await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f"You have register your nickname successfully"
-                        )
-
-                    return None
-
-                except ValueError as ve:
-                    self.ctx.Logs.error(f"Value Error : {ve}")
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.ctx.Config.SERVICE_PREFIX}{command.upper()} <PASSWORD> <EMAIL>")
-
-            case 'identify':
-                # Identify ACCOUNT PASSWORD
-                try:
-                    if len(cmd) < 3:
-                        await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.ctx.Config.SERVICE_NICKNAME} {command.upper()} <ACCOUNT> <PASSWORD>'
-                        )
-                        return None
-
-                    account = str(cmd[1]) # account
-                    encrypted_password = self.ctx.Utils.hash_password(cmd[2])
-                    user_obj = u
-                    client_obj = c
-
-                    if client_obj is not None:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are already logged in")
-                        return None
-
-                    db_query = f"SELECT account FROM {self.ctx.Config.TABLE_CLIENT} WHERE account = :account AND password = :password"
-                    db_param = {'account': account, 'password': encrypted_password}
-                    exec_query = await self.ctx.Base.db_execute_query(db_query, db_param)
-                    result_query = exec_query.fetchone()
-                    if result_query:
-                        account = result_query[0]
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are now logged in")
-                        client = self.ctx.Definition.MClient(**user_obj.to_dict(), account=account)
-                        self.ctx.Client.insert(client)
-                        await self.Protocol.send_svslogin(user_obj.uid, account)
-                        await self.Protocol.send_svs2mode(nickname=fromuser, user_mode='+r')
-                    else:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Wrong password or account")
-
-                    return None
-
-                except ValueError as ve:
-                    self.ctx.Logs.error(f"Value Error: {ve}")
-                    await self.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=fromuser,
-                            msg=f'/msg {self.ctx.Config.SERVICE_NICKNAME} {command.upper()} <ACCOUNT> <PASSWORD>'
-                        )
-
-                except Exception as err:
-                    self.ctx.Logs.error(f"General Error: {err}")
-
-            case 'logout':
-                try:
-                    # LOGOUT <account>
-                    if len(cmd) < 2:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
-                        return None
-
-                    user_obj = u
-                    if user_obj is None:
-                        self.ctx.Logs.error(f"The User [{fromuser}] is not available in the database")
-                        return None
-
-                    client_obj = c
-
-                    if client_obj is None:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Nothing to logout. please login first")
-                        return None
-
-                    await self.Protocol.send_svslogout(client_obj)
-                    self.ctx.Client.delete(user_obj.uid)
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You have been logged out successfully")
-
-                except ValueError as ve:
-                    self.ctx.Logs.error(f"Value Error: {ve}")
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
-                except Exception as err:
-                    self.ctx.Logs.error(f"General Error: {err}")
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} <account>")
-
             case 'help':
                 # Syntax. !help [module_name]
                 module_name = str(cmd[1]) if len(cmd) == 2 else None
@@ -950,9 +748,6 @@ class Irc:
 
                     for chan_name in self.ctx.Channel.UID_CHANNEL_DB:
                         await self.Protocol.send_set_mode('-l', channel_name=chan_name.name)
-
-                    for client in self.ctx.Client.CLIENT_DB:
-                        await self.Protocol.send_svslogout(client)
 
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
@@ -1087,17 +882,6 @@ class Irc:
                     )
                 return None
 
-            case 'show_clients':
-                count_users = len(self.ctx.Client.CLIENT_DB)
-                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Total Connected Clients: {count_users}")
-                for db_client in self.ctx.Client.CLIENT_DB:
-                    await self.Protocol.send_notice(
-                        nick_from=dnickname,
-                        nick_to=fromuser,
-                        msg=f"UID : {db_client.uid} - isWebirc: {db_client.isWebirc} - isWebSocket: {db_client.isWebsocket} - Nickname: {db_client.nickname} - Account: {db_client.account} - Connection: {db_client.connexion_datetime}"
-                    )
-                return None
-
             case 'show_admins':
                 for db_admin in self.ctx.Admin.UID_ADMIN_DB:
                     await self.Protocol.send_notice(
@@ -1186,4 +970,3 @@ class Irc:
 
             case _:
                 pass
-    

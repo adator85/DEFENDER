@@ -115,9 +115,11 @@ async def set_mode_to_all(uplink: 'Command', channel_name: str, action: Literal[
     users:str = ''
     uids_split = [chan_info.uids[i:i + 6] for i in range(0, len(chan_info.uids), 6)]
 
-    await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {channel_name} {action}{set_mode} {dnickname}")
+    # await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {channel_name} {action}{set_mode} {dnickname}")
     for uid in uids_split:
         for i in range(0, len(uid)):
+            if uplink.ctx.Utils.clean_uid(uid[i]) == uplink.ctx.Config.SERVICE_ID:
+                continue
             mode += set_mode
             users += f'{uplink.ctx.User.get_nickname(uplink.ctx.Utils.clean_uid(uid[i]))} '
             if i == len(uid) - 1:

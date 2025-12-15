@@ -67,15 +67,14 @@ class Admin:
         Returns:
             bool: True if the admin level has been updated
         """
+        admin_obj = self.get_admin(nickname)
+        if admin_obj:
+            # If the admin exist, update and do not go further
+            admin_obj.level = new_admin_level
+            self._ctx.Logs.debug(f'Admin ({admin_obj.nickname}) has been updated with new level {new_admin_level}')
+            return True
 
-        for record in self.UID_ADMIN_DB:
-            if record.nickname == nickname:
-                # If the admin exist, update and do not go further
-                record.level = new_admin_level
-                self._ctx.Logs.debug(f'Admin ({record.nickname}) has been updated with new level {new_admin_level}')
-                return True
-
-        self._ctx.Logs.debug(f'The new level {new_admin_level} was not updated, nickname = {nickname} - The Client is not an admin')
+        self._ctx.Logs.debug(f'The new level {new_admin_level} was not updated in local variable, nickname = {nickname} is not logged in')
 
         return False
 
@@ -94,7 +93,7 @@ class Admin:
             self._ctx.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
             return True
 
-        self._ctx.Logs.debug(f'The UID {uidornickname} was not deleted')
+        self._ctx.Logs.debug(f'The UID {uidornickname} was not deleted from the local variable (admin not connected)')
 
         return False
 
