@@ -4,7 +4,7 @@ import sys
 import threading
 from typing import TYPE_CHECKING
 import core.module as module_mod
-from core.classes.modules import user, admin, client, channel, reputation, sasl
+from core.classes.modules import user, admin, channel, reputation, sasl
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -20,7 +20,6 @@ REHASH_MODULES = [
     'core.classes.modules.commands',
     'core.classes.modules.user',
     'core.classes.modules.admin',
-    'core.classes.modules.client',
     'core.classes.modules.channel',
     'core.classes.modules.reputation',
     'core.classes.modules.sasl',
@@ -63,7 +62,6 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     uplink.ModuleUtils.model_clear()          # Clear loaded modules.
     uplink.User.UID_DB.clear()                # Clear User Object
     uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-    uplink.Client.CLIENT_DB.clear()           # Clear Client object
     uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
 
     # Reload Service modules
@@ -77,7 +75,6 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
     uplink.Settings.set_cache('commands', uplink.Commands.DB_COMMANDS)
     uplink.Settings.set_cache('users', uplink.User.UID_DB)
-    uplink.Settings.set_cache('clients', uplink.Client.CLIENT_DB)
     uplink.Settings.set_cache('admins', uplink.Admin.UID_ADMIN_DB)
     uplink.Settings.set_cache('reputations', uplink.Reputation.UID_REPUTATION_DB)
     uplink.Settings.set_cache('channels', uplink.Channel.UID_CHANNEL_DB)
@@ -132,7 +129,6 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Base = uplink.BaseModule.Base(uplink)
 
     uplink.User = user.User(uplink)
-    uplink.Client = client.Client(uplink)
     uplink.Admin = admin.Admin(uplink)
     uplink.Channel = channel.Channel(uplink)
     uplink.Reputation = reputation.Reputation(uplink)
@@ -141,7 +137,6 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     # Backup data
     uplink.User.UID_DB = uplink.Settings.get_cache('users')
-    uplink.Client.CLIENT_DB = uplink.Settings.get_cache('clients')
     uplink.Admin.UID_ADMIN_DB = uplink.Settings.get_cache('admins')
     uplink.Channel.UID_CHANNEL_DB = uplink.Settings.get_cache('channels')
     uplink.Reputation.UID_REPUTATION_DB = uplink.Settings.get_cache('reputations')

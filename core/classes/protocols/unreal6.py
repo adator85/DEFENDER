@@ -7,7 +7,7 @@ from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import is_coroutinefunction, tr
 
 if TYPE_CHECKING:
-    from core.definition import MClient, MSasl, MUser, MChannel
+    from core.definition import MSasl, MUser, MChannel
 
 class Unrealircd6(IProtocol):
 
@@ -469,18 +469,13 @@ class Unrealircd6(IProtocol):
         except Exception as err:
             self._ctx.Logs.error(f'General Error: {err}')
 
-    async def send_svslogout(self, client_obj: 'MClient') -> None:
+    async def send_svslogout(self) -> None:
         """Logout a client from his account
-
-        Args:
-            client_obj (MClient): The Client object
         """
         try:
-            c_uid = client_obj.uid
-            c_nickname = client_obj.nickname
-            await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SVSLOGIN {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
-            await self.send_svs2mode(c_nickname, '-r')
-
+            # await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} SVSLOGIN {self._ctx.Settings.MAIN_SERVER_HOSTNAME} {c_uid} 0")
+            # await self.send_svs2mode(c_nickname, '-r')
+            pass
         except Exception as err:
             self._ctx.Logs.error(f'General Error: {err}')
 
@@ -795,7 +790,6 @@ class Unrealircd6(IProtocol):
 
             self._ctx.Channel.delete_user_from_all_channel(uid_who_quit)
             self._ctx.User.delete(uid_who_quit)
-            self._ctx.Client.delete(uid_who_quit)
             self._ctx.Reputation.delete(uid_who_quit)
             self._ctx.Admin.delete(uid_who_quit)
 
@@ -879,7 +873,6 @@ class Unrealircd6(IProtocol):
             uid = str(server_msg[1]).lstrip(':')
             newnickname = server_msg[3]
             self._ctx.User.update_nickname(uid, newnickname)
-            self._ctx.Client.update_nickname(uid, newnickname)
             self._ctx.Admin.update_nickname(uid, newnickname)
             self._ctx.Reputation.update(uid, newnickname)
 

@@ -431,23 +431,27 @@ class Base:
             self.running_iothreads.remove(id_obj)
             return result
 
-    def asynctask_done(self, task: Union[asyncio.Task, asyncio.Future]):
+    def asynctask_done(self, task: Union[asyncio.Task, asyncio.Future], context: Optional[dict[str, Any]] = None):
         """Log task when done
 
         Args:
             task (asyncio.Task): The Asyncio Task callback
         """
-        name = task.get_name() if isinstance(task, asyncio.Task) else "Thread"
-        task_or_future = "Task" if isinstance(task, asyncio.Task) else "Future"
+
+        if context:
+            print(context)
+
+        task_name = "Future" if isinstance(task, asyncio.Future) else task.get_name()
+        task_or_future = "Task"
         try:
             if task.exception():
-                self.logs.error(f"[ASYNCIO] {task_or_future} {name} failed with exception: {task.exception()}")
+                self.logs.error(f"[ASYNCIO] {task_or_future} {task_name} failed with exception: {task.exception()}")
             else:
-                self.logs.debug(f"[ASYNCIO] {task_or_future} {name} completed successfully.")
+                self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} completed successfully.")
         except asyncio.CancelledError as ce:
-            self.logs.debug(f"[ASYNCIO] {task_or_future} {name} terminated with cancelled error. {ce}")
+            self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} terminated with cancelled error. {ce}")
         except asyncio.InvalidStateError as ie:
-            self.logs.debug(f"[ASYNCIO] {task_or_future} {name} terminated with invalid state error. {ie}")
+            self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} terminated with invalid state error. {ie}")
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -611,25 +615,10 @@ class Base:
             )
         '''
 
-        table_core_client = f'''CREATE TABLE IF NOT EXISTS {self.Config.TABLE_CLIENT} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            createdOn TEXT,
-            account TEXT,
-            nickname TEXT,
-            hostname TEXT,
-            vhost TEXT,
-            realname TEXT,
-            email TEXT,
-            password TEXT,
-            level INTEGER
-            )
-        '''
-
         await self.db_execute_query(table_core_log)
         await self.db_execute_query(table_core_log_command)
         await self.db_execute_query(table_core_module)
         await self.db_execute_query(table_core_admin)
-        await self.db_execute_query(table_core_client)
         await self.db_execute_query(table_core_channel)
         await self.db_execute_query(table_core_config)
 

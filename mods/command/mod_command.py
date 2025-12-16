@@ -70,9 +70,7 @@ class Command(IModule):
             self.ctx.Irc.Protocol.known_protocol.add(c)
 
         self.ctx.Commands.build_command(2, self.module_name, 'join', 'Join a channel')
-        self.ctx.Commands.build_command(2, self.module_name, 'assign', 'Assign a user to a role or task')
         self.ctx.Commands.build_command(2, self.module_name, 'part', 'Leave a channel')
-        self.ctx.Commands.build_command(2, self.module_name, 'unassign', 'Remove a user from a role or task')
         self.ctx.Commands.build_command(2, self.module_name, 'owner', 'Give channel ownership to a user')
         self.ctx.Commands.build_command(2, self.module_name, 'deowner', 'Remove channel ownership from a user')
         self.ctx.Commands.build_command(2, self.module_name, 'protect', 'Protect a user from being kicked')
@@ -218,16 +216,12 @@ class Command(IModule):
                         user_uid = self.ctx.User.clean_uid(cmd[5])
                         userObj: MUser = self.ctx.User.get_user(user_uid)
                         channel_name = cmd[4] if self.ctx.Channel.is_valid_channel(cmd[4]) else None
-                        client_obj = self.ctx.Client.get_client(user_uid)
                         nickname = userObj.nickname if userObj is not None else None
-
-                        if client_obj is not None:
-                            nickname = client_obj.account
 
                         if userObj is None:
                             return None
 
-                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes and not self.ctx.Client.is_exist(userObj.uid):
+                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
                             return None
 
                         db_data: dict[str, str] = {"nickname": nickname.lower(), "channel": channel_name.lower()}
@@ -416,7 +410,7 @@ class Command(IModule):
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
-            case 'join' | 'assign':
+            case 'join':
                 try:
                     await self.mod_utils.set_assign_channel_to_service(self, cmd, fromuser)
                 except IndexError as ie:
@@ -425,7 +419,7 @@ class Command(IModule):
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
-            case 'part' | 'unassign':
+            case 'part':
                 try:
                     # Syntax. !part #channel
                     await self.mod_utils.set_unassign_channel_to_service(self, cmd, fromuser)

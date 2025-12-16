@@ -3,7 +3,7 @@ from typing import Optional, TYPE_CHECKING
 from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
-    from core.definition import MClient, MSasl, MUser, MChannel
+    from core.definition import MSasl, MUser, MChannel
     from core.loader import Loader
 
 class IProtocol(ABC):
@@ -224,11 +224,8 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_svslogout(self, client_obj: 'MClient') -> None:
+    async def send_svslogout(self) -> None:
         """Logout a client from his account
-
-        Args:
-            client_obj (MClient): The Client UID
         """
 
     @abstractmethod

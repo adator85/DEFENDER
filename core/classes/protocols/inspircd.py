@@ -8,7 +8,7 @@ from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
-    from core.definition import MSasl, MClient, MUser, MChannel
+    from core.definition import MSasl, MUser, MChannel
 
 class Inspircd(IProtocol):
 
@@ -562,7 +562,6 @@ class Inspircd(IProtocol):
             uid = str(scopy[0]).replace(':','')
             newnickname = scopy[2]
             self._ctx.User.update_nickname(uid, newnickname)
-            self._ctx.Client.update_nickname(uid, newnickname)
             self._ctx.Admin.update_nickname(uid, newnickname)
 
             return None
@@ -1334,15 +1333,12 @@ class Inspircd(IProtocol):
             client_uid (str): Client UID
             user_account (str): The account of the user
         """
-        ...
+        pass
 
-    async def send_svslogout(self, client_obj: 'MClient') -> None:
+    async def send_svslogout(self) -> None:
         """Logout a client from his account
-
-        Args:
-            client_obj (MClient): The Client Object Model
         """
-        ...
+        pass
 
     async def send_svsmode(self, nickname: str, user_mode: str) -> None:
         """_summary_

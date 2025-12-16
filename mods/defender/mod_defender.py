@@ -288,9 +288,18 @@ class Defender(IModule):
         jail_chan = self.ctx.Config.SALON_JAIL                  # Salon pot de miel
         jail_chan_mode = self.ctx.Config.SALON_JAIL_MODES       # Mode du salon "pot de miel"
 
+        color_green = self.ctx.Config.COLORS.green
+        color_red = self.ctx.Config.COLORS.red
+        color_black = self.ctx.Config.COLORS.black
+        color_nogc = self.ctx.Config.COLORS.nogc
+
         match command:
 
             case 'show_reputation':
+
+                if self.mod_config.reputation == 0:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")
+                    return None
 
                 if not self.ctx.Reputation.UID_REPUTATION_DB:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
@@ -664,9 +673,6 @@ class Defender(IModule):
                 # .proxy_scan set psutil_scan on/off         --> Active les informations de connexion a la machine locale
                 # .proxy_scan set abuseipdb_scan on/off      --> Active le scan via l'api abuseipdb
                 len_cmd = len(cmd)
-                color_green = self.ctx.Config.COLORS.green
-                color_red = self.ctx.Config.COLORS.red
-                color_black = self.ctx.Config.COLORS.black
 
                 if len_cmd == 4:
                     set_key = str(cmd[1]).lower()
@@ -943,6 +949,7 @@ class Defender(IModule):
                         if chan.name not in channel_to_dont_quit:
                             await self.ctx.Irc.Protocol.send_join_chan(uidornickname=dnickname, channel=chan.name)
                             await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"Sentinel mode activated on {channel}", channel=chan.name)
+                    await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"[ {color_green}SENTINEL{color_nogc} ] Activated by {fromuser}", channel=self.ctx.Config.SERVICE_CHANLOG)
                     return None
 
                 if activation == 'off':
@@ -955,9 +962,9 @@ class Defender(IModule):
                         if chan.name not in channel_to_dont_quit:
                             await self.ctx.Irc.Protocol.send_part_chan(uidornickname=dnickname, channel=chan.name)
                             await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"Sentinel mode deactivated on {channel}", channel=chan.name)
-                    
-                    await self.join_saved_channels()
 
+                    await self.join_saved_channels()
+                    await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"[ {color_red}SENTINEL{color_nogc} ] Deactivated by {fromuser}", channel=self.ctx.Config.SERVICE_CHANLOG)
                     return None
 
             case _:
