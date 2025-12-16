@@ -23,9 +23,28 @@ configuration:
     OWNER: "TON_NICK_NAME"
     PASSWORD: "TON_PASSWORD"
 
-    JSONRPC_URL: "https://your.domaine.com:8600/api"
-    JSONRPC_PATH_TO_SOCKET_FILE: "/PATH/TO/YOUR/IRCD/data/rpc.socket"
+    ##########################################
+    #    Defender JSON-RPC Configuration     #
+    ##########################################
+    RPC_HOST: "0.0.0.0"
+    RPC_PORT: 5000
+    RPC_USERS:
+        - USERNAME: "RPC_USER_1"
+          PASSWORD: "RPC_USER_1_PASSWORD"
+        - USERNAME: "RPC_USER_2"
+          PASSWORD: "RPC_USER_2_PASSWORD"
+
+    ##########################################
+    #   UnrealIRCD JSON-RPC Configuration    #
+    ##########################################
+    # unixsocket or http
     JSONRPC_METHOD: "unixsocket"
+
+    # If the method is unixsocket you don't need URL, USER or PASSWORD
+    JSONRPC_PATH_TO_SOCKET_FILE: "/PATH/TO/YOUR/IRCD/data/rpc.socket"
+
+    # If METHOD is http
+    JSONRPC_URL: "https://your.domaine.com:8600/api"
     JSONRPC_USER: "YOUR_RPC_USER"
     JSONRPC_PASSWORD: "YOUR_RPC_PASSWORD"
 
