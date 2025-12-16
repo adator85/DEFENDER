@@ -1,5 +1,6 @@
 traduction:
-  # Message help
+
+# Message help
   - orig: "Access denied!"
     trad: "Accès refusé."
   - orig: "Wrong password!"
@@ -11,11 +12,34 @@ traduction:
   - orig: "cmd method is not available in the module (%s)"
     trad: "La méthode cmd n'est pas disponible dans le module (%s)"
   - orig: "[%sMODULE ERROR%s] Module %s is facing issues! %s"
-    trad: "[%sMODULE ERREUR%s] Le module %s a rencontré une erreur! %s"
+    trad: "[%sERREUR MODULE%s] Le module %s a rencontré une erreur! %s"
   - orig: "%s - %sNot Loaded%s"
     trad: "%s - %sNon chargé%s"
   - orig: "Successfuly connected to %s"
-    trad: "Connecter a %s avec succés"
+    trad: "Connecté à %s avec succés"
   - orig: "[ %sINFORMATION%s ] >> %s is ready!"
     trad: "[ %sINFORMATION%s ] >> %s est prêt!"
 
+# core/irc.py
+  - orig: "[ %s%s%s ] - %s has been disconnected from %s"
+    trad: "[ %s%s%s ] - %s a été déconnecté de %s"
+  - orig: "You can't use this command anymore ! Please use [%sauth] instead"
+    trad: "Vous ne pouvez plus utiliser cette commande ! Utilisez [%auth] à la place."
+  - orig: "The nickname sent [%s] is different than the one set in the configuration file!"
+    trad: "Le pseudo transmis, [%s], ne correspond pas à celui renseigné dans le fichier de configuration \!"
+  - orig: "[%s %s %s] - %s is now connected to %s"
+    trad: "[%s %s %s] - %s est désormais connecté à %s"
+  - orig: "[ %s %s %s ] - %s provided a wrong password!"
+    trad: "[ %s %s %s ] - %s a donné un mauvais mot de passe \!"
+  - orig: "%s - %sNot Loaded%s"
+    trad: "%s - Non chargé%s"
+
+# core/classe/protocols/unreal6.py & core/classe/protocols/inspircd.py
+  - orig: "[ %sINFORMATION%s ] >> %s is ready!"
+    trad: "[ %sINFORMATION%s ] >> %s est prêt \!"
+  - orig: "[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s"
+    trad: "[ %sSASL AUTH%s ] - %s (%s) s'est connecté avec succès à %s"
+  - orig: "[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s"
+    trad: "[ %sSASL AUTH%s ] - %s : Mauvais certificat fourni avec le compte %s"
+  - orig: "[ %sFINGERPRINT AUTH%s ] - %s (%s) is now connected successfuly to %s"
+    trad: "[ %sFINGERPRINT AUTH%s ] - %s (%s) est maintenant authentifié sur %s \!"
