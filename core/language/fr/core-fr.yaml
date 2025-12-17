@@ -30,7 +30,7 @@ traduction:
   - orig: "[%s %s %s] - %s is now connected to %s"
     trad: "[%s %s %s] - %s est désormais connecté à %s"
   - orig: "[ %s %s %s ] - %s provided a wrong password!"
-    trad: "[ %s %s %s ] - %s a donné un mauvais mot de passe \!"
+    trad: "[ %s %s %s ] - %s a donné un mauvais mot de passe !"
   - orig: "%s - %sNot Loaded%s"
     trad: "%s - Non chargé%s"
 
