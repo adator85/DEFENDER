@@ -26,7 +26,7 @@ traduction:
   - orig: "You can't use this command anymore ! Please use [%sauth] instead"
     trad: "Vous ne pouvez plus utiliser cette commande ! Utilisez [%auth] à la place."
   - orig: "The nickname sent [%s] is different than the one set in the configuration file!"
-    trad: "Le pseudo transmis, [%s], ne correspond pas à celui renseigné dans le fichier de configuration \!"
+    trad: "Le pseudo transmis, [%s], ne correspond pas à celui renseigné dans le fichier de configuration !"
   - orig: "[%s %s %s] - %s is now connected to %s"
     trad: "[%s %s %s] - %s est désormais connecté à %s"
   - orig: "[ %s %s %s ] - %s provided a wrong password!"
@@ -36,10 +36,10 @@ traduction:
 
 # core/classe/protocols/unreal6.py & core/classe/protocols/inspircd.py
   - orig: "[ %sINFORMATION%s ] >> %s is ready!"
-    trad: "[ %sINFORMATION%s ] >> %s est prêt \!"
+    trad: "[ %sINFORMATION%s ] >> %s est prêt !"
   - orig: "[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s"
     trad: "[ %sSASL AUTH%s ] - %s (%s) s'est connecté avec succès à %s"
   - orig: "[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s"
     trad: "[ %sSASL AUTH%s ] - %s : Mauvais certificat fourni avec le compte %s"
   - orig: "[ %sFINGERPRINT AUTH%s ] - %s (%s) is now connected successfuly to %s"
-    trad: "[ %sFINGERPRINT AUTH%s ] - %s (%s) est maintenant authentifié sur %s \!"
+    trad: "[ %sFINGERPRINT AUTH%s ] - %s (%s) est maintenant authentifié sur %s !"
