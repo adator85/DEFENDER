@@ -1,3 +1,15 @@
+# 
+# Defender : Security for Internet Relay Chat
+#   Module : Clone
+#   Description : This module can connect multiple clones with lot of features
+#   Features :
+#       - Connect clones by groups to the server,
+#       - Join or part one, all or a group to channel,
+#       - Kill one, all or a group to channel,
+#       - Clones can send discussions to the clone channel logs
+#           (This can be useful to alert you in case of any forbiden discussion like harassment,
+#           sexual harassment, bad intention, violence ...)
+# 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Any
 from core.classes.interfaces.imodule import IModule
@@ -17,11 +29,11 @@ class Clone(IModule):
         ...
 
     MOD_HEADER: dict[str, str] = {
-        'name':'Clone',
-        'version':'1.0.0',
-        'description':'Connect thousands of clones to your IRCD, by group. You can use them as security moderation.',
-        'author':'Defender Team',
-        'core_version':'Defender-6'
+        'name': 'Clone',
+        'version': '1.0.0',
+        'description': 'Connect thousands of clones to your IRCD, by group. You can use them as security moderation.',
+        'author': 'Defender Team',
+        'core_version': 'Defender-6'
     }
 
     def __init__(self, context: 'Loader') -> None:
@@ -93,6 +105,8 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
+        self.ctx.Base.create_asynctask(func=self.Threads.thread_kill_clones(self))
+
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
         return None
@@ -159,7 +173,7 @@ class Clone(IModule):
                                 connection_interval = int(cmd[4]) if len(cmd) == 5 else 0.2
 
                                 self.ctx.Base.create_asynctask(
-                                    func=self.Threads.coro_connect_clones(self, number_of_clones, group, False, connection_interval)
+                                    self.Threads.coro_connect_clones(self, number_of_clones, group, False, connection_interval)
                                 )
 
                             except IndexError:

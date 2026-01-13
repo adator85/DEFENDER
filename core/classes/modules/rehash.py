@@ -68,8 +68,12 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, uplink.Settings.current_admin)
 
+    print(f"############ NUMBER OF IO THREADS: {len(uplink.Base.running_iothreads)}")
+    print(f"############ NUMBER OF IO TASKS: {len(uplink.Base.running_iotasks)}")
+    print(f"############ NUMBER OF THREADS: {len(uplink.Base.running_threads)}")
     await uplink.Irc.run()
     uplink.Config.DEFENDER_RESTART = 0
+
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
@@ -246,5 +250,5 @@ async def shutdown(uplink: 'Loader') -> None:
 async def force_shutdown(uplink: 'Loader') -> None:
     await asyncio.sleep(10)
     uplink.Logs.critical("The system has been killed because something is blocking the loop")
-    uplink.Logs.critical(asyncio.all_tasks())        
+    uplink.Logs.critical(asyncio.all_tasks())
     sys.exit('The system has been killed')

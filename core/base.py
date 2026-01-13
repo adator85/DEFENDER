@@ -402,6 +402,7 @@ class Base:
         if run_once:
             for iothread in self.running_iothreads:
                 if func.__name__.lower() == iothread.name.lower():
+                    self.logs.debug(f"[ASYNCIO - THREAD] {func.__name__} is already running!")
                     return None
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix=func.__name__) as executor:
@@ -415,13 +416,15 @@ class Base:
 
             future = loop.run_in_executor(executor, func, *tuple(largs))
             future.add_done_callback(self.asynctask_done)
+            _thread = list(executor._threads)[0]
+            _thread.name = func.__name__
 
             id_obj = self.Loader.Definition.MThread(
                 name=func.__name__,
-                thread_id=list(executor._threads)[0].native_id,
-                thread_event=thread_event, 
-                thread_obj=list(executor._threads)[0], 
-                executor=executor, 
+                thread_id=_thread.native_id,
+                thread_event=thread_event,
+                thread_obj=_thread,
+                executor=executor,
                 future=future)
 
             self.running_iothreads.append(id_obj)
@@ -524,13 +527,21 @@ class Base:
         """Methode qui supprime les threads qui ont finis leurs job
         """
         try:
-            for thread in self.running_threads:
-                if thread.name != 'heartbeat':
-                    if not thread.is_alive():
-                        self.running_threads.remove(thread)
-                        self.logs.debug(f"-- Thread {str(thread.name)} {str(thread.native_id)} has been removed!")
+            _iothreads = self.running_iothreads.copy()
+            _threads = self.running_threads.copy()
 
-            # print(threading.enumerate())
+            for _thread in _threads:
+                if _thread.name != 'heartbeat':
+                    if not _thread.is_alive():
+                        self.running_threads.remove(_thread)
+                        self.logs.debug(f"[THREADING] Thread {str(_thread.name)} {str(_thread.native_id)} has been removed!")
+
+            for _iothread in _iothreads:
+                _iothd = _iothread.thread_obj
+                if not _iothd.is_alive():
+                    self.running_iothreads.remove(_iothread)
+                    self.logs.debug(f"[ASYNCIO - THREAD] Thread {str(_iothd.name)} {str(_iothd.native_id)} has been removed!")
+
         except Exception as err:
             self.logs.error(err, exc_info=True)
 
@@ -544,6 +555,19 @@ class Base:
             soc.close()
             self.running_sockets.remove(soc)
             self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
+
+    def garbage_collector_tasks(self) -> None:
+        """Methode qui supprime les threads qui ont finis leurs job
+        """
+        _tasks = self.running_iotasks
+
+        for _task in _tasks:
+            try:
+                if _task.cancelled() or _task.done():
+                    self.running_iotasks.remove(_task)
+                    self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been removed!")
+            except asyncio.exceptions.CancelledError as cerr:
+                self.logs.debug(f"Asyncio CancelledError reached! {_task} ({cerr})")
 
     def db_init(self) -> tuple[Engine, Connection]:
 
@@ -769,6 +793,7 @@ class Base:
             # Run Garbage Collector Timer
             self.garbage_collector_timer()
             self.garbage_collector_thread()
+            self.garbage_collector_tasks()
             # self.garbage_collector_sockets()
             return None
 

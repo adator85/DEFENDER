@@ -52,6 +52,12 @@ class Defender(IModule):
         #     )
         # '''
 
+        table_autolimit = '''CREATE TABLE IF NOT EXISTS defender_autolimit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            datetime TEXT,
+            channel TEXT
+        '''
+
         # self.ctx.Base.db_execute_query(table_autoop)
         # self.ctx.Base.db_execute_query(table_config)
         # self.ctx.Base.db_execute_query(table_trusted)
