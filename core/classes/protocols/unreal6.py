@@ -1426,6 +1426,9 @@ class Unrealircd6(IProtocol):
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '0014ZZH1F', 'S', 'EXTERNAL', 'zzzzzzzkey']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
+            if not self._ctx.Config.SASL_ACTIVE:
+                None
+
             scopy = server_msg.copy()
             psasl = self._ctx.Sasl
             sasl_enabled = False
@@ -1490,6 +1493,9 @@ class Unrealircd6(IProtocol):
             self._ctx.Logs.error(f'General Error: {err}', exc_info=True)
 
     async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> None:
+        if not self._ctx.Config.SASL_ACTIVE:
+            return None
+
         s = sasl_model
         if sasl_model:
             async def db_get_admin_info(*, username: Optional[str] = None, password: Optional[str] = None, fingerprint: Optional[str] = None) -> Optional[dict[str, Any]]:
