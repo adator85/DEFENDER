@@ -1136,7 +1136,7 @@ class Unrealircd6(IProtocol):
             # ['@s2s-md/..', ':001', 'UID', 'adator__', '0', '1755987444', '...', 'desktop-h1qck20.mshome.net', '001XLTT0U', '0', '+iwxz', '*', 'Clk-EC2256B2.mshome.net', 'rBKAAQ==', ':...']
 
             sasl_obj = self._ctx.Sasl.get_sasl_obj(uid)
-            if sasl_obj:
+            if sasl_obj and self._ctx.Config.SASL_ACTIVE:
                 if sasl_obj.auth_success:
                     self._ctx.Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
                     await self.send_priv_msg(nick_from=dnickname, 
@@ -1147,7 +1147,6 @@ class Unrealircd6(IProtocol):
                     await self.send_priv_msg(nick_from=dnickname, 
                                             msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s", red, nogc, nickname, sasl_obj.username),
                                             channel=dchanlog)
-                    await self.send_notice(nick_from=dnickname, nick_to=nickname, msg=tr("Wrong password!"))
 
                 # Delete sasl object!
                 self._ctx.Sasl.delete_sasl_client(uid)
@@ -1496,7 +1495,6 @@ class Unrealircd6(IProtocol):
 
         s = sasl_model
         if not self._ctx.Config.SASL_ACTIVE:
-            await self.send2socket(f":{self._ctx.Config.SERVEUR_LINK} 906 {s.username} :SASL authentication aborted")
             return None
 
         if sasl_model:
