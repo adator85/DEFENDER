@@ -96,7 +96,9 @@ async def set_automode(uplink: 'Command', cmd: list[str], client: str) -> None:
 async def set_deopall(uplink: 'Command', channel_name: str) -> None:
 
     service_id = uplink.ctx.Config.SERVICE_ID
+    dnickname = uplink.ctx.User.get_user(service_id)
     await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} SVSMODE {channel_name} -o")
+    await uplink.ctx.Irc.Protocol.send_set_mode('+o', nickname=dnickname.nickname, channel_name=channel_name)
     return None
 
 async def set_devoiceall(uplink: 'Command', channel_name: str) -> None:
@@ -118,7 +120,7 @@ async def set_mode_to_all(uplink: 'Command', channel_name: str, action: Literal[
     # await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {channel_name} {action}{set_mode} {dnickname}")
     for uid in uids_split:
         for i in range(0, len(uid)):
-            if uplink.ctx.Utils.clean_uid(uid[i]) == uplink.ctx.Config.SERVICE_ID:
+            if uplink.ctx.Utils.clean_uid(uid[i]) == service_id:
                 continue
             mode += set_mode
             users += f'{uplink.ctx.User.get_nickname(uplink.ctx.Utils.clean_uid(uid[i]))} '

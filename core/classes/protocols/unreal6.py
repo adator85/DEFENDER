@@ -261,7 +261,7 @@ class Unrealircd6(IProtocol):
         This method will always send as the command as Defender's nickname (service_id)
 
         Args:
-            modes (str): The selected mode
+            modes (str): The selected mode (must contain + or -)
             nickname (Optional[str]): The nickname
             channel_name (Optional[str]): The channel name
             params (Optional[str]): Parameters like password.
