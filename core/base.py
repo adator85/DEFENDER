@@ -1,5 +1,7 @@
 import asyncio
+import contextvars
 import os
+import sys
 import re
 import json
 import socket
@@ -9,10 +11,11 @@ import ast
 import requests
 import concurrent.futures
 from dataclasses import fields
-from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING, Union
+from typing import Any, Awaitable, Callable, Mapping, Optional, TYPE_CHECKING, Union
 from base64 import b64decode, b64encode
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
+from core.classes.modules.dthreads.dthread import DaemonThreadPoolExecutor
 import core.definition as dfn
 
 if TYPE_CHECKING:
@@ -375,6 +378,8 @@ class Base:
             asyncio.Task: The Task
         """
         name = func.__name__ if async_name is None else async_name
+        self.Settings.TASKS_CTX.set(name)
+        io_ctx = contextvars.copy_context()
 
         if run_once:
             for task in asyncio.all_tasks():
@@ -382,7 +387,7 @@ class Base:
                     return None
 
         task = asyncio.create_task(func, name=name)
-        task.add_done_callback(self.asynctask_done)
+        task.add_done_callback(self.asynctask_done, context=io_ctx)
         self.running_iotasks.append(task)
 
         self.logs.debug(f"=== New IO task created as: {task.get_name()}")
@@ -399,37 +404,43 @@ class Base:
         Returns:
             Any: The final result of the blocking IO function
         """
+        self.Settings.TASKS_CTX.set(func.__name__)
+        io_ctx = contextvars.copy_context()
+        
         if run_once:
             for iothread in self.running_iothreads:
                 if func.__name__.lower() == iothread.name.lower():
+                    self.logs.debug(f"[ASYNCIO - THREAD] {func.__name__} is already running!")
                     return None
+        executor = DaemonThreadPoolExecutor(daemon=True)
+        executor.start(max_workers=1, thread_name_prefix=func.__name__)
+        loop = asyncio.get_event_loop()
+        largs = list(args)
+        thread_event: Optional[threading.Event] = None
+        if thread_flag:
+            thread_event = threading.Event()
+            thread_event.set()
+            largs.insert(0, thread_event)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix=func.__name__) as executor:
-            loop = asyncio.get_event_loop()
-            largs = list(args)
-            thread_event: Optional[threading.Event] = None
-            if thread_flag:
-                thread_event = threading.Event()
-                thread_event.set()
-                largs.insert(0, thread_event)
+        future = loop.run_in_executor(executor, func, *tuple(largs))
+        future.add_done_callback(self.asynctask_done, context=io_ctx)
+        _thread = list(executor._threads)[0]
+        _thread.name = func.__name__
 
-            future = loop.run_in_executor(executor, func, *tuple(largs))
-            future.add_done_callback(self.asynctask_done)
+        id_obj = self.Loader.Definition.MThread(
+            name=func.__name__,
+            thread_id=_thread.native_id,
+            thread_event=thread_event,
+            thread_obj=_thread,
+            executor=executor,
+            future=future)
 
-            id_obj = self.Loader.Definition.MThread(
-                name=func.__name__,
-                thread_id=list(executor._threads)[0].native_id,
-                thread_event=thread_event, 
-                thread_obj=list(executor._threads)[0], 
-                executor=executor, 
-                future=future)
+        self.running_iothreads.append(id_obj)
+        self.logs.debug(f"=== New thread started {func.__name__} with max workers set to: {executor._max_workers}")
+        result = await future
 
-            self.running_iothreads.append(id_obj)
-            self.logs.debug(f"=== New thread started {func.__name__} with max workers set to: {executor._max_workers}")
-            result = await future
-
-            self.running_iothreads.remove(id_obj)
-            return result
+        self.running_iothreads.remove(id_obj)
+        return result
 
     def asynctask_done(self, task: Union[asyncio.Task, asyncio.Future], context: Optional[dict[str, Any]] = None):
         """Log task when done
@@ -437,11 +448,7 @@ class Base:
         Args:
             task (asyncio.Task): The Asyncio Task callback
         """
-
-        if context:
-            print(context)
-
-        task_name = "Future" if isinstance(task, asyncio.Future) else task.get_name()
+        task_name = self.Settings.TASKS_CTX.get()
         task_or_future = "Task"
         try:
             if task.exception():
@@ -524,13 +531,22 @@ class Base:
         """Methode qui supprime les threads qui ont finis leurs job
         """
         try:
-            for thread in self.running_threads:
-                if thread.name != 'heartbeat':
-                    if not thread.is_alive():
-                        self.running_threads.remove(thread)
-                        self.logs.debug(f"-- Thread {str(thread.name)} {str(thread.native_id)} has been removed!")
+            _iothreads = self.running_iothreads.copy()
+            _threads = self.running_threads.copy()
 
-            # print(threading.enumerate())
+            for _thread in _threads:
+                if _thread.name != 'heartbeat':
+                    if not _thread.is_alive():
+                        self.running_threads.remove(_thread)
+                        self.logs.debug(f"[THREADING] Thread {str(_thread.name)} {str(_thread.native_id)} has been removed!")
+
+            for _iothread in _iothreads:
+                _iothd = _iothread.thread_obj
+                if not _iothd.is_alive():
+                    self.running_iothreads.remove(_iothread)
+                    _iothread.executor.shutdown()
+                    self.logs.debug(f"[ASYNCIO - THREAD] Thread {str(_iothd.name)} {str(_iothd.native_id)} has been removed!")
+
         except Exception as err:
             self.logs.error(err, exc_info=True)
 
@@ -544,6 +560,19 @@ class Base:
             soc.close()
             self.running_sockets.remove(soc)
             self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
+
+    def garbage_collector_tasks(self) -> None:
+        """Methode qui supprime les threads qui ont finis leurs job
+        """
+        _tasks = self.running_iotasks.copy()
+
+        for _task in _tasks:
+            try:
+                if _task.cancelled() or _task.done():
+                    self.running_iotasks.remove(_task)
+                    self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been removed!")
+            except asyncio.exceptions.CancelledError as cerr:
+                self.logs.debug(f"Asyncio CancelledError reached! {_task} ({cerr})")
 
     def db_init(self) -> tuple[Engine, Connection]:
 
@@ -769,6 +798,7 @@ class Base:
             # Run Garbage Collector Timer
             self.garbage_collector_timer()
             self.garbage_collector_thread()
+            self.garbage_collector_tasks()
             # self.garbage_collector_sockets()
             return None
 
@@ -802,3 +832,94 @@ class Base:
 
         self.logs.debug(f'Method to execute : {str(self.periodic_func)}')
         return None
+
+    def stop_all_sockets(self) -> None:
+
+        _sockets = self.running_sockets.copy()
+        self.logs.debug(f"=======> Closing all Sockets!")
+        for soc in _sockets:
+            soc.close()
+            while soc.fileno() != -1:
+                soc.close()
+            self.running_sockets.remove(soc)
+            self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
+
+    def stop_all_io_threads(self) -> None:
+
+        # STOP ALL IO-THREADS
+        self.logs.debug(f"=======> Closing all IO Threads")
+        _iothreads = self.running_iothreads.copy()
+        for t in _iothreads:
+            self.logs.debug(f'=======> Closing thread name {t.thread_obj.name}')
+            if t.thread_event is not None:
+                t.thread_event.clear()
+            t.executor.shutdown()
+
+        _running_threads = threading.enumerate()
+        _threads_queues = list(concurrent.futures.thread._threads_queues.items())
+        if len(_running_threads) > 1 or len(_threads_queues) > 0:
+            self.logs.debug(f"Running threads: {_running_threads}")
+            tq: Mapping[Any, Any] = concurrent.futures.thread._threads_queues.copy()
+            for t, q in tq.items():
+                self.logs.debug(f"IO Threads in queue: {t}")
+                concurrent.futures.thread._threads_queues.pop(t, None)
+
+    async def stop_all_timers(self) -> None:
+
+        _timers = self.running_timers.copy()
+        # STOP ALL TIMERS
+        self.logs.debug(f"=======> Closing all timers!")
+        for timer in _timers:
+            while timer.is_alive():
+                self.logs.debug(f"> waiting for {timer.name} to close")
+                timer.cancel()
+                await asyncio.sleep(0.2)
+            self.running_timers.remove(timer)
+            self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
+
+    async def stop_all_tasks(self) -> None:
+
+        # STOP ALL TASKS
+        _tasks = self.running_iotasks.copy()
+        self.logs.debug(f"=======> Closing all IO TASKS!")
+        [self.running_iotasks.remove(task) for task in _tasks if 'force_shutdown' == task.get_name()]
+        for _task in _tasks:
+            self.logs.debug(f"[ASYNCIO - TASK] Cancelling {_task.get_name()}")
+            while _task.cancel(): # True if still running
+                await asyncio.sleep(0.2)
+                continue
+            if not _task.cancel():
+                self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been cancelled!")
+
+    async def on_serv_shutdown(self) -> None:
+        """This method is running whenever the server is going to
+        shutdown!
+        """
+        # STOP ALL IO-THREADS
+        self.stop_all_io_threads()
+
+        # STOP ALL TASKS
+        await self.stop_all_tasks()
+
+        # STOP ALL SOCKETS
+        self.stop_all_sockets()
+
+        # STOP ALL TIMERS
+        await self.stop_all_timers()
+
+        # CLOSING DATABASE ENGINE.
+        self.db_close()
+
+        self.execute_periodic_action()
+
+        self.logs.debug(f'IO Threads: {len(self.running_iothreads)}')
+        self.logs.debug(f'Old Threads: {len(self.running_threads)}')
+        self.logs.debug(f'IO Tasks: {len(self.running_iotasks)}')
+        self.logs.debug(f'Sockets: {len(self.running_sockets)}')
+        self.logs.debug(f'Timers: {len(self.running_timers)}')
+
+        self.running_iothreads.clear()
+        self.running_threads.clear()
+        self.running_iotasks.clear()
+        self.running_sockets.clear()
+        self.running_timers.clear()

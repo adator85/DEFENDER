@@ -103,7 +103,7 @@ class IProtocol(ABC):
         """Set a mode to channel or to a nickname or for a user in a channel
 
         Args:
-            modes (str): The selected mode
+            modes (str): The selected mode (must contain + or -)
             nickname (Optional[str]): The nickname
             channel_name (Optional[str]): The channel name
             params (Optional[str]): Parameters like password.

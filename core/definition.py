@@ -194,6 +194,12 @@ class MConfig(MainModel):
     PASSWORD: str = "password"
     """The password of the admin of the service"""
 
+    SASL_ACTIVE: bool = False
+    """Activate SASL Authentication. Default: False"""
+
+    RPC_ACTIVE: bool = False
+    """Activate Defender RPC Server. Default: False"""
+
     RPC_HOST: str = "127.0.0.1"
     """The host to bind. Default: 127.0.0.1"""
 

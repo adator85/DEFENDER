@@ -68,8 +68,12 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, uplink.Settings.current_admin)
 
+    print(f"############ NUMBER OF IO THREADS: {len(uplink.Base.running_iothreads)}")
+    print(f"############ NUMBER OF IO TASKS: {len(uplink.Base.running_iotasks)}")
+    print(f"############ NUMBER OF THREADS: {len(uplink.Base.running_threads)}")
     await uplink.Irc.run()
     uplink.Config.DEFENDER_RESTART = 0
+
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     need_a_restart = ["SERVEUR_ID"]
@@ -82,7 +86,9 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Settings.set_cache('modules', uplink.ModuleUtils.DB_MODULES)
     uplink.Settings.set_cache('module_headers', uplink.ModuleUtils.DB_MODULE_HEADERS)
 
-    await uplink.RpcServer.stop_rpc_server()
+    _was_rpc_connected = uplink.RpcServer.live
+    if _was_rpc_connected:
+        await uplink.RpcServer.stop_rpc_server()
 
     restart_flag = False
     config_model_bakcup = uplink.Config
@@ -148,7 +154,9 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Irc.Protocol.register_command()
 
     uplink.RpcServer = uplink.RpcServerModule.JSonRpcServer(uplink)
-    uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
+    if _was_rpc_connected:
+        # if rpc server was running then start the RPC server
+        uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
@@ -176,22 +184,8 @@ async def shutdown(uplink: 'Loader') -> None:
         for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
             await uplink.ModuleUtils.unload_one_module(module.module_name)
 
-        uplink.Logs.debug(f"=======> Closing all Sockets!")
-        for soc in uplink.Base.running_sockets:
-            soc.close()
-            while soc.fileno() != -1:
-                soc.close()
-            uplink.Base.running_sockets.remove(soc)
-            uplink.Logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
-
-        # Nettoyage des timers
-        uplink.Logs.debug(f"=======> Closing all timers!")
-        for timer in uplink.Base.running_timers:
-            while timer.is_alive():
-                uplink.Logs.debug(f"> waiting for {timer.name} to close")
-                timer.cancel()
-                await asyncio.sleep(0.2)
-            uplink.Logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
+        uplink.Base.stop_all_sockets()
+        await uplink.Base.stop_all_timers()
 
         uplink.Logs.debug(f"=======> Closing all Threads!")
         for thread in uplink.Base.running_threads:
@@ -200,38 +194,8 @@ async def shutdown(uplink: 'Loader') -> None:
                 uplink.Logs.debug(f"> Running the last periodic action")
             uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
 
-        uplink.Logs.debug(f"=======> Closing all IO Threads!")
-        [th.thread_event.clear() for th in uplink.Base.running_iothreads if isinstance(th.thread_event, threading.Event)]
-
-        uplink.Logs.debug(f"=======> Closing all IO TASKS!")
-        t = None
-        for task in uplink.Base.running_iotasks:
-            if 'force_shutdown' == task.get_name():
-                t = task
-        if t:
-            uplink.Base.running_iotasks.remove(t)
-
-        task_already_canceled: list = []
-        for task in uplink.Base.running_iotasks:
-            try:
-                if not task.cancel():
-                    print(task.get_name())
-                    task_already_canceled.append(task)
-            except asyncio.exceptions.CancelledError as cerr:
-                uplink.Logs.debug(f"Asyncio CancelledError reached! {task}")
-
-        for task in task_already_canceled:
-            uplink.Base.running_iotasks.remove(task)
-        
-            for task in uplink.Base.running_iotasks:
-                try:
-                    await asyncio.wait_for(asyncio.gather(task), timeout=5)
-                except asyncio.exceptions.TimeoutError as te:
-                    uplink.Logs.debug(f"Asyncio Timeout reached! {te} {task}")
-                    for task in uplink.Base.running_iotasks:
-                        task.cancel()
-                except asyncio.exceptions.CancelledError as cerr:
-                    uplink.Logs.debug(f"Asyncio CancelledError reached! {cerr} {task}")
+        uplink.Base.stop_all_io_threads()
+        await uplink.Base.stop_all_tasks()
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()
@@ -246,5 +210,5 @@ async def shutdown(uplink: 'Loader') -> None:
 async def force_shutdown(uplink: 'Loader') -> None:
     await asyncio.sleep(10)
     uplink.Logs.critical("The system has been killed because something is blocking the loop")
-    uplink.Logs.critical(asyncio.all_tasks())        
+    uplink.Logs.critical(asyncio.all_tasks())
     sys.exit('The system has been killed')

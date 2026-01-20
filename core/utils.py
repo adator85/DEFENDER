@@ -5,6 +5,7 @@ import gc
 import ssl
 from pathlib import Path
 from re import match, sub
+import threading
 from typing import Literal, Optional, Any, TYPE_CHECKING
 from datetime import datetime, timedelta
 from time import time, sleep
@@ -152,7 +153,7 @@ def heartbeat(event: 'Event', loader: 'Loader', beat: float) -> None:
     Args:
         beat (float): Nombre de secondes entre chaque exécution
     """
-
+    loader.Logs.debug(f"Thread started from {threading.current_thread().name}")
     while event.is_set():
         loader.Base.execute_periodic_action()
         sleep(beat)
