@@ -902,7 +902,14 @@ class Irc:
                 return None
 
             case 'show_cache':
-                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"The cache is currently contains {self.ctx.Settings.get_cache_size()} value(s).")
+                _cache_size = self.ctx.Settings.get_cache_size()
+                if _cache_size == 0:
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("The cache is empty!"))
+                    return None
+               
+                await self.Protocol.send_notice(nick_from=dnickname,
+                                                nick_to=fromuser,
+                                                msg=f"The cache is currently contains {_cache_size} value(s).")
                 for key, value in self.ctx.Settings.show_cache().items():
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
@@ -912,10 +919,10 @@ class Irc:
                 return None
             
             case 'clear_cache':
-                cache_size = self.ctx.Settings.get_cache_size()
-                if cache_size > 0:
+                _cache_size = self.ctx.Settings.get_cache_size()
+                if _cache_size > 0:
                     self.ctx.Settings.clear_cache()
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{cache_size} value(s) has been cleared from the cache.")
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{_cache_size} value(s) has been cleared from the cache.")
                     return None
                 
                 await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Nothing to clean. The cache is empty!"))
