@@ -86,7 +86,9 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Settings.set_cache('modules', uplink.ModuleUtils.DB_MODULES)
     uplink.Settings.set_cache('module_headers', uplink.ModuleUtils.DB_MODULE_HEADERS)
 
-    await uplink.RpcServer.stop_rpc_server()
+    _was_rpc_connected = uplink.RpcServer.live
+    if _was_rpc_connected:
+        await uplink.RpcServer.stop_rpc_server()
 
     restart_flag = False
     config_model_bakcup = uplink.Config
@@ -152,7 +154,9 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Irc.Protocol.register_command()
 
     uplink.RpcServer = uplink.RpcServerModule.JSonRpcServer(uplink)
-    uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
+    if _was_rpc_connected:
+        # if rpc server was running then start the RPC server
+        uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
