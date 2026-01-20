@@ -916,6 +916,9 @@ class Irc:
                 if cache_size > 0:
                     self.ctx.Settings.clear_cache()
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{cache_size} value(s) has been cleared from the cache.")
+                    return None
+                
+                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Nothing to clean. The cache is empty!"))
                 return None
 
             case 'uptime':
