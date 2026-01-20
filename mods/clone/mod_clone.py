@@ -175,6 +175,11 @@ class Clone(IModule):
                                 self.ctx.Base.create_asynctask(
                                     self.Threads.coro_connect_clones(self, number_of_clones, group, False, connection_interval)
                                 )
+                                # _clone = self.ctx.DThread.add_task(
+                                #     self.Threads.coro_connect_clones, number_of_clones, group, False, connection_interval,
+                                #     daemon=True
+                                # )
+                                # self.ctx.DThread.start(_clone)
 
                             except IndexError:
                                 await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group] [freq]")

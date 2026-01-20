@@ -1,4 +1,6 @@
 import asyncio
+import concurrent
+import concurrent.futures
 import re
 import ssl
 import threading
@@ -103,9 +105,14 @@ class Irc:
         except asyncio.exceptions.IncompleteReadError as ie:
             # When IRCd server is down
             # asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of undefined expected bytes
-            self.ctx.Logs.critical(f"The IRCd server is no more connected! {ie}")
+            self.ctx.Logs.critical(f"IRCd server is no more connected! {ie}")
         except asyncio.exceptions.CancelledError as cerr:
             self.ctx.Logs.debug(f"Asyncio CancelledError reached! {cerr}")
+        except KeyboardInterrupt as ke:
+            self.ctx.Logs.debug(f"Interruption by key: {ke}")
+        finally:
+            self.ctx.Logs.debug("Finally we destroy it")
+            await self.ctx.Base.on_serv_shutdown()
 
     async def connect(self):
 
@@ -830,13 +837,7 @@ class Irc:
                 return None
 
             case 'show_threads':
-                for thread in self.ctx.Base.running_threads:
-                    await self.Protocol.send_notice(
-                        nick_from=dnickname,
-                        nick_to=fromuser,
-                        msg=f">> {thread.name} ({thread.is_alive()})"
-                    )
-                
+
                 for thread in threading.enumerate():
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
@@ -892,10 +893,11 @@ class Irc:
 
             case 'show_configuration':
                 for key, value in self.ctx.Config.to_dict().items():
+                    _configuration = f'{key} = ***********' if 'password' in key.lower() or 'rpc_users' in key.lower() else f'{key} = {value}'
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f'{key} = {value}'
+                        msg=_configuration
                         )
                 return None
 

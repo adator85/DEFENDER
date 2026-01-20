@@ -1,7 +1,3 @@
-from logging import Logger
-from core.classes.modules.dthreads.dthread import DThread
-from core.classes.modules.settings import global_settings
-from core.classes.modules import translation, user, admin, channel, reputation, settings, sasl
 import core.logs as logs
 import core.definition as df
 import core.utils as utils
@@ -12,6 +8,9 @@ import core.classes.modules.config as conf_mod
 import core.classes.modules.rpc.rpc as rpc_mod
 import core.irc as irc
 import core.classes.protocols.factory as factory
+from logging import Logger
+from core.classes.modules.settings import global_settings
+from core.classes.modules import translation, user, admin, channel, reputation, settings, sasl
 
 class Loader:
 
@@ -59,8 +58,6 @@ class Loader:
         self.Settings.global_translation            = self.Translation.get_translation()
 
         self.Base: base_mod.Base                    = self.BaseModule.Base(self)
-
-        self.DThread: DThread                       = DThread(self)
 
         self.User: user.User                        = user.User(self)
 

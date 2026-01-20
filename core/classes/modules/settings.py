@@ -1,6 +1,7 @@
 """This class should never be reloaded.
 """
 import asyncio
+import contextvars
 from logging import Logger
 from threading import Timer, Thread, RLock
 from asyncio.locks import Lock
@@ -36,6 +37,8 @@ class Settings:
     PROTOCTL_USER_MODES: list[str]              = []
     PROTOCTL_CHANNEL_MODES: list[str]           = []
     PROTOCTL_PREFIX: list[str]                  = []
+
+    TASKS_CTX                                   = contextvars.ContextVar("task-name", default="None")
 
     SMOD_MODULES: list[MSModule]                = []
     """List contains all Server modules"""

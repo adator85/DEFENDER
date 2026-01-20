@@ -180,22 +180,8 @@ async def shutdown(uplink: 'Loader') -> None:
         for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
             await uplink.ModuleUtils.unload_one_module(module.module_name)
 
-        uplink.Logs.debug(f"=======> Closing all Sockets!")
-        for soc in uplink.Base.running_sockets:
-            soc.close()
-            while soc.fileno() != -1:
-                soc.close()
-            uplink.Base.running_sockets.remove(soc)
-            uplink.Logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
-
-        # Nettoyage des timers
-        uplink.Logs.debug(f"=======> Closing all timers!")
-        for timer in uplink.Base.running_timers:
-            while timer.is_alive():
-                uplink.Logs.debug(f"> waiting for {timer.name} to close")
-                timer.cancel()
-                await asyncio.sleep(0.2)
-            uplink.Logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
+        uplink.Base.stop_all_sockets()
+        await uplink.Base.stop_all_timers()
 
         uplink.Logs.debug(f"=======> Closing all Threads!")
         for thread in uplink.Base.running_threads:
@@ -204,38 +190,8 @@ async def shutdown(uplink: 'Loader') -> None:
                 uplink.Logs.debug(f"> Running the last periodic action")
             uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
 
-        uplink.Logs.debug(f"=======> Closing all IO Threads!")
-        [th.thread_event.clear() for th in uplink.Base.running_iothreads if isinstance(th.thread_event, threading.Event)]
-
-        uplink.Logs.debug(f"=======> Closing all IO TASKS!")
-        t = None
-        for task in uplink.Base.running_iotasks:
-            if 'force_shutdown' == task.get_name():
-                t = task
-        if t:
-            uplink.Base.running_iotasks.remove(t)
-
-        task_already_canceled: list = []
-        for task in uplink.Base.running_iotasks:
-            try:
-                if not task.cancel():
-                    print(task.get_name())
-                    task_already_canceled.append(task)
-            except asyncio.exceptions.CancelledError as cerr:
-                uplink.Logs.debug(f"Asyncio CancelledError reached! {task}")
-
-        for task in task_already_canceled:
-            uplink.Base.running_iotasks.remove(task)
-        
-            for task in uplink.Base.running_iotasks:
-                try:
-                    await asyncio.wait_for(asyncio.gather(task), timeout=5)
-                except asyncio.exceptions.TimeoutError as te:
-                    uplink.Logs.debug(f"Asyncio Timeout reached! {te} {task}")
-                    for task in uplink.Base.running_iotasks:
-                        task.cancel()
-                except asyncio.exceptions.CancelledError as cerr:
-                    uplink.Logs.debug(f"Asyncio CancelledError reached! {cerr} {task}")
+        uplink.Base.stop_all_io_threads()
+        await uplink.Base.stop_all_tasks()
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()

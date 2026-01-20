@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 from core import install
 #############################################
 #       @Version : 6.4                      #
@@ -11,11 +12,16 @@ from core import install
 #############################################
 
 async def main():
-    # install.update_packages()
+    install.update_packages()
     from core.loader import Loader
     loader = Loader()
     await loader.start()
     await loader.Irc.run()
 
 if __name__ == "__main__":
-    asyncio.run(main(), debug=False)
+    try:
+        asyncio.run(main(), debug=False)
+    except KeyboardInterrupt:
+        tq = concurrent.futures.thread._threads_queues.copy()
+        for t, q in tq.items():
+            concurrent.futures.thread._threads_queues.pop(t, None)
