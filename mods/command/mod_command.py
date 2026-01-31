@@ -264,13 +264,15 @@ class Command(IModule):
 
             case 'deopall':
                 try:
-                    await self.mod_utils.set_deopall(self, fromchannel)
+                    # await self.mod_utils.set_deopall(self, fromchannel)
+                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'o')
                 except Exception as err:
                     self.ctx.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'devoiceall':
                 try:
-                    await self.mod_utils.set_devoiceall(self, fromchannel)
+                    # await self.mod_utils.set_devoiceall(self, fromchannel)
+                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'v')
                 except Exception as err:
                     self.ctx.Logs.error(f'Unknown Error: {str(err)}')
 
