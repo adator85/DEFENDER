@@ -224,11 +224,31 @@ def clean_uid(uid: str) -> Optional[str]:
     return parsed_uid
 
 def hide_sensitive_data(srvmsg: list[str]) -> list[str]:
+    """This function processes a list of strings (srvmsg) 
+    to hide sensitive data in certain messages.
+
+    It identifies if the message contains a 'PRIVMSG' command
+    followed by a specific authentication action
+    (such as 'auth', 'addaccess', 'editaccess', or 'firstauth').
+    If so, it replaces all subsequent strings in the message with
+    asterisks (*) to hide the sensitive information.
+
+    Args:
+        srvmsg (list[str]): A list of strings representing a server message.
+
+    Returns:
+        list[str]: A modified list with sensitive data replaced by asterisks 
+            if applicable, or the original list if no match is found.
+    
+    Raises:
+        ValueError: If 'PRIVMSG' is not found, the original 
+            list is returned unchanged.
+    """
     try:
         srv_msg = srvmsg.copy()
         privmsg_index = srv_msg.index('PRIVMSG')
         auth_index = privmsg_index + 2
-        if match(r'^:{1}\W?(auth)$', srv_msg[auth_index]) is None:
+        if match(r'^:{1}\W?(auth|addaccess|editaccess|firstauth)$', srv_msg[auth_index]) is None:
             return srv_msg
 
         for l in range(auth_index + 1, len(srv_msg)):

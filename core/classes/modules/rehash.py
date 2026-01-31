@@ -195,6 +195,9 @@ async def shutdown(uplink: 'Loader') -> None:
             uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
 
         uplink.Base.stop_all_io_threads()
+
+        await asyncio.wait(uplink.Settings.RUNNING_ASYNC_TASKS)
+
         await uplink.Base.stop_all_tasks()
 
         uplink.Base.running_timers.clear()

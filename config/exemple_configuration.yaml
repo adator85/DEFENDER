@@ -1,4 +1,9 @@
 configuration:
+
+    ##########################################
+    #         Server Configuration           #
+    ##########################################
+
     SERVEUR_IP: "YOUR.SERVER.IP"
     SERVEUR_HOSTNAME: "YOUR.SERVER.HOST"
     SERVEUR_LINK: "LINK.DE.TON.SERVER"
@@ -7,6 +12,10 @@ configuration:
     SERVEUR_ID: "006"
     SERVEUR_SSL: true
     SERVEUR_PROTOCOL: "unreal6" # unreal6 or inspircd
+
+    ##########################################
+    #     Defender Service Configuration     #
+    ##########################################
 
     SERVICE_NAME: "defender"
     SERVICE_NICKNAME: "PyDefender"
@@ -20,12 +29,17 @@ configuration:
     SERVICE_UMODES: "o"
     SERVICE_PREFIX: "!"
 
+    ##########################################
+    #       Defender Owner Configuration     #
+    ##########################################
+
     OWNER: "TON_NICK_NAME"
     PASSWORD: "TON_PASSWORD"
 
     ##########################################
     #    Defender JSON-RPC Configuration     #
     ##########################################
+    RPC_ACTIVE: false
     RPC_HOST: "0.0.0.0"
     RPC_PORT: 5000
     RPC_USERS:
@@ -48,20 +62,36 @@ configuration:
     JSONRPC_USER: "YOUR_RPC_USER"
     JSONRPC_PASSWORD: "YOUR_RPC_PASSWORD"
 
+    ##########################################
+    #   Defender Reputation Configuration    #
+    ##########################################
+
     SALON_JAIL: "#jail"
     SALON_JAIL_MODES: "sS"
     SALON_LIBERER: "#welcome"
+
+    ##########################################
+    #     Defender Clones Configuration      #
+    ##########################################
 
     CLONE_CHANNEL: "#clones"
     CLONE_CMODES: "+nts"
     CLONE_LOG_HOST_EXEMPT: ["HOST.TO.SKIP"]
     CLONE_CHANNEL_PASSWORD: "YOUR_CHANNEL_PASSWORD"
 
-    API_TIMEOUT: 2
+    ##########################################
+    #      Defender Debug Configuration      #
+    ##########################################
 
+    DEBUG_LEVEL: 20 # 10=DEBUG | 20=INFO | 30=WARNING | 40=ERROR | 50=CRITICAL
+    DEBUG_HARD: false
+
+    ##########################################
+    #      Defender Other Configuration      #
+    ##########################################
+
+    SASL_ACTIVE: false
+    API_TIMEOUT: 2
     PORTS_TO_SCAN: [3028, 8080, 1080, 1085, 4145, 9050]
     WHITELISTED_IP: ["127.0.0.1", "192.168.1.1"]
     GLINE_DURATION: "30"
-
-    DEBUG_LEVEL: 20
-    DEBUG_HARD: true

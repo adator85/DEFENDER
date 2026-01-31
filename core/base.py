@@ -171,16 +171,16 @@ class Base:
             user_cmd (str): The user who performed the command
             cmd (str): la commande a enregistrer
         """
-        cmd_list = cmd.split()
-        if len(cmd_list) == 3:
-            if cmd_list[0].replace(self.Config.SERVICE_PREFIX, '') == 'auth':
-                cmd_list[1] = '*******'
-                cmd_list[2] = '*******'
-                cmd = ' '.join(cmd_list)
+        forbidden_keywords = ['auth', 'editaccess', 'addaccess', 'firstauth']
+        cmd_output = cmd.replace(self.Config.SERVICE_PREFIX, '')
+        cmd_split = cmd_output.split()
+        if len(cmd_split) > 0:
+            if cmd_split[0].lower() in forbidden_keywords:
+                cmd = f'{cmd_split[0]} *******'
 
-        insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
-        mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'commande': cmd}
-        await self.db_execute_query(insert_cmd_query, mes_donnees)
+            insert_cmd_query = f"INSERT INTO {self.Config.TABLE_COMMAND} (datetime, user, commande) VALUES (:datetime, :user, :commande)"
+            mes_donnees = {'datetime': self.Utils.get_sdatetime(), 'user': user_cmd, 'commande': cmd}
+            await self.db_execute_query(insert_cmd_query, mes_donnees)
 
         return None
 
