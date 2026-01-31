@@ -35,6 +35,16 @@ class JSonRpcServer:
         }
 
     async def start_rpc_server(self):
+        
+        if not self._ctx.Config.RPC_ACTIVE:
+            await self._ctx.Irc.Protocol.send_priv_msg(
+                self._ctx.Config.SERVICE_NICKNAME,
+                "[DEFENDER JSONRPC SERVER] You must set RPC_ACTIVE=true "
+                "in your config file in order to use the RPC Server!",
+                self._ctx.Config.SERVICE_CHANLOG
+            )
+            self._ctx.Logs.debug("D-RPC Server is deactivated from the config file!")
+            return None
 
         if not self.live:
             self.routes = [Route('/api', self.request_handler, methods=['POST'])]
@@ -64,6 +74,13 @@ class JSonRpcServer:
                 "[DEFENDER JSONRPC SERVER] RPC Server Stopped!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
+        else:
+            await self._ctx.Irc.Protocol.send_priv_msg(
+                self._ctx.Config.SERVICE_NICKNAME,
+                "[DEFENDER JSONRPC SERVER] RPC Server is not running!",
+                self._ctx.Config.SERVICE_CHANLOG
+            )
+            self._ctx.Logs.debug("JSON-RPC Server is not running!")
 
     async def request_handler(self, request: Request) -> JSONResponse:
 

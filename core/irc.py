@@ -748,7 +748,7 @@ class Irc:
                 try:
                     final_reason = ' '.join(cmd[1:])
                     self.hb_active = False
-                    self.ctx.Base.create_asynctask(rehash.force_shutdown(self.ctx), run_once=True)
+                    # self.ctx.Base.create_asynctask(rehash.force_shutdown(self.ctx), run_once=True)
                     await rehash.shutdown(self.ctx)
                     self.ctx.Base.execute_periodic_action()
 

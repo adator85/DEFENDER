@@ -25,3 +25,5 @@ if __name__ == "__main__":
         tq = concurrent.futures.thread._threads_queues.copy()
         for t, q in tq.items():
             concurrent.futures.thread._threads_queues.pop(t, None)
+    except RuntimeError:
+        pass

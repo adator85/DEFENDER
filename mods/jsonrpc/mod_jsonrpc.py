@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
@@ -137,7 +138,13 @@ class Jsonrpc(IModule):
                         msg=f"[{self.ctx.Config.COLORS.green}JSONRPC INFO{self.ctx.Config.COLORS.nogc}] Shutting down RPC system!", 
                         channel=self.ctx.Config.SERVICE_CHANLOG
                     )
-        self.ctx.Base.create_asynctask(thds.thread_unsubscribe(self))
+        _t = None
+        for task in self.ctx.Settings.RUNNING_ASYNC_TASKS:
+            if task.get_name() == 'thread_subscribe':
+                _t = task
+
+        await asyncio.wait_for(self.ctx.Base.create_asynctask(thds.thread_unsubscribe(self)), timeout=10)
+        await asyncio.wait_for(_t, timeout=10)
         self.ctx.Commands.drop_command_by_module(self.module_name)
         self.ctx.Logs.debug(f"Unloading {self.module_name}")
         return None
