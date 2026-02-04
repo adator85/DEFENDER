@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
+import core.definition as dfn
 from core.classes.interfaces.imodule import IModule
 import mods.jsonrpc.schemas as schemas
 import mods.jsonrpc.utils as utils
@@ -32,6 +33,8 @@ class Jsonrpc(IModule):
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
         self._mod_config: Optional[schemas.ModConfModel] = None
+        self._task_subscribe: Optional[dfn.DTask] = None
+        self._task_unsubscribe: Optional[dfn.DTask] = None
 
     @property
     def mod_config(self) -> ModConfModel:
@@ -115,7 +118,7 @@ class Jsonrpc(IModule):
             self.LiveRpc.setup(live_param)
 
             if self.mod_config.jsonrpc == 1:
-                self.ctx.Base.create_asynctask(thds.thread_subscribe(self))
+                self._task_subscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_subscribe(self))
             
             return None
         except Exception as err:
@@ -138,13 +141,10 @@ class Jsonrpc(IModule):
                         msg=f"[{self.ctx.Config.COLORS.green}JSONRPC INFO{self.ctx.Config.COLORS.nogc}] Shutting down RPC system!", 
                         channel=self.ctx.Config.SERVICE_CHANLOG
                     )
-        _t = None
-        for task in self.ctx.Settings.RUNNING_ASYNC_TASKS:
-            if task.get_name() == 'thread_subscribe':
-                _t = task
+        self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
 
-        await asyncio.wait_for(self.ctx.Base.create_asynctask(thds.thread_unsubscribe(self)), timeout=10)
-        await asyncio.wait_for(_t, timeout=10)
+        await asyncio.wait_for(self._task_unsubscribe.task, timeout=10)
+        await asyncio.wait_for(self._task_subscribe.task, timeout=10)
         self.ctx.Commands.drop_command_by_module(self.module_name)
         self.ctx.Logs.debug(f"Unloading {self.module_name}")
         return None
@@ -174,11 +174,11 @@ class Jsonrpc(IModule):
                     match option:
 
                         case 'on':
-                            self.ctx.Base.create_asynctask(thds.thread_subscribe(self))
+                            self._task_subscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_subscribe(self))
                             await self.update_configuration('jsonrpc', 1)
 
                         case 'off':
-                            self.ctx.Base.create_asynctask(thds.thread_unsubscribe(self))
+                            self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
                             await self.update_configuration('jsonrpc', 0)
 
                 except IndexError as ie:

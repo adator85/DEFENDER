@@ -11,6 +11,7 @@ import core.classes.protocols.factory as factory
 from logging import Logger
 from core.classes.modules.settings import global_settings
 from core.classes.modules import translation, user, admin, channel, reputation, settings, sasl
+from core.classes.modules.dthreads.dasyncio import DAsyncio
 
 class Loader:
 
@@ -80,6 +81,8 @@ class Loader:
         self.PFactory: factory.ProtocolFactorty     = factory.ProtocolFactorty(self)
 
         self.RpcServer: rpc_mod.JSonRpcServer       = rpc_mod.JSonRpcServer(self)
+
+        self.DAsyncio : DAsyncio                    = DAsyncio(self)
 
         self.Logs.debug(self.Utils.tr("Loader %s success", __name__))
     

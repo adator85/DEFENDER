@@ -1,7 +1,5 @@
 import asyncio
-import contextvars
 import os
-import sys
 import re
 import json
 import socket
@@ -10,13 +8,12 @@ import ipaddress
 import ast
 import requests
 import concurrent.futures
+import core.definition as dfn
 from dataclasses import fields
-from typing import Any, Awaitable, Callable, Mapping, Optional, TYPE_CHECKING, Union
+from typing import Any, Callable, Mapping, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
 from sqlalchemy import create_engine, Engine, Connection, CursorResult
 from sqlalchemy.sql import text
-from core.classes.modules.dthreads.dthread import DaemonThreadPoolExecutor
-import core.definition as dfn
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -38,13 +35,13 @@ class Base:
         self.running_timers: list[threading.Timer] = self.Settings.RUNNING_TIMERS
 
         # Liste des threads en cours
-        self.running_threads: list[threading.Thread] = self.Settings.RUNNING_THREADS
+        self.running_threads: list[dfn.DThread] = self.Settings.RUNNING_THREADS
 
         # Les sockets ouvert
         self.running_sockets: list[socket.socket] = self.Settings.RUNNING_SOCKETS
 
         # List of all asyncio tasks
-        self.running_iotasks: list[asyncio.Task] = self.Settings.RUNNING_ASYNC_TASKS
+        self.running_iotasks: list[dfn.DTask] = self.Settings.RUNNING_ASYNC_TASKS
 
         # List of all asyncio threads pool executors
         self.running_iothreads: list[dfn.MThread] = self.Settings.RUNNING_ASYNC_THREADS
@@ -122,26 +119,18 @@ class Base:
                 self.logs.debug(f'-- Retrieve the latest version from Github')
                 self.__get_latest_defender_version()
 
-            isNewVersion = False
             latest_version = self.Config.LATEST_VERSION
             current_version = self.Config.CURRENT_VERSION
 
-            curr_major , curr_minor, curr_patch = current_version.split('.')
-            last_major, last_minor, last_patch = latest_version.split('.')
+            _current_version = tuple(map(int, current_version.split('.')))
+            _latest_version = tuple(map(int, latest_version.split('.')))
 
-            if int(last_major) > int(curr_major):
+            if _current_version < _latest_version:
                 self.logs.info(f'New version available: {current_version} >>> {latest_version}')
-                isNewVersion = True
-            elif int(last_major) == int(curr_major) and int(last_minor) > int(curr_minor):
-                self.logs.info(f'New version available: {current_version} >>> {latest_version}')
-                isNewVersion = True
-            elif int(last_major) == int(curr_major) and int(last_minor) == int(curr_minor) and int(last_patch) > int(curr_patch):
-                self.logs.info(f'New version available: {current_version} >>> {latest_version}')
-                isNewVersion = True
+                return True
             else:
-                isNewVersion = False
+                return False
 
-            return isNewVersion
         except ValueError as ve:
             self.logs.error(f'Impossible to convert in version number : {ve}')
         except AttributeError as atterr:
@@ -253,7 +242,7 @@ class Base:
                 if isinstance(getattr(dataclassObj, param), list):
                     value = ast.literal_eval(value)
 
-                setattr(dataclassObj, param, self.int_if_possible(value))
+                setattr(dataclassObj, param, self.convert_to_int(value))
 
             return response
 
@@ -286,7 +275,7 @@ class Base:
             update = await self.db_execute_query(query, mes_donnees)
             updated_rows = update.rowcount
             if updated_rows > 0:
-                setattr(dataclass_obj, param_key, self.int_if_possible(param_value))
+                setattr(dataclass_obj, param_key, self.convert_to_int(param_value))
                 self.logs.debug(f'Parameter updated : {param_key} - {param_value} | Module: {module_name}')
             else:
                 self.logs.error(f'Parameter NOT updated : {param_key} - {param_value} | Module: {module_name}')
@@ -338,7 +327,7 @@ class Base:
             self.logs.error(f'Assertion Error -> {ae}')
             return None
 
-    def create_thread(self, func: object, func_args: tuple = (), run_once: bool = False, daemon: bool = True) -> None:
+    def create_thread(self, func: Callable[..., object], *args, run_once: bool = False, daemon: bool = True) -> None:
         """Create a new thread and store it into running_threads variable
 
         Args:
@@ -347,118 +336,40 @@ class Base:
             run_once (bool, optional): If you want to ensure that this method/function run once. Defaults to False.
         """
         try:
+            def custom_hook(args: threading.ExceptHookArgs) -> None:
+                _name = args.thread.name
+                _id = args.thread.ident
+                if isinstance(args.exc_value, TypeError):
+                    self.logs.error(f"You must add 'event' as first argument to your thread function '{_name}-{_id}'")
+                    return None
+
+                self.logs.error(f'Thread failed: {args.exc_value} ({type(args.exc_value)}) {_name}-{_id}')
+                return None
+
+            threading.excepthook = custom_hook
+            _event = threading.Event()
+            _event.set() # set the flag to true
+            _name = func.__name__
+            _init_args = [_event]
+            _init_args.extend(list(args))
+            _final_args = tuple(_init_args)
+
             # Clean unused threads first
             self.garbage_collector_thread()
 
-            func_name = func.__name__
-
             if run_once:
                 for thread in self.running_threads:
-                    if thread.name == func_name:
+                    if thread.thread.name == _name:
                         return None
 
-            th = threading.Thread(target=func, args=func_args, name=str(func_name), daemon=daemon)
-            th.start()
+            _thread = threading.Thread(target=func, args=_final_args, name=_name, daemon=daemon)
+            _thread.start()
 
-            self.running_threads.append(th)
-            self.logs.debug(f"-- Thread ID : {str(th.ident)} | Thread name : {th.name} | Running Threads : {len(threading.enumerate())}")
+            self.running_threads.append(dfn.DThread(_thread, _event))
+            self.logs.debug(f"[THREAD V2 START] ID: {_thread.ident} | NAME: {_thread.name} | #THREADS: {len(threading.enumerate())}")
 
         except Exception as err:
             self.logs.error(err, exc_info=True)
-
-    def create_asynctask(self, func: Callable[..., Awaitable[Any]], *, async_name: str = None, run_once: bool = False) -> Optional[asyncio.Task]:
-        """Create a new asynchrone and store it into running_iotasks variable
-
-        Args:
-            func (Callable): The function you want to call in asynchrone way
-            async_name (str, optional): The task name. Defaults to None.
-            run_once (bool, optional): If true the task will be run once. Defaults to False.
-
-        Returns:
-            asyncio.Task: The Task
-        """
-        name = func.__name__ if async_name is None else async_name
-        self.Settings.TASKS_CTX.set(name)
-        io_ctx = contextvars.copy_context()
-
-        if run_once:
-            for task in asyncio.all_tasks():
-                if task.get_name().lower() == name.lower():
-                    return None
-
-        task = asyncio.create_task(func, name=name)
-        task.add_done_callback(self.asynctask_done, context=io_ctx)
-        self.running_iotasks.append(task)
-
-        self.logs.debug(f"=== New IO task created as: {task.get_name()}")
-        return task
-
-    async def create_thread_io(self, func: Callable[..., Any], *args, run_once: bool = False, thread_flag: bool = False) -> Optional[Any]:
-        """Run threads via asyncio.
-
-        Args:
-            func (Callable[..., Any]): The blocking IO function
-            run_once (bool, optional): If it should be run once.. Defaults to False.
-            thread_flag (bool, optional): If you are using a endless loop, use the threading Event object. Defaults to False.
-
-        Returns:
-            Any: The final result of the blocking IO function
-        """
-        self.Settings.TASKS_CTX.set(func.__name__)
-        io_ctx = contextvars.copy_context()
-        
-        if run_once:
-            for iothread in self.running_iothreads:
-                if func.__name__.lower() == iothread.name.lower():
-                    self.logs.debug(f"[ASYNCIO - THREAD] {func.__name__} is already running!")
-                    return None
-        executor = DaemonThreadPoolExecutor(daemon=True)
-        executor.start(max_workers=1, thread_name_prefix=func.__name__)
-        loop = asyncio.get_event_loop()
-        largs = list(args)
-        thread_event: Optional[threading.Event] = None
-        if thread_flag:
-            thread_event = threading.Event()
-            thread_event.set()
-            largs.insert(0, thread_event)
-
-        future = loop.run_in_executor(executor, func, *tuple(largs))
-        future.add_done_callback(self.asynctask_done, context=io_ctx)
-        _thread = list(executor._threads)[0]
-        _thread.name = func.__name__
-
-        id_obj = self.Loader.Definition.MThread(
-            name=func.__name__,
-            thread_id=_thread.native_id,
-            thread_event=thread_event,
-            thread_obj=_thread,
-            executor=executor,
-            future=future)
-
-        self.running_iothreads.append(id_obj)
-        self.logs.debug(f"=== New thread started {func.__name__} with max workers set to: {executor._max_workers}")
-        result = await future
-
-        self.running_iothreads.remove(id_obj)
-        return result
-
-    def asynctask_done(self, task: Union[asyncio.Task, asyncio.Future], context: Optional[dict[str, Any]] = None):
-        """Log task when done
-
-        Args:
-            task (asyncio.Task): The Asyncio Task callback
-        """
-        task_name = self.Settings.TASKS_CTX.get()
-        task_or_future = "Task"
-        try:
-            if task.exception():
-                self.logs.error(f"[ASYNCIO] {task_or_future} {task_name} failed with exception: {task.exception()}")
-            else:
-                self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} completed successfully.")
-        except asyncio.CancelledError as ce:
-            self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} terminated with cancelled error. {ce}")
-        except asyncio.InvalidStateError as ie:
-            self.logs.debug(f"[ASYNCIO] {task_or_future} {task_name} terminated with invalid state error. {ie}")
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -469,7 +380,8 @@ class Base:
         Returns:
             bool: True if is alive
         """
-        for thread in self.running_threads:
+        for _dthread in self.running_threads:
+            thread = _dthread.thread
             if thread.name.lower() == thread_name.lower():
                 if thread.is_alive():
                     return True
@@ -487,7 +399,8 @@ class Base:
         Returns:
             bool: True if the thread exist
         """
-        for thread in self.running_threads:
+        for _dthread in self.running_threads:
+            thread = _dthread.thread
             if thread.name.lower() == thread_name.lower():
                     return True
 
@@ -503,11 +416,11 @@ class Base:
         Returns:
             int: Number of threads
         """
-        with self.Settings.LOCK:
+        with self.Settings.THLOCK:
             count = 0
-
-            for thr in self.running_threads:
-                if thread_name == thr.name:
+            for _dthread in self.running_threads:
+                _thread = _dthread.thread
+                if thread_name.lower() == _thread.name.lower():
                     count += 1
 
             return count
@@ -534,18 +447,18 @@ class Base:
             _iothreads = self.running_iothreads.copy()
             _threads = self.running_threads.copy()
 
-            for _thread in _threads:
-                if _thread.name != 'heartbeat':
-                    if not _thread.is_alive():
-                        self.running_threads.remove(_thread)
-                        self.logs.debug(f"[THREADING] Thread {str(_thread.name)} {str(_thread.native_id)} has been removed!")
+            for _dthread in _threads:
+                _thread = _dthread.thread
+                if not _thread.is_alive():
+                    self.running_threads.remove(_dthread)
+                    self.logs.debug(f"[THREAD V2 CLEAN] ID: {_thread.native_id} | NAME: {_thread.name}")
 
             for _iothread in _iothreads:
                 _iothd = _iothread.thread_obj
                 if not _iothd.is_alive():
                     self.running_iothreads.remove(_iothread)
                     _iothread.executor.shutdown()
-                    self.logs.debug(f"[ASYNCIO - THREAD] Thread {str(_iothd.name)} {str(_iothd.native_id)} has been removed!")
+                    self.logs.debug(f"[IO THREAD CLEAN] ID: {_iothd.native_id} | NAME: {_iothd.name}")
 
         except Exception as err:
             self.logs.error(err, exc_info=True)
@@ -564,12 +477,13 @@ class Base:
     def garbage_collector_tasks(self) -> None:
         """Methode qui supprime les threads qui ont finis leurs job
         """
-        _tasks = self.running_iotasks.copy()
+        _dtasks = self.running_iotasks.copy()
 
-        for _task in _tasks:
+        for _dtask in _dtasks:
+            _task = _dtask.task
             try:
                 if _task.cancelled() or _task.done():
-                    self.running_iotasks.remove(_task)
+                    self.running_iotasks.remove(_dtask)
                     self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been removed!")
             except asyncio.exceptions.CancelledError as cerr:
                 self.logs.debug(f"Asyncio CancelledError reached! {_task} ({cerr})")
@@ -702,24 +616,6 @@ class Base:
         except AttributeError as ae:
             self.logs.error(f"Attribute Error : {ae}")
 
-    def int_if_possible(self, value):
-        """Convertit la valeur reçue en entier, si possible.
-        Sinon elle retourne la valeur initiale.
-
-        Args:
-            value (any): la valeur à convertir
-
-        Returns:
-            any: Retour un entier, si possible. Sinon la valeur initiale.
-        """
-        try:
-            response = int(value)
-            return response
-        except ValueError:
-            return value
-        except TypeError:
-            return value
-
     def convert_to_int(self, value: Any) -> Optional[int]:
         """Convert a value to int
 
@@ -844,6 +740,19 @@ class Base:
             self.running_sockets.remove(soc)
             self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
 
+    def stop_all_threads(self) -> None:
+        self.logs.debug("=======> Closing all Threads")
+        _dthreads = self.running_threads.copy()
+        for _dthread in _dthreads:
+            _thread = _dthread.thread
+            _event = _dthread.event
+
+            # Set the flag to false
+            _event.clear()
+            self.logs.debug(f"[THREAD V2 STOP] ID: {_thread.ident} | NAME: {_thread.name} | LIVE: {'Yes' if _thread.is_alive() else 'No'}")
+            _thread.join(timeout=5)
+            self.running_threads.remove(_dthread)
+
     def stop_all_io_threads(self) -> None:
 
         # STOP ALL IO-THREADS
@@ -882,12 +791,18 @@ class Base:
         # STOP ALL TASKS
         _tasks = self.running_iotasks.copy()
         self.logs.debug(f"=======> Closing all IO TASKS!")
-        [self.running_iotasks.remove(task) for task in _tasks if 'force_shutdown' == task.get_name()]
-        for _task in _tasks:
-            self.logs.debug(f"[ASYNCIO - TASK] Cancelling {_task.get_name()}")
-            while _task.cancel(): # True if still running
-                await asyncio.sleep(0.2)
-                continue
+        [self.running_iotasks.remove(task) for task in _tasks if 'force_shutdown' == task.task.get_name()]
+        for _dtask in _tasks:
+            _task = _dtask.task
+            _event = _dtask.event
+            if _event is not None:
+                _event.clear()
+            
+            try:
+                await asyncio.wait_for(_task, timeout=2)
+            except asyncio.exceptions.TimeoutError:
+                self.logs.debug(f'[IO TASK CRASH] {_task.get_name()} has been forced to cancel')
+
             if not _task.cancel():
                 self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been cancelled!")
 

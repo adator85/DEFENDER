@@ -156,7 +156,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.RpcServer = uplink.RpcServerModule.JSonRpcServer(uplink)
     if _was_rpc_connected:
         # if rpc server was running then start the RPC server
-        uplink.Base.create_asynctask(uplink.RpcServer.start_rpc_server())
+        uplink.DAsyncio.create_safe_task(uplink.RpcServer.start_rpc_server())
 
     # Reload Service modules
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
@@ -186,19 +186,10 @@ async def shutdown(uplink: 'Loader') -> None:
 
         uplink.Base.stop_all_sockets()
         await uplink.Base.stop_all_timers()
-
-        uplink.Logs.debug(f"=======> Closing all Threads!")
-        for thread in uplink.Base.running_threads:
-            if thread.name == 'heartbeat' and thread.is_alive():
-                uplink.Base.execute_periodic_action()
-                uplink.Logs.debug(f"> Running the last periodic action")
-            uplink.Logs.debug(f"> Cancelling {thread.name} {thread.native_id}")
-
+        uplink.Base.stop_all_threads()
         uplink.Base.stop_all_io_threads()
-
-        await asyncio.wait(uplink.Settings.RUNNING_ASYNC_TASKS)
-
         await uplink.Base.stop_all_tasks()
+        await asyncio.wait([_dtask.task for _dtask in uplink.Settings.RUNNING_ASYNC_TASKS])
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()

@@ -1,4 +1,3 @@
-from calendar import c
 import socket
 import psutil
 import requests
@@ -50,11 +49,6 @@ async def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
     mode = str(srvmsg[4])
     group_to_check = str(srvmsg[5:])
     group_to_unban = '~security-group:unknown-users'
-
-    if confmodel.autolimit == 1:
-        if mode == '+l' or mode == '-l':
-            chan = uplink.ctx.Channel.get_channel(channel)
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + confmodel.autolimit_amount}")
 
     if gconfig.SALON_JAIL == channel:
         if mode == '+b' and group_to_unban in group_to_check:
@@ -197,7 +191,7 @@ async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
         uplink.ctx.Logs.debug(f"This UID do not exist anymore: {srvmsg}")
         return None
 
-    ban_all_chan = uplink.ctx.Base.int_if_possible(confmodel.reputation_ban_all_chan)
+    ban_all_chan = uplink.ctx.Base.convert_to_int(confmodel.reputation_ban_all_chan)
     jail_salon = uplink.ctx.Config.SALON_JAIL
     service_id = uplink.ctx.Config.SERVICE_ID
     get_user_reputation = uplink.ctx.Reputation.get_reputation(userobj.uid)
@@ -326,7 +320,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
         uplink.ctx.Logs.debug(f'[FLOOD] {get_detected_nickname} triggered +m mode on the channel {channel}')
         fu.nbr_msg = 0
         fu.first_msg_time = unixtime
-        uplink.ctx.Base.create_asynctask(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
+        uplink.ctx.DAsyncio.create_safe_task(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
 
 async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
 
@@ -579,7 +573,7 @@ def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser'
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK) as sock:
             try:
                 sock.settimeout(0.5)
-                connection = (remote_ip, uplink.ctx.Base.int_if_possible(port))
+                connection = (remote_ip, uplink.ctx.Base.convert_to_int(port))
                 sock.connect(connection)
 
                 result['opened_ports'].append(port)
