@@ -206,15 +206,17 @@ class Irc:
 
         if user_obj is None:
             return None
-        
-        self.ctx.Admin.insert(
-            self.ctx.Definition.MAdmin(
+
+        _admin = self.ctx.Definition.MAdmin(
                 **user_obj.to_dict(),
                 language=language,
                 account=account,
                 level=int(level)
             )
-        )
+
+        self.ctx.Admin.insert(_admin)
+
+        self.ctx.Settings.current_admin = _admin
 
         return None
 
@@ -448,7 +450,7 @@ class Irc:
 
                 if cmd_owner == config_owner and cmd_password == config_password:
                     await self.ctx.Base.db_create_first_admin()
-                    self.insert_db_admin(current_uid, cmd_owner, 5, self.ctx.Config.LANG)
+                    self.insert_db_admin(current_uid, cmd_owner, 5, self.ctx.Settings.global_lang)
                     await self.Protocol.send_priv_msg(
                         msg=tr("[%s %s %s] - %s is now connected to %s", GREEN, current_command.upper(), NOGC, fromuser, dnickname),
                         nick_from=dnickname,
