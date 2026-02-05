@@ -23,7 +23,14 @@ class ALHelper:
             self.insert_al_channel(ALChannel(_channel, _amount, _interval))
 
     def insert_al_channel(self, obj: ALChannel) -> bool:
+        """Insert AutoLimit channel into the object
 
+        Args:
+            obj (ALChannel): The AutoLimit object
+
+        Returns:
+            bool: True if the channel has been added else False
+        """
         if self.get_al_channel(obj.channel.lower()) is not None:
             return False
 

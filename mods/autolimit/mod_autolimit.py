@@ -95,32 +95,82 @@ class Autolimit(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('+l', channel_name=_channel, params=len(mchan.uids) + _amount)
 
     async def increment_autolimit(self, event: asyncio.Event) -> None:
-        uid_channel_db_copy: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
-        chan_list: list[str] = [c.name for c in self.ctx.Channel.UID_CHANNEL_DB]
+
+        _static_serv_chans_gauto: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+        _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+
+        _static_serv_chan_list: list[str] = [c.name for c in self.ctx.Channel.UID_CHANNEL_DB]
+        _static_al_chan_list = [c.channel for c in self.DB_AL_CHANNELS]
+
+        __flag = 0
 
         while event.is_set():
-            for _channel in self.ctx.Channel.UID_CHANNEL_DB:
-                if self.mod_config.global_autolimit == 1:
-                    for chan_copy in uid_channel_db_copy:
-                        if chan_copy["name"] == _channel.name and len(_channel.uids) != chan_copy.get('uids_count'):
-                            self.ctx.DAsyncio.create_task(self.apply_mode, _channel)
-                            chan_copy['uids_count'] = len(_channel.uids)
-                else:
-                    for chan_copy in uid_channel_db_copy:
-                        _db_chan = self.helper.get_al_channel(_channel.name)
-                        if _db_chan:
-                            if chan_copy.get('name') == _db_chan.channel and len(_channel.uids) != chan_copy.get('uids_count'):
-                                self.ctx.DAsyncio.create_task(self.apply_mode, _channel, _db_chan)
-                                chan_copy['uids_count'] = len(_channel.uids)
 
-                if chan_copy.get('uids_count') == 0 and chan_copy.get('name') == _channel.name:
-                    if {'name': _channel.name, 'uids_count': 0} in uid_channel_db_copy:
-                        uid_channel_db_copy.remove({'name': _channel.name, 'uids_count': 0})
+            if self.mod_config.global_autolimit == 1:
+                __id = 1
+                if __flag != __id:
+                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    __flag = __id
 
-                if _channel.name not in chan_list:
-                    uid_channel_db_copy.append({'name': _channel.name, 'uids_count': 0})
-                    chan_list.append(_channel.name)
-                    chan_list = list(set(chan_list))
+                # Save online server channel list
+                _online_serv_chan_list = [c.name for c in self.ctx.Channel.UID_CHANNEL_DB]
+                
+                # Get the channels that are not in the online serv channel list
+                diff = list(set(filter(lambda x: x not in _online_serv_chan_list, _static_serv_chan_list)))
+
+                # print("Online: ", _online_serv_chan_list)
+                # print("Static: ", _static_serv_chan_list)
+                # print("Channel to delete:", diff)
+
+                # If there is an empty channel, remove it from 
+                # the static server channel list
+                for _channel in diff:
+                    _static_serv_chan_list.remove(_channel)
+                    _static_serv_chans = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB if c.name.lower() == _channel]
+
+                for _serv_chan in self.ctx.Channel.UID_CHANNEL_DB:
+                    # If new channel add it into the static serv channel list.
+                    if _serv_chan.name not in _static_serv_chan_list:
+                        _static_serv_chan_list.append(_serv_chan.name)
+                        _static_serv_chans = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB if c.name.lower() == _serv_chan.name]
+
+                    for _static_serv_chan in _static_serv_chans:
+                        if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.uids) != _static_serv_chan.get('uids_count'):
+                            self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan))
+                            _static_serv_chan['uids_count'] = len(_serv_chan.uids)
+            else:
+                __id = 2
+                if __flag != __id:
+                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    __flag = __id
+
+                _online_al_chans_list = [c.channel for c in self.DB_AL_CHANNELS]
+
+                if len(self.DB_AL_CHANNELS) == 0:
+                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    _static_al_chan_list = _online_al_chans_list
+
+                diff = list(set(filter(lambda x: x not in _online_al_chans_list, _static_al_chan_list)))
+
+                # print("Online: ", [c.channel for c in self.DB_AL_CHANNELS])
+                # print("Static: ", _static_al_chan_list)
+                # print("Channel to delete:", diff)
+
+                for _channel in diff:
+                    _static_al_chan_list.remove(_channel)
+                    _static_serv_chans = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB if c.name.lower() == _channel]
+
+                for _al_chan in self.DB_AL_CHANNELS:
+                    if _al_chan.channel not in _static_al_chan_list:
+                        _static_al_chan_list.append(_al_chan.channel)
+                        _static_serv_chans = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB if c.name.lower() == _al_chan.channel]
+
+                    _serv_chan = self.ctx.Channel.get_channel(_al_chan.channel)
+                    if _serv_chan:
+                        for _static_serv_chan in _static_serv_chans:
+                            if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.uids) != _static_serv_chan.get('uids_count'):
+                                self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan, _al_chan))
+                                _static_serv_chan['uids_count'] = len(_serv_chan.uids)
 
             await asyncio.sleep(0.3)
 
@@ -181,6 +231,12 @@ class Autolimit(IModule):
         match args:
             case 'set':
                 # Syntax. AUTOLIMIT SET #channel <amount> <interval>
+                if self.mod_config.global_autolimit == 1:
+                    await proto.send_notice(nick_from=dnickname, nick_to=u.nickname,
+                                            msg="The autolimit is set globally! "
+                                            "you can't use it by channel, you must run "
+                                            "autolimit global off")
+                    return None
                 if len(cmd) < 5:
                     await proto.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="Syntax. AUTOLIMIT SET <channel> <amount> <interval>")
                     return None
@@ -286,6 +342,8 @@ class Autolimit(IModule):
                             nick_from=dnickname, nick_to=u.nickname,
                             msg=f"{_channel} has been removed from autolimit system!")
 
+                        await proto.send_mode_chan(_channel, '-l')
+
                     return None
 
                 except Exception as err:
@@ -349,6 +407,8 @@ class Autolimit(IModule):
 
                     if _state == 'on':
                         await self.update_configuration('global_autolimit', 1)
+                        await self.update_configuration('global_amount', _amount)
+                        await self.update_configuration('global_interval', _interval)
                         await proto.send_notice(
                             nick_from=dnickname,
                             nick_to=u.nickname,
@@ -362,9 +422,6 @@ class Autolimit(IModule):
                                 await self.ctx.Irc.Protocol.send_set_mode('-l', channel_name=_channel.name)
                         await proto.send_notice(nick_from=dnickname, nick_to=u.nickname,
                                                 msg='[AUTOLIMIT] Global autolimit deactivated!')
-
-                    await self.update_configuration('global_amount', _amount)
-                    await self.update_configuration('global_interval', _interval)
 
                 except Exception as err:
                     self.ctx.Logs.error(f"Unknown Error: {err}")
