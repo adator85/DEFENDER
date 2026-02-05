@@ -2,7 +2,7 @@ OS := $(shell uname -s)
 CURRENT_USER := $(shell whoami)
 PYTHON_VERSION := $(shell python3 -V)
 HOME_DIR := $(shell echo $$HOME)
-SHELL := /bin/bash
+SHELL := $(shell echo $$0)
 
 install:
 ifeq ($(wildcard config/configuration.yaml),)
@@ -13,6 +13,7 @@ ifeq ($(OS), Linux)
 	$(info Installation for os : $(OS))
 	$(info Python version: $(PYTHON_VERSION))
 	$(info Home directory: $(HOME_DIR))
+	$(info Shell type: $(SHELL))
 
 	@python3 core/install.py --check-version
 	@if [ $$? -eq 0 ]; then \
