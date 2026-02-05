@@ -15,11 +15,11 @@ class Autolimit(IModule):
     __TABLENAME__: str = 'autolimit_channels'
 
     MOD_HEADER: dict[str, str] = {
-        'name':'Autolimit',
-        'version':'0.0.1',
-        'description':'Autolimit module',
-        'author':'Defender Team',
-        'core_version':'Defender-6'
+        'name': 'Autolimit',
+        'version': '0.0.2',
+        'description': 'Autolimit module by channel or globally',
+        'author': 'Defender Team',
+        'core_version': 'Defender-6'
     }
 
     @dataclass

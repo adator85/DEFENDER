@@ -1,6 +1,4 @@
 from typing import Optional, TYPE_CHECKING
-
-from requests.utils import is_valid_cidr
 from mods.autolimit.schemas import ALChannel
 
 if TYPE_CHECKING:
