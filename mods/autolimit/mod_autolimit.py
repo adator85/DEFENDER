@@ -114,7 +114,8 @@ class Autolimit(IModule):
                                 chan_copy['uids_count'] = len(_channel.uids)
 
                 if chan_copy.get('uids_count') == 0 and chan_copy.get('name') == _channel.name:
-                    uid_channel_db_copy.remove({'name': _channel.name, 'uids_count': 0})
+                    if {'name': _channel.name, 'uids_count': 0} in uid_channel_db_copy:
+                        uid_channel_db_copy.remove({'name': _channel.name, 'uids_count': 0})
 
                 if _channel.name not in chan_list:
                     uid_channel_db_copy.append({'name': _channel.name, 'uids_count': 0})
