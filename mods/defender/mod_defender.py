@@ -4,6 +4,7 @@ from core.classes.interfaces.imodule import IModule
 import mods.defender.schemas as schemas
 import mods.defender.utils as utils
 import mods.defender.threads as thds
+from core.definition import DTask
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -25,9 +26,22 @@ class Defender(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
+
         self._mod_config: Optional[schemas.ModConfModel] = None
         self.Schemas = schemas.RepDB()
         self.Threads = thds
+        self.mod_utils: Optional[utils] = None
+        self.timeout: int = 0
+        self.flood_system: dict = dict()
+        self.reputation_first_connexion: dict = dict()
+        self.abuseipdb_key: str = ''
+        self.cloudfilt_key: str = ''
+        self.freeipapi: Optional[DTask] = None
+        self.cloudfilt: Optional[DTask] = None
+        self.abuseipdb: Optional[DTask] = None
+        self.local_scan: Optional[DTask] = None
+        self.psutil: Optional[DTask] = None
+        self.reputation: Optional[DTask] = None
 
     @property
     def mod_config(self) -> ModConfModel:
@@ -36,8 +50,6 @@ class Defender(IModule):
     def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -126,7 +138,10 @@ class Defender(IModule):
             for chan in self.ctx.Channel.UID_CHANNEL_DB:
                 if chan.name != self.ctx.Config.SALON_JAIL:
                     await self.ctx.Irc.Protocol.send_set_mode('+b', channel_name=chan.name, params='~security-group:unknown-users')
-                    await self.ctx.Irc.Protocol.send_set_mode('+eee', channel_name=chan.name, params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users')
+                    await self.ctx.Irc.Protocol.send_set_mode(
+                        '+eee',
+                        channel_name=chan.name,
+                        params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users')
 
     def __onload(self):
 
@@ -193,9 +208,11 @@ class Defender(IModule):
 
         if response is not None:
             q_insert = "INSERT INTO def_trusted (datetime, user, host, vhost) VALUES (?, ?, ?, ?)"
-            mes_donnees = {'datetime': self.ctx.mod_utils.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
+            mes_donnees = {'datetime': self.ctx.Utils.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
             exec_query = self.ctx.Base.db_execute_query(q_insert, mes_donnees)
             pass
+
+        return None
 
     async def join_saved_channels(self) -> None:
         """_summary_
@@ -300,18 +317,22 @@ class Defender(IModule):
         match command:
 
             case 'show_reputation':
+                p = self.ctx.Irc.Protocol
 
                 if self.mod_config.reputation == 0:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")
+                    await p.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")
                     return None
 
                 if not self.ctx.Reputation.UID_REPUTATION_DB:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
+                    await p.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
+                    return None
 
                 for suspect in self.ctx.Reputation.UID_REPUTATION_DB:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, 
-                                             nick_to=fromuser, 
-                                             msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score_connexion} | Secret code: {suspect.secret_code} | Connected on: {suspect.connexion_datetime}")
+                    await p.send_notice(nick_from=dnickname,
+                                        nick_to=fromuser,
+                                        msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score_connexion} | Secret code: {suspect.secret_code} | Connected on: {suspect.connexion_datetime}")
+
+                return None
 
             case 'code':
                 try:
@@ -423,7 +444,7 @@ class Defender(IModule):
                                     msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION{self.ctx.Config.COLORS.black} ] : Already deactivated",
                                     channel=dchanlog
                                     )
-                                return False
+                                return None
 
                             await self.update_configuration(key, 0)
                             self.reputation.event.clear()
