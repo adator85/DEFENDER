@@ -69,9 +69,9 @@ def generate_realname_for_clone(faker_instance: 'Faker') -> tuple[int, str, str]
     else:
         department = faker_instance.city()
 
-    return (age, gender, department)
+    return age, gender, department
 
-def generate_nickname_for_clone(faker_instance: 'Faker', gender: Optional[str] = 'AUTO') -> str:
+def generate_nickname_for_clone(faker_instance: 'Faker', gender: Optional[str] = 'AUTO') -> Optional[str]:
     """Generate nickname for clone
 
     Args:
@@ -90,6 +90,8 @@ def generate_nickname_for_clone(faker_instance: 'Faker', gender: Optional[str] =
         return faker_instance.first_name_female()
     elif gender.upper() == 'M':
         return faker_instance.first_name_male()
+
+    return None
 
 def generate_ipv4_for_clone(faker_instance: 'Faker', auto: bool = True) -> str:
     """Generate remote ipv4 for clone
@@ -156,18 +158,18 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
     geoip = generate_country_code_for_clone(faker)
 
-    checkNickname = uplink.Clone.nickname_exists(nickname)
-    checkUid = uplink.Clone.uid_exists(uid=uid)
+    check_nickname = uplink.Clone.nickname_exists(nickname)
+    check_uid = uplink.Clone.uid_exists(uid=uid)
 
-    while checkNickname:
+    while check_nickname:
         caracteres = '0123456789'
         randomize = ''.join(random.choice(caracteres) for _ in range(2))
         nickname = nickname + str(randomize)
-        checkNickname = uplink.Clone.nickname_exists(nickname)
+        check_nickname = uplink.Clone.nickname_exists(nickname)
 
-    while checkUid:
+    while check_uid:
         uid = generate_uid_for_clone(faker, uplink.ctx.Config.SERVEUR_ID)
-        checkUid = uplink.Clone.uid_exists(uid=uid)
+        check_uid = uplink.Clone.uid_exists(uid=uid)
 
     clone = uplink.Schemas.MClone(
                 connected=False,
@@ -190,19 +192,19 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
 async def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
     
-    senderObj, recieverObj, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
+    sender_obj, reciever_obj, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
 
-    if senderObj is not None:
-        if senderObj.hostname in uplink.ctx.Config.CLONE_LOG_HOST_EXEMPT:
-            return
-        senderMsg = message
-        clone_obj = recieverObj
+    if sender_obj is not None:
+        if sender_obj.hostname in uplink.ctx.Config.CLONE_LOG_HOST_EXEMPT:
+            return None
+        sender_msg = message
+        clone_obj = reciever_obj
 
         if clone_obj is None:
-            return
+            return None
 
         if clone_obj.uid != uplink.ctx.Config.SERVICE_ID:
-            final_message = f"{senderObj.nickname}!{senderObj.username}@{senderObj.hostname} > {senderMsg.lstrip(':')}"
+            final_message = f"{sender_obj.nickname}!{sender_obj.username}@{sender_obj.hostname} > {sender_msg.lstrip(':')}"
             await uplink.ctx.Irc.Protocol.send_priv_msg(
                 nick_from=clone_obj.uid,
                 msg=final_message,

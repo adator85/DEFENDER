@@ -116,7 +116,7 @@ class Test(IModule):
         match command:
             
             case 'asyncio':
-                self.ctx.Base.create_asynctask(self.asyncio_func())
+                self.ctx.DAsyncio.create_safe_task(self.asyncio_func())
                 return None
 
             case 'test-command':

@@ -127,14 +127,7 @@ class Irc:
         await self.Protocol.send_link()
 
     async def listen(self):
-        self.ctx.Base.create_asynctask(
-            self.ctx.Base.create_thread_io(
-                self.ctx.Utils.heartbeat,
-                self.ctx, self.beat,
-                run_once=True, thread_flag=True
-                )
-        )
-
+        self.ctx.Base.create_thread(self.ctx.Utils.heartbeat, self.ctx, self.beat, run_once=True)
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
             await self.send_response(data.splitlines())
@@ -213,15 +206,17 @@ class Irc:
 
         if user_obj is None:
             return None
-        
-        self.ctx.Admin.insert(
-            self.ctx.Definition.MAdmin(
+
+        _admin = self.ctx.Definition.MAdmin(
                 **user_obj.to_dict(),
                 language=language,
                 account=account,
                 level=int(level)
             )
-        )
+
+        self.ctx.Admin.insert(_admin)
+
+        self.ctx.Settings.current_admin = _admin
 
         return None
 
@@ -290,11 +285,11 @@ class Irc:
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
         dnickname = self.ctx.Config.SERVICE_NICKNAME
-        response = await self.ctx.Base.create_asynctask(
-            self.ctx.Base.create_thread_io(
+        response = await self.ctx.DAsyncio.create_safe_task(
+            self.ctx.DAsyncio.create_io_thread(
                 self.ctx.Base.check_for_new_version, True
             )
-        )
+        ).task
 
         if response:
             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" New Version available : {self.ctx.Config.CURRENT_VERSION} >>> {self.ctx.Config.LATEST_VERSION}")
@@ -455,7 +450,7 @@ class Irc:
 
                 if cmd_owner == config_owner and cmd_password == config_password:
                     await self.ctx.Base.db_create_first_admin()
-                    self.insert_db_admin(current_uid, cmd_owner, 5, self.ctx.Config.LANG)
+                    self.insert_db_admin(current_uid, cmd_owner, 5, self.ctx.Settings.global_lang)
                     await self.Protocol.send_priv_msg(
                         msg=tr("[%s %s %s] - %s is now connected to %s", GREEN, current_command.upper(), NOGC, fromuser, dnickname),
                         nick_from=dnickname,
@@ -528,7 +523,7 @@ class Irc:
                         return None
 
                     new_admin = str(cmd[1])
-                    level = self.ctx.Base.int_if_possible(cmd[2])
+                    level = self.ctx.Base.convert_to_int(cmd[2])
                     password = str(cmd[3])
 
                     await self.create_defender_user(fromuser, new_admin, level, password)
@@ -748,12 +743,8 @@ class Irc:
                 try:
                     final_reason = ' '.join(cmd[1:])
                     self.hb_active = False
-                    # self.ctx.Base.create_asynctask(rehash.force_shutdown(self.ctx), run_once=True)
                     await rehash.shutdown(self.ctx)
                     self.ctx.Base.execute_periodic_action()
-
-                    for chan_name in self.ctx.Channel.UID_CHANNEL_DB:
-                        await self.Protocol.send_set_mode('-l', channel_name=chan_name.name)
 
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
@@ -946,7 +937,7 @@ class Irc:
                 return None
 
             case 'checkversion':
-                self.ctx.Base.create_asynctask(self.thread_check_for_new_version(fromuser))
+                self.ctx.DAsyncio.create_safe_task(self.thread_check_for_new_version(fromuser))
                 return None
 
             case 'raw':
@@ -974,10 +965,10 @@ class Irc:
                 return None
 
             case 'start_rpc':
-                self.ctx.Base.create_asynctask(self.ctx.RpcServer.start_rpc_server())
+                self.ctx.DAsyncio.create_safe_task(self.ctx.RpcServer.start_rpc_server())
 
             case 'stop_rpc':
-                self.ctx.Base.create_asynctask(self.ctx.RpcServer.stop_rpc_server())
+                self.ctx.DAsyncio.create_safe_task(self.ctx.RpcServer.stop_rpc_server())
 
             case _:
                 pass

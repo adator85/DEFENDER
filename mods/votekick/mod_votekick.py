@@ -357,7 +357,7 @@ class Votekick(IModule):
                                                       channel=channel
                                                       )
 
-                            self.ctx.Base.create_asynctask(thds.timer_vote_verdict(self, channel))
+                            self.ctx.DAsyncio.create_safe_task(thds.timer_vote_verdict(self, channel))
                             await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, 
                                                       msg="This vote will end after 60 secondes",
                                                       channel=channel

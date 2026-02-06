@@ -17,9 +17,6 @@ class ModConfModel(MainModel):
     flood_message: int = 5
     flood_time: int = 1
     flood_timer: int = 20
-    autolimit: int = 0
-    autolimit_amount: int = 3
-    autolimit_interval: int = 3
     sentinel: int = 0
 
 @dataclass

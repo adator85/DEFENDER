@@ -40,6 +40,14 @@ class Clone(IModule):
         super().__init__(context)
         self._mod_config: Optional[schemas.ModConfModel] = None
 
+        self.stop: bool = False
+        self.Schemas: Optional[schemas] = None
+        self.Utils: Optional[utils] = None
+        self.Threads: Optional[thds] = None
+        self.Faker: Optional['Faker'] = None
+        self.Clone: Optional[CloneManager] = None
+
+
     @property
     def mod_config(self) -> ModConfModel:
         return self._mod_config
@@ -52,13 +60,13 @@ class Clone(IModule):
             None: Aucun retour n'es attendu
         """
 
-        table_channel = '''CREATE TABLE IF NOT EXISTS clone_list (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            datetime TEXT,
-            nickname TEXT,
-            username TEXT
-            )
-        '''
+        # table_channel = '''CREATE TABLE IF NOT EXISTS clone_list (
+        #    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #    datetime TEXT,
+        #    nickname TEXT,
+        #    username TEXT
+        #    )
+        # '''
 
         # await self.ctx.Base.db_execute_query(table_channel)
 
@@ -105,7 +113,7 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
-        self.ctx.Base.create_asynctask(func=self.Threads.thread_kill_clones(self))
+        self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
@@ -137,12 +145,12 @@ class Clone(IModule):
             self.ctx.Logs.error(f'General Error: {err}', exc_info=True)
             return None
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
 
         try:
 
             if len(cmd) < 1:
-                return
+                return None
 
             command = str(cmd[0]).lower()
             fromuser = user
@@ -170,16 +178,10 @@ class Clone(IModule):
                                 self.stop = False
                                 number_of_clones = int(cmd[2])
                                 group = str(cmd[3]).lower()
-                                connection_interval = int(cmd[4]) if len(cmd) == 5 else 0.2
+                                connection_interval = float(cmd[4]) if len(cmd) == 5 else 0.2
 
-                                self.ctx.Base.create_asynctask(
-                                    self.Threads.coro_connect_clones(self, number_of_clones, group, False, connection_interval)
-                                )
-                                # _clone = self.ctx.DThread.add_task(
-                                #     self.Threads.coro_connect_clones, number_of_clones, group, False, connection_interval,
-                                #     daemon=True
-                                # )
-                                # self.ctx.DThread.start(_clone)
+                                self.ctx.DAsyncio.create_task(self.Threads.coro_connect_clones,
+                                                              self, number_of_clones, group, False, connection_interval)
 
                             except IndexError:
                                 await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect [number of clone you want to connect] [Group] [freq]")
@@ -192,7 +194,7 @@ class Clone(IModule):
                                 option = str(cmd[2])
 
                                 if option.lower() == 'all':
-                                    self.ctx.Base.create_asynctask(func=self.Threads.thread_kill_clones(self))
+                                    self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
 
                                 elif self.Clone.group_exists(option):
                                     list_of_clones_in_group = self.Clone.get_clones_from_groupname(option)

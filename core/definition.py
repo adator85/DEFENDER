@@ -339,6 +339,7 @@ class MConfig(MainModel):
 
 @dataclass
 class MThread(MainModel):
+    """This dataclass is for async thread"""
     name: str
     thread_id: Optional[int]
     thread_event: Optional[threading.Event]
@@ -398,3 +399,13 @@ class MRegister:
 class MIrcdCommand:
     command_name: str
     func: Any
+
+@dataclass
+class DThread(MainModel):
+    thread: threading.Thread
+    event: threading.Event
+
+@dataclass
+class DTask(MainModel):
+    task: Optional[asyncio.Task]
+    event: Optional[asyncio.Event]

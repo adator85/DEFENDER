@@ -4,14 +4,13 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from mods.defender.mod_defender import Defender
 
-async def coro_apply_reputation_sanctions(uplink: 'Defender'):
-    uplink.reputationTimer_isRunning = True
-    while uplink.reputationTimer_isRunning:
+async def coro_apply_reputation_sanctions(event: asyncio.Event, uplink: 'Defender'):
+
+    while event.is_set():
         await uplink.mod_utils.action_apply_reputation_santions(uplink)
         await asyncio.sleep(5)
 
-async def coro_cloudfilt_scan(uplink: 'Defender'):
-    uplink.cloudfilt_isRunning = True
+async def coro_cloudfilt_scan(event: asyncio.Event, uplink: 'Defender'):
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
     color_red = uplink.ctx.Config.COLORS.red
@@ -19,15 +18,17 @@ async def coro_cloudfilt_scan(uplink: 'Defender'):
     nogc = uplink.ctx.Config.COLORS.nogc
     p = uplink.ctx.Irc.Protocol
 
-    while uplink.cloudfilt_isRunning:
+    while event.is_set():
         try:
             list_to_remove:list = []
             for user in uplink.Schemas.DB_CLOUDFILT_USERS:
                 if user.remote_ip not in uplink.ctx.Config.WHITELISTED_IP:
-                    result: Optional[dict] = await uplink.ctx.Base.create_thread_io(
-                        uplink.mod_utils.action_scan_client_with_cloudfilt,
-                        uplink, user
-                    )
+                    result: Optional[dict] = await uplink.ctx.DAsyncio.create_safe_task(
+                        uplink.ctx.DAsyncio.create_io_thread(
+                            uplink.mod_utils.action_scan_client_with_cloudfilt,
+                            uplink, user
+                            )).task
+
                     list_to_remove.append(user)
 
                     if not result:
@@ -64,23 +65,23 @@ async def coro_cloudfilt_scan(uplink: 'Defender'):
         except TimeoutError as te:
             uplink.ctx.Logs.debug(f"Timeout Error {te}")
 
-async def coro_freeipapi_scan(uplink: 'Defender'):
-    uplink.freeipapi_isRunning = True
+async def coro_freeipapi_scan(event: asyncio.Event, uplink: 'Defender'):
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
     color_red = uplink.ctx.Config.COLORS.red
     nogc = uplink.ctx.Config.COLORS.nogc
     p = uplink.ctx.Irc.Protocol
     
-    while uplink.freeipapi_isRunning:
+    while event.is_set():
         try:
             list_to_remove: list = []
             for user in uplink.Schemas.DB_FREEIPAPI_USERS:
                 if user.remote_ip not in uplink.ctx.Config.WHITELISTED_IP:
-                    result: Optional[dict] = await uplink.ctx.Base.create_thread_io(
-                        uplink.mod_utils.action_scan_client_with_freeipapi,
-                        uplink, user
-                    )
+                    result: Optional[dict] = await uplink.ctx.DAsyncio.create_safe_task(
+                        uplink.ctx.DAsyncio.create_io_thread(
+                            uplink.mod_utils.action_scan_client_with_freeipapi,
+                            uplink, user)
+                    ).task
 
                     if not result:
                         continue
@@ -112,25 +113,24 @@ async def coro_freeipapi_scan(uplink: 'Defender'):
         except TimeoutError as te:
             uplink.ctx.Logs.debug(f"Timeout Error {te}")
 
-async def coro_abuseipdb_scan(uplink: 'Defender'):
+async def coro_abuseipdb_scan(event: asyncio.Event, uplink: 'Defender'):
 
-    uplink.abuseipdb_isRunning = True
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
     color_red = uplink.ctx.Config.COLORS.red
     nogc = uplink.ctx.Config.COLORS.nogc
     p = uplink.ctx.Irc.Protocol
     
-    while uplink.abuseipdb_isRunning:
+    while event.is_set():
         try:
             list_to_remove: list = []
             for user in uplink.Schemas.DB_ABUSEIPDB_USERS:
                 if user.remote_ip not in uplink.ctx.Config.WHITELISTED_IP:
 
-                    result: Optional[dict] = await uplink.ctx.Base.create_thread_io(
+                    result: Optional[dict] = await uplink.ctx.DAsyncio.create_safe_task(uplink.ctx.DAsyncio.create_io_thread(
                         uplink.mod_utils.action_scan_client_with_abuseipdb,
                         uplink, user
-                    )
+                    )).task
                     list_to_remove.append(user)
 
                     if not result:
@@ -164,24 +164,24 @@ async def coro_abuseipdb_scan(uplink: 'Defender'):
         except TimeoutError as te:
             uplink.ctx.Logs.debug(f"Timeout Error {te}", exc_info=True)
 
-async def coro_local_scan(uplink: 'Defender'):
-    uplink.localscan_isRunning = True
+async def coro_local_scan(event: asyncio.Event, uplink: 'Defender'):
+
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
     color_red = uplink.ctx.Config.COLORS.red
     nogc = uplink.ctx.Config.COLORS.nogc
     p = uplink.ctx.Irc.Protocol
 
-    while uplink.localscan_isRunning:
+    while event.is_set():
         try:
             list_to_remove:list = []
             for user in uplink.Schemas.DB_LOCALSCAN_USERS:
                 if user.remote_ip not in uplink.ctx.Config.WHITELISTED_IP:
                     list_to_remove.append(user)
-                    result = await uplink.ctx.Base.create_thread_io(
+                    result = await uplink.ctx.DAsyncio.create_safe_task(uplink.ctx.DAsyncio.create_io_thread(
                         uplink.mod_utils.action_scan_client_with_local_socket,
                         uplink, user
-                        )
+                        )).task
 
                     if not result:
                         continue
@@ -213,19 +213,23 @@ async def coro_local_scan(uplink: 'Defender'):
         except TimeoutError as te:
             uplink.ctx.Logs.debug(f"Timeout Error {te}")
 
-async def coro_psutil_scan(uplink: 'Defender'):
-    uplink.psutil_isRunning = True
+async def coro_psutil_scan(event: asyncio.Event, uplink: 'Defender'):
+
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
     color_red = uplink.ctx.Config.COLORS.red
     nogc = uplink.ctx.Config.COLORS.nogc
     p = uplink.ctx.Irc.Protocol
 
-    while uplink.psutil_isRunning:
+    while event.is_set():
         try:
             list_to_remove:list = []
             for user in uplink.Schemas.DB_PSUTIL_USERS:
-                result = await uplink.ctx.Base.create_thread_io(uplink.mod_utils.action_scan_client_with_psutil, uplink, user)
+                result = await uplink.ctx.DAsyncio.create_safe_task(
+                    uplink.ctx.DAsyncio.create_io_thread(
+                        uplink.mod_utils.action_scan_client_with_psutil,
+                        uplink, user)
+                ).task
                 list_to_remove.append(user)
 
                 if not result:
@@ -247,68 +251,6 @@ async def coro_psutil_scan(uplink: 'Defender'):
             uplink.ctx.Logs.debug(f"The value to remove is not in the list. {ve}")
         except TimeoutError as te:
             uplink.ctx.Logs.debug(f"Timeout Error {te}")
-
-async def coro_autolimit(uplink: 'Defender'):
-
-    if uplink.mod_config.autolimit == 0:
-        uplink.ctx.Logs.debug("autolimit deactivated ... canceling the thread")
-        return None
-
-    while uplink.ctx.Irc.autolimit_started:
-        await asyncio.sleep(0.2)
-
-    uplink.ctx.Irc.autolimit_started = True
-    init_amount = uplink.mod_config.autolimit_amount
-    p = uplink.ctx.Irc.Protocol
-    INIT = 1
-
-    # Copy Channels to a list of dict
-    chanObj_copy: list[dict[str, int]] = [{"name": c.name, "uids_count": len(c.uids)} for c in uplink.ctx.Channel.UID_CHANNEL_DB]
-    chan_list: list[str] = [c.name for c in uplink.ctx.Channel.UID_CHANNEL_DB]
-
-    while uplink.autolimit_isRunning:
-        if uplink.mod_config.autolimit == 0:
-            uplink.ctx.Logs.debug("autolimit deactivated ... stopping the current thread")
-            break
-
-        for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
-            for chan_copy in chanObj_copy:
-                if chan_copy["name"] == chan.name and len(chan.uids) != chan_copy["uids_count"]:
-                    await p.send_set_mode('+l', channel_name=chan.name, params=len(chan.uids) + uplink.mod_config.autolimit_amount)
-                    chan_copy["uids_count"] = len(chan.uids)
-
-            if chan.name not in chan_list:
-                chan_list.append(chan.name)
-                chanObj_copy.append({"name": chan.name, "uids_count": 0})
-
-        # Verifier si un salon a été vidé
-        current_chan_in_list = [d.name for d in uplink.ctx.Channel.UID_CHANNEL_DB]
-        for c in chan_list:
-            if c not in current_chan_in_list:
-                chan_list.remove(c)
-
-        # Si c'est la premiere execution
-        if INIT == 1:
-            for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
-                await p.send_set_mode('+l', channel_name=chan.name, params=len(chan.uids) + uplink.mod_config.autolimit_amount)
-
-        # Si le nouveau amount est différent de l'initial
-        if init_amount != uplink.mod_config.autolimit_amount:
-            init_amount = uplink.mod_config.autolimit_amount
-            for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
-                await p.send_set_mode('+l', channel_name=chan.name, params=len(chan.uids) + uplink.mod_config.autolimit_amount)
-
-        INIT = 0
-
-        if uplink.autolimit_isRunning:
-            await asyncio.sleep(uplink.mod_config.autolimit_interval)
-
-    for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
-        await p.send_set_mode('-l', channel_name=chan.name)
-
-    uplink.ctx.Irc.autolimit_started = False
-
-    return None
 
 async def coro_release_mode_mute(uplink: 'Defender', action: str, channel: str):
     """DO NOT EXECUTE THIS FUNCTION DIRECTLY

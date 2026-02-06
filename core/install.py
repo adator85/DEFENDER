@@ -56,7 +56,7 @@ def update_packages() -> None:
 	try:
 		newVersion = False
 		db_packages = __load_required_package_versions()
-		print(ROOT_PATH)
+
 		if sys.prefix not in PYENV.__str__():
 			print(f"You are probably running a new installation or you are not using your virtual env {PYENV}")
 			return newVersion

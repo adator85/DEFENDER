@@ -1,15 +1,12 @@
-from calendar import c
 import socket
 import psutil
 import requests
-import mods.defender.threads as dthreads
 from json import loads
 from re import match
 from typing import TYPE_CHECKING, Optional
 from mods.defender.schemas import FloodUser
 
 if TYPE_CHECKING:
-    from core.loader import Loader
     from core.definition import MUser
     from mods.defender.mod_defender import Defender
 
@@ -18,7 +15,7 @@ def handle_on_reputation(uplink: 'Defender', srvmsg: list[str]):
     >>> srvmsg = [':001', 'REPUTATION', '128.128.128.128', '0']
     >>> srvmsg = [':001', 'REPUTATION', '128.128.128.128', '*0']
     Args:
-        irc_instance (Irc): The Irc instance
+        uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
     """
     ip = srvmsg[2]
@@ -37,9 +34,8 @@ async def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
     >>> srvmsg = ['@unrealircd.org/...', ':001C0MF01', 'MODE', '#services', '+l', '1']
     >>> srvmsg = ['...', ':001XSCU0Q', 'MODE', '#jail', '+b', '~security-group:unknown-users']
     Args:
-        irc_instance (Irc): The Irc instance
+        uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
-        confmodel (ModConfModel): The Module Configuration
     """
     irc = uplink.ctx.Irc
     gconfig = uplink.ctx.Config
@@ -51,11 +47,6 @@ async def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
     group_to_check = str(srvmsg[5:])
     group_to_unban = '~security-group:unknown-users'
 
-    if confmodel.autolimit == 1:
-        if mode == '+l' or mode == '-l':
-            chan = uplink.ctx.Channel.get_channel(channel)
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {chan.name} +l {len(chan.uids) + confmodel.autolimit_amount}")
-
     if gconfig.SALON_JAIL == channel:
         if mode == '+b' and group_to_unban in group_to_check:
             await p.send2socket(f":{gconfig.SERVICE_ID} MODE {gconfig.SALON_JAIL} -b ~security-group:unknown-users")
@@ -66,7 +57,10 @@ async def handle_on_privmsg(uplink: 'Defender', srvmsg: list[str]):
 
     sender, reciever, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
     if uplink.mod_config.sentinel == 1 and channel.name != uplink.ctx.Config.SERVICE_CHANLOG:
-        await uplink.ctx.Irc.Protocol.send_priv_msg(uplink.ctx.Config.SERVICE_NICKNAME, f"{sender.nickname} say on {channel.name}: {' '.join(message)}", uplink.ctx.Config.SERVICE_CHANLOG)
+        await uplink.ctx.Irc.Protocol.send_priv_msg(
+            uplink.ctx.Config.SERVICE_NICKNAME,
+            f"{sender.nickname} say on {channel.name}: {' '.join(message)}",
+            uplink.ctx.Config.SERVICE_CHANLOG)
 
     await action_on_flood(uplink, srvmsg)
     return None
@@ -77,9 +71,8 @@ async def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
     >>> srvmsg = ['@msgid..', ':001', 'SJOIN', '1702138958', '#welcome', ':0015L1AHL']
 
     Args:
-        irc_instance (Irc): The Irc instance
+        uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
-        confmodel (ModConfModel): The Module Configuration
     """
     irc = uplink.ctx.Irc
     p = irc.Protocol
@@ -117,11 +110,12 @@ def handle_on_slog(uplink: 'Defender', srvmsg: list[str]):
     """Handling SLOG messages
     >>> srvmsg = ['@unrealircd...', ':001', 'SLOG', 'info', 'blacklist', 'BLACKLIST_HIT', ':[Blacklist]', 'IP', '162.x.x.x', 'matches', 'blacklist', 'dronebl', '(dnsbl.dronebl.org/reply=6)']
     Args:
-        irc_instance (Irc): The Irc instance
+        uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
-        confmodel (ModConfModel): The Module Configuration
     """
-    ['@unrealircd...', ':001', 'SLOG', 'info', 'blacklist', 'BLACKLIST_HIT', ':[Blacklist]', 'IP', '162.x.x.x', 'matches', 'blacklist', 'dronebl', '(dnsbl.dronebl.org/reply=6)']
+    # ['@unrealircd...', ':001', 'SLOG', 'info', 'blacklist', 'BLACKLIST_HIT',
+    # ':[Blacklist]', 'IP', '162.x.x.x', 'matches',
+    # 'blacklist', 'dronebl', '(dnsbl.dronebl.org/reply=6)']
 
     if not uplink.ctx.Base.is_valid_ip(srvmsg[8]):
         return None
@@ -143,14 +137,13 @@ def handle_on_slog(uplink: 'Defender', srvmsg: list[str]):
 
     return None
 
-async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
+async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]) -> None:
     """Handle nickname changes.
     >>> srvmsg = ['@unrealircd.org...', ':001MZQ0RB', 'NICK', 'newnickname', '1754663712']
     >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
     Args:
-        irc_instance (Irc): The Irc instance
+        uplink (Defender): The Defender instance
         srvmsg (list[str]): The Server MSG
-        confmodel (ModConfModel): The Module Configuration
     """
     p = uplink.ctx.Irc.Protocol
     u, new_nickname, timestamp = p.parse_nick(srvmsg)
@@ -182,11 +175,13 @@ async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]):
                 await p.send2socket(f":{service_id} MODE {chan.name} -b {oldnick}!*@*")
                 await p.send2socket(f":{service_id} MODE {chan.name} +b {newnickname}!*@*")
 
-async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
+    return None
+
+async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]) -> None:
     """Handle on quit message
     >>> srvmsg = ['@unrealircd.org...', ':001MZQ0RB', 'QUIT', ':Quit:', 'quit message']
     Args:
-        uplink (Irc): The Defender Module instance
+        uplink (Defender): The Defender Module instance
         srvmsg (list[str]): The Server MSG
     """
     p = uplink.ctx.Irc.Protocol
@@ -197,7 +192,7 @@ async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
         uplink.ctx.Logs.debug(f"This UID do not exist anymore: {srvmsg}")
         return None
 
-    ban_all_chan = uplink.ctx.Base.int_if_possible(confmodel.reputation_ban_all_chan)
+    ban_all_chan = uplink.ctx.Base.convert_to_int(confmodel.reputation_ban_all_chan)
     jail_salon = uplink.ctx.Config.SALON_JAIL
     service_id = uplink.ctx.Config.SERVICE_ID
     get_user_reputation = uplink.ctx.Reputation.get_reputation(userobj.uid)
@@ -212,7 +207,9 @@ async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]):
         uplink.ctx.Reputation.delete(userobj.uid)
         uplink.ctx.Logs.debug(f"Client {get_user_reputation.nickname} has been removed from Reputation local DB")
 
-async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
+    return None
+
+async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]) -> None:
     """_summary_
     >>> ['@s2s-md...', ':001', 'UID', 'nickname', '0', '1754675249', '...', '125-168-141-239.hostname.net', '001BAPN8M', 
     '0', '+iwx', '*', '32001BBE.25ACEFE7.429FE90D.IP', 'ZA2ic7w==', ':realname']
@@ -233,7 +230,7 @@ async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
     # Get User information
     if _User is None:
         uplink.ctx.Logs.warning(f'Error when parsing UID', exc_info=True)
-        return
+        return None
 
     # If user is not service or IrcOp then scan them
     if not match(r'^.*[S|o?].*$', _User.umodes):
@@ -262,13 +259,15 @@ async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]):
                         await action_add_reputation_sanctions(uplink, _User.uid)
                         uplink.ctx.Logs.info(f'[REPUTATION] Reputation system ON (Nickname: {_User.nickname}, uid: {_User.uid})')
 
+    return None
+
 ####################
 # ACTION FUNCTIONS #
 ####################
 # [:<sid>] UID <uid> <ts> <nick> <real-host> <displayed-host> <real-user> <ip> <signon> <modes> [<mode-parameters>]+ :<real>
 # [:<sid>] UID nickname hopcount timestamp username hostname uid servicestamp umodes virthost cloakedhost ip :gecos
 
-async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
+async def action_on_flood(uplink: 'Defender', srvmsg: list[str]) -> None:
 
     confmodel = uplink.mod_config
     if confmodel.flood == 0:
@@ -281,10 +280,10 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
 
     user_trigger = str(srvmsg[1]).replace(':','')
     channel = srvmsg[3]
-    User = uplink.ctx.User.get_user(user_trigger)
+    _user = uplink.ctx.User.get_user(user_trigger)
 
-    if User is None or not uplink.ctx.Channel.is_valid_channel(channel_to_check=channel):
-        return
+    if _user is None or not uplink.ctx.Channel.is_valid_channel(channel_to_check=channel):
+        return None
 
     flood_time = confmodel.flood_time
     flood_message = confmodel.flood_message
@@ -294,8 +293,8 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
     color_red = gconfig.COLORS.red
     color_bold = gconfig.COLORS.bold
 
-    get_detected_uid = User.uid
-    get_detected_nickname = User.nickname
+    get_detected_uid = _user.uid
+    get_detected_nickname = _user.nickname
     unixtime = uplink.ctx.Utils.get_unixtime()
     get_diff_secondes = 0
 
@@ -303,6 +302,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
         for flood_user in flood_users:
             if flood_user.uid == uid:
                 return flood_user
+        return None
 
     fu = get_flood_user(get_detected_uid)
     if fu is None:
@@ -316,6 +316,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
         fu.first_msg_time = unixtime
         fu.nbr_msg = 0
         get_diff_secondes = unixtime - fu.first_msg_time
+
     elif fu.nbr_msg > flood_message:
         await p.send_set_mode('+m', channel_name=channel)
         await p.send_priv_msg(
@@ -326,7 +327,9 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]):
         uplink.ctx.Logs.debug(f'[FLOOD] {get_detected_nickname} triggered +m mode on the channel {channel}')
         fu.nbr_msg = 0
         fu.first_msg_time = unixtime
-        uplink.ctx.Base.create_asynctask(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
+        uplink.ctx.DAsyncio.create_safe_task(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
+
+    return None
 
 async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
 
@@ -397,6 +400,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
     service_id = gconfig.SERVICE_ID
     dchanlog = gconfig.SERVICE_CHANLOG
     color_red = gconfig.COLORS.red
+    color_green = gconfig.COLORS.green
     nogc = gconfig.COLORS.nogc
     salon_jail = gconfig.SALON_JAIL
     uid_to_clean = []
@@ -405,13 +409,28 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
         return None
 
     for user in uplink.ctx.Reputation.UID_REPUTATION_DB:
-        if not user.isWebirc: # Si il ne vient pas de WebIRC
+        admin = uplink.ctx.Admin.get_admin(user.uid)
+        if admin:
+            if uplink.ctx.Reputation.delete(admin.uid):
+                await p.send_priv_msg(
+                    nick_from=service_id,
+                    msg=f"[ {color_green}REPUTATION RELEASE{nogc} ] :{admin.nickname} has been released! because is an admin",
+                    channel=dchanlog)
+                await p.send2socket(f":{gconfig.SERVEUR_LINK} REPUTATION {admin.remote_ip} {reputation_seuil}")
+                await p.send_notice(
+                    nick_from=service_id,
+                    nick_to=admin.nickname,
+                    msg=f"You have been released for the reputation system!")
+
+                uplink.ctx.Logs.info(f"{admin.nickname} ({admin.account}) has been released! because is an admin")
+                break
+
+        if not user.isWebirc: # If user is not coming from WebIrc
             if uplink.ctx.User.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score_connexion) <= int(reputation_seuil):
                 await p.send_priv_msg(
                     nick_from=service_id,
                     msg=f"[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
-                    channel=dchanlog
-                    )
+                    channel=dchanlog)
                 await p.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code")
                 await p.send2socket(f":{gconfig.SERVEUR_LINK} REPUTATION {user.remote_ip} 0")
 
@@ -429,6 +448,8 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
         uplink.ctx.Channel.delete_user_from_all_channel(uid)
         uplink.ctx.Reputation.delete(uid)
         uplink.ctx.User.delete(uid)
+
+    return None
 
 def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
     """Analyse l'ip avec cloudfilt
@@ -562,7 +583,7 @@ def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUser') -
 
     return result
 
-def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, str]]:
+def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser') -> Optional[dict[str, list]]:
     """local_scan
 
     Args:
@@ -579,7 +600,7 @@ def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser'
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM or socket.SOCK_NONBLOCK) as sock:
             try:
                 sock.settimeout(0.5)
-                connection = (remote_ip, uplink.ctx.Base.int_if_possible(port))
+                connection = (remote_ip, uplink.ctx.Base.convert_to_int(port))
                 sock.connect(connection)
 
                 result['opened_ports'].append(port)
@@ -598,11 +619,12 @@ def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser'
 
     return result
 
-def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser') -> list[int]:
+def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser') -> Optional[list[int]]:
     """psutil_scan for Linux (should be run on the same location as the unrealircd server)
 
     Args:
-        userModel (UserModel): The User Model Object
+        uplink (Defender): The Defender instance
+        user_model (MUser): The User object
 
     Returns:
         list[int]: list of ports

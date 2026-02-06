@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 from core.classes.protocols.command_handler import CommandHandler
 
 if TYPE_CHECKING:
@@ -99,7 +99,11 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+    async def send_set_mode(self,
+                            modes: str, *,
+                            nickname: Optional[str] = None,
+                            channel_name: Optional[str] = None,
+                            params: Optional[Any] = None) -> None:
         """Set a mode to channel or to a nickname or for a user in a channel
 
         Args:
