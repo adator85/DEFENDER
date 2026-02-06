@@ -36,6 +36,7 @@ class Autolimit(IModule):
         self._is_running = True
         self._io = context.DAsyncio
         self.task_increment_autolimit: Optional[DTask] = None
+        self.helper: Optional[ALHelper] = None
 
     async def load(self):
         # Variable qui va contenir les options de configuration du module Defender
@@ -63,8 +64,6 @@ class Autolimit(IModule):
     async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu

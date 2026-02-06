@@ -161,12 +161,12 @@ class Defender(IModule):
         self.Schemas.DB_PSUTIL_USERS = []
         self.Schemas.DB_LOCALSCAN_USERS = []
 
-        self.abuseipdb.event.clear()
-        self.freeipapi.event.clear()
-        self.cloudfilt.event.clear()
-        self.psutil.event.clear()
-        self.local_scan.event.clear()
-        self.reputation.event.clear()
+        self.abuseipdb.event.clear() if self.mod_config.abuseipdb_scan == 1 else None
+        self.freeipapi.event.clear() if self.mod_config.freeipapi_scan == 1 else None
+        self.cloudfilt.event.clear() if self.mod_config.cloudfilt_scan == 1 else None
+        self.psutil.event.clear() if self.mod_config.psutil_scan == 1 else None
+        self.local_scan.event.clear() if self.mod_config.local_scan == 1 else None
+        self.reputation.event.clear() if self.mod_config.reputation == 1 else None
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
