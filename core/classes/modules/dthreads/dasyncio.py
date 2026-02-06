@@ -3,7 +3,7 @@ import contextvars
 import threading
 from core.classes.modules.dthreads.dthread import DaemonThreadPoolExecutor
 import core.definition as dfn
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, Coroutine
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -19,7 +19,7 @@ class DAsyncio:
         self.running_iothreads: list[dfn.MThread] = self.ctx.Settings.RUNNING_ASYNC_THREADS
 
     def create_task(self,
-                    func: Callable[..., object],
+                    func: Callable[..., Coroutine[Any, Any, Any]],
                     *args,
                     task_name: Optional[str] = None,
                     run_once: bool = False,
@@ -40,7 +40,10 @@ class DAsyncio:
 
         return _dtask
 
-    def create_safe_task(self, func: Callable[..., Awaitable[Any]], *, async_name: str = None, run_once: bool = False) -> Optional[dfn.DTask]:
+    def create_safe_task(self, func: Coroutine[Any, Any, Any], *,
+                         async_name: str = None,
+                         run_once: bool = False
+                         ) -> Optional[dfn.DTask]:
         """Create a new asynchrone and store it into running_iotasks variable
         WARNING: Use this is you are sure that the func will be stopped.
         Args:
@@ -69,7 +72,10 @@ class DAsyncio:
         self.logs.debug(f"[IO SAFE TASK CREATE] Name: {_task.get_name()}")
         return _dtask
 
-    async def create_io_thread(self, func: Callable[..., object], *args, thread_name: str = '', run_once: bool = False, thread_flag: bool = False) -> Optional[Any]:
+    async def create_io_thread(self, func: Callable[..., object], *args,
+                               thread_name: str = '', run_once: bool = False,
+                               thread_flag: bool = False
+                               ) -> Optional[Any]:
         """Run threads via asyncio.
 
         Args:
@@ -121,7 +127,7 @@ class DAsyncio:
         self.running_iothreads.remove(id_obj)
         return result
 
-    def __create_asynctask(self, func: Callable[..., Awaitable[Any]], *, async_name: str = None, run_once: bool = False) -> Optional[asyncio.Task]:
+    def __create_asynctask(self, func: Coroutine[Any, Any, Any], *, async_name: str = None, run_once: bool = False) -> Optional[asyncio.Task]:
         """Create a new asynchrone and store it into running_iotasks variable
 
         Args:
@@ -146,12 +152,16 @@ class DAsyncio:
         self.logs.debug(f"[IO TASK CREATE] Name: {task.get_name()}")
         return task
 
-    def __asynctask_done(self, task: Union[asyncio.Task, asyncio.Future], context: Optional[dict[str, Any]] = None):
+    def __asynctask_done(self,
+                         task: Union[asyncio.Task, asyncio.Future],
+                         context: Optional[dict[str, Any]] = None
+                         ) -> None:
         """Log task when done
 
         Args:
             task (asyncio.Task): The Asyncio Task callback
         """
+        _context = context
         task_name = self.ctx.Settings.TASKS_CTX.get()
         task_or_future = "Task"
         try:
