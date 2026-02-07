@@ -23,7 +23,7 @@ class Inspircd(IProtocol):
                                          'MODE', 'QUIT', 'SQUIT',
                                          'VERSION'}
 
-    async def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
+    async def get_ircd_protocol_position(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
         """Get the position of known commands
 
         Args:

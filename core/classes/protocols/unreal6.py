@@ -15,13 +15,13 @@ class Unrealircd6(IProtocol):
         self.name = 'UnrealIRCD-6'
         self.protocol_version = 6100
         self.known_protocol: set[str] = {'SJOIN', 'UID', 'MD', 'QUIT', 'SQUIT',
-                               'EOS', 'PRIVMSG', 'MODE', 'UMODE2', 
-                               'VERSION', 'REPUTATION', 'SVS2MODE', 
+                               'EOS', 'PRIVMSG', 'MODE', 'UMODE2',
+                               'VERSION', 'REPUTATION', 'SVS2MODE',
                                'SLOG', 'NICK', 'PART', 'PONG', 'SASL', 'PING',
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
                                'SETHOST', '006', '007', '018'}
 
-    def get_ircd_protocol_poisition(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
+    def get_ircd_protocol_position(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
         """Get the position of known commands
 
         Args:
@@ -1574,7 +1574,7 @@ class Unrealircd6(IProtocol):
     async def on_kick(self, server_msg: list[str]) -> None:
         """When a user is kicked out from a channel
 
-        ['@unrealircd.org/issued-by=RPC:admin-for-test@...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
+        ['@...', ':001', 'KICK', '#jsonrpc', '001ELW13T', ':Kicked', 'from', 'JSONRPC', 'User']
         Args:
             server_msg (list[str]): The server message
         """
