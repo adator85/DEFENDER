@@ -1,9 +1,7 @@
-import sys
 import yaml
-from json import load
 from sys import exit
 from os import sep
-from typing import Any, Optional, Union, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 from core.definition import MConfig
 
 if TYPE_CHECKING:
