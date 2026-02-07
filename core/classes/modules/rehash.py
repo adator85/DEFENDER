@@ -1,10 +1,10 @@
 import asyncio
+import gc
 import importlib
 import sys
-import threading
 from typing import TYPE_CHECKING
-import core.module as module_mod
-from core.classes.modules import user, admin, channel, reputation, sasl
+# import core.module as module_mod
+# from core.classes.modules import user, admin, channel, reputation, sasl
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -86,18 +86,30 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Settings.set_cache('modules', uplink.ModuleUtils.DB_MODULES)
     uplink.Settings.set_cache('module_headers', uplink.ModuleUtils.DB_MODULE_HEADERS)
 
+    # Remove heartbeat thread.
+    _running_threads = uplink.Base.running_threads.copy()
+    for dthread in _running_threads:
+        if dthread.thread.name == 'heartbeat':
+            dthread.event.clear()
+            uplink.Base.running_threads.remove(dthread)
+
     _was_rpc_connected = uplink.RpcServer.live
     if _was_rpc_connected:
         await uplink.RpcServer.stop_rpc_server()
 
     restart_flag = False
-    config_model_bakcup = uplink.Config
+    config_model_bakcup = uplink.Config.copy()
     mods = REHASH_MODULES
     _count_reloaded_modules = len(mods)
     for mod in mods:
-        importlib.reload(sys.modules[mod])
+        if mod in sys.modules:
+            del sys.modules[mod]
+        importlib.import_module(mod)
 
+    del uplink.Utils
     uplink.Utils = sys.modules['core.utils']
+
+    del uplink.Config
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
     uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
@@ -130,16 +142,25 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
             msg='You need to restart defender !')
 
     # Reload Main Commands Module
+    del uplink.Commands
     uplink.Commands = uplink.CommandModule.Command(uplink)
     uplink.Commands.DB_COMMANDS = uplink.Settings.get_cache('commands')
+
+    uplink.Base.db_close()
+
+    del uplink.Base
     uplink.Base = uplink.BaseModule.Base(uplink)
 
-    uplink.User = user.User(uplink)
-    uplink.Admin = admin.Admin(uplink)
-    uplink.Channel = channel.Channel(uplink)
-    uplink.Reputation = reputation.Reputation(uplink)
-    uplink.ModuleUtils = module_mod.Module(uplink)
-    uplink.Sasl = sasl.Sasl(uplink)
+    del (uplink.User, uplink.Admin, uplink.Channel,
+         uplink.Reputation, uplink.ModuleUtils, uplink.Sasl,
+         uplink.Irc.Protocol, uplink.RpcServer)
+
+    uplink.User = sys.modules['core.classes.modules.user'].User(uplink)
+    uplink.Admin = sys.modules['core.classes.modules.admin'].Admin(uplink)
+    uplink.Channel = sys.modules['core.classes.modules.channel'].Channel(uplink)
+    uplink.Reputation = sys.modules['core.classes.modules.reputation'].Reputation(uplink)
+    uplink.ModuleUtils = sys.modules['core.module'].Module(uplink)
+    uplink.Sasl = sys.modules['core.classes.modules.sasl'].Sasl(uplink)
 
     # Backup data
     uplink.User.UID_DB = uplink.Settings.get_cache('users')
@@ -164,12 +185,19 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     color_green = uplink.Config.COLORS.green
     color_reset = uplink.Config.COLORS.nogc
+    uplink.Base.create_thread(uplink.Utils.heartbeat, uplink, uplink.Irc.beat, run_once=True)
 
     await uplink.Irc.Protocol.send_priv_msg(
         uplink.Config.SERVICE_NICKNAME,
         tr("[ %sREHASH INFO%s ] Rehash completed! %s modules reloaded.", color_green, color_reset, _count_reloaded_modules),
         uplink.Config.SERVICE_CHANLOG
     )
+
+    del (config_dict, _was_rpc_connected, config_model_bakcup
+    , mods, conf_bkp_dict, color_green, color_reset,
+    _count_reloaded_modules, _running_threads)
+
+    gc.collect()
 
     return None
 
@@ -189,14 +217,15 @@ async def shutdown(uplink: 'Loader') -> None:
         uplink.Base.stop_all_threads()
         uplink.Base.stop_all_io_threads()
         await uplink.Base.stop_all_tasks()
-        await asyncio.wait([_dtask.task for _dtask in uplink.Settings.RUNNING_ASYNC_TASKS])
+
+        if uplink.Settings.RUNNING_ASYNC_TASKS:
+            await asyncio.wait([_dtask.task for _dtask in uplink.Settings.RUNNING_ASYNC_TASKS])
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()
         uplink.Base.running_iotasks.clear()
         uplink.Base.running_iothreads.clear()
         uplink.Base.running_sockets.clear()
-
         uplink.Base.db_close()
 
         return None
