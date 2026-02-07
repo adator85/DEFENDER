@@ -484,9 +484,9 @@ class Base:
             try:
                 if _task.cancelled() or _task.done():
                     self.running_iotasks.remove(_dtask)
-                    self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been removed!")
+                    self.logs.debug(f"[IO TASK REMOVED] {_task.get_name()} has been removed!")
             except asyncio.exceptions.CancelledError as cerr:
-                self.logs.debug(f"Asyncio CancelledError reached! {_task} ({cerr})")
+                self.logs.debug(f"[IO TASK CANCELLED ERROR] {_task.get_name()} ({cerr}) CancelledError reached!")
 
     def db_init(self) -> tuple[Engine, Connection]:
 
