@@ -25,25 +25,18 @@ class Reputation:
         Returns:
             bool: True if inserted
         """
-        result = False
-        exist = False
+        if not isinstance(new_reputation_user, MReputation):
+            self._ctx.Logs.debug('Wrong object, you must pass an MReputation object!')
+            return False
 
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == new_reputation_user.uid:
-                # If the user exist then return False and do not go further
-                exist = True
-                self._ctx.Logs.debug(f'{record.uid} already exist')
-                return result
+        _ruser = self.get_reputation(new_reputation_user.uid)
 
-        if not exist:
+        if _ruser is None:
             self.UID_REPUTATION_DB.append(new_reputation_user)
-            result = True
             self._ctx.Logs.debug(f'New Reputation User Captured: ({new_reputation_user})')
+            return True
 
-        if not result:
-            self._ctx.Logs.critical(f'The Reputation User Object was not inserted {new_reputation_user}')
-
-        return result
+        return False
 
     def update(self, uid: str, new_nickname: str) -> bool:
         """Update the nickname starting from the UID
@@ -74,23 +67,13 @@ class Reputation:
         Returns:
             bool: True if deleted
         """
-        result = False
+        _ruser = self.get_reputation(uid)
+        if _ruser:
+            self._ctx.Logs.debug(f'UID ({_ruser.uid}) has been deleted')
+            self.UID_REPUTATION_DB.remove(_ruser)
+            return True
 
-        if not self.is_exist(uid):
-            return result
-
-        for record in self.UID_REPUTATION_DB:
-            if record.uid == uid:
-                # If the user exist then remove and return True and do not go further
-                self.UID_REPUTATION_DB.remove(record)
-                result = True
-                self._ctx.Logs.debug(f'UID ({record.uid}) has been deleted')
-                return result
-
-        if not result:
-            self._ctx.Logs.critical(f'The UID {uid} was not deleted')
-
-        return result
+        return False
 
     def get_reputation(self, uidornickname: str) -> Optional[MReputation]:
         """Get The User Object model
