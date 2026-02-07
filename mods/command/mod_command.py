@@ -133,7 +133,7 @@ class Command(IModule):
             nogc = self.ctx.Config.COLORS.nogc
             cmd = list(data).copy()
 
-            pos, parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd=cmd, log=True)
+            pos, parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd=cmd, log=True)
 
             if pos == -1:
                 return None
@@ -240,7 +240,7 @@ class Command(IModule):
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}", exc_info=True)
 
-    async def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []):
+    async def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: Optional[str]):
 
         command = str(cmd[0]).lower()
         dnickname = self.ctx.Config.SERVICE_NICKNAME

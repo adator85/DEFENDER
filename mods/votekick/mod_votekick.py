@@ -121,7 +121,7 @@ class Votekick(IModule):
                 return None
 
         cmd = data.copy() if isinstance(data, list) else list(data).copy()
-        index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+        index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
         if index == -1:
             return None
 
@@ -145,7 +145,7 @@ class Votekick(IModule):
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}")
 
-    async def hcmds(self, user:str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         # cmd is the command starting from the user command
         # full cmd is sending the entire server response
 

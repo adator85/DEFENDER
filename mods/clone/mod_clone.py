@@ -41,9 +41,9 @@ class Clone(IModule):
         self._mod_config: Optional[schemas.ModConfModel] = None
 
         self.stop: bool = False
-        self.Schemas: Optional[schemas] = None
-        self.Utils: Optional[utils] = None
-        self.Threads: Optional[thds] = None
+        self.Schemas = schemas
+        self.Utils = utils
+        self.Threads = thds
         self.Faker: Optional['Faker'] = None
         self.Clone: Optional[CloneManager] = None
 
@@ -125,7 +125,7 @@ class Clone(IModule):
                 return None
 
             cmd = data.copy() if isinstance(data, list) else list(data).copy()
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
             if index == -1:
                 return None
 
@@ -145,7 +145,7 @@ class Clone(IModule):
             self.ctx.Logs.error(f'General Error: {err}', exc_info=True)
             return None
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
 
         try:
 

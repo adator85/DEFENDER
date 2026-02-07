@@ -30,7 +30,7 @@ class Defender(IModule):
         self._mod_config: Optional[schemas.ModConfModel] = None
         self.Schemas = schemas.RepDB()
         self.Threads = thds
-        self.mod_utils: Optional[utils] = None
+        self.mod_utils = utils
         self.timeout: int = 0
         self.flood_system: dict = dict()
         self.reputation_first_connexion: dict = dict()
@@ -245,7 +245,7 @@ class Defender(IModule):
         cmd = data.copy() if isinstance(data, list) else list(data).copy()
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
             if index == -1:
                 return None
 
@@ -293,7 +293,7 @@ class Defender(IModule):
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}", exc_info=True)
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: list = []) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         u = self.ctx.User.get_user(user)
         if u is None:
             return None

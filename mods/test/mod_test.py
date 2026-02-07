@@ -90,13 +90,18 @@ class Test(IModule):
         Args:
             data (list): Messages coming from the IRCD server.
         """
-        cmd = list(data).copy()
+
+        cmd = data.copy() if isinstance(data, list) else list(data).copy()
+        index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
+        if index == -1:
+            return None
+
         try:
             return None
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}")
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         """All messages coming from the user commands (Mandatory)
 
         Args:

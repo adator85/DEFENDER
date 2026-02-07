@@ -1,13 +1,11 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
 import core.definition as dfn
 from core.classes.interfaces.imodule import IModule
 import mods.jsonrpc.schemas as schemas
-import mods.jsonrpc.utils as utils
 import mods.jsonrpc.threads as thds
-from dataclasses import dataclass
 from unrealircd_rpc_py.ConnectionFactory import ConnectionFactory
 from unrealircd_rpc_py.LiveConnectionFactory import LiveConnectionFactory
 
@@ -16,7 +14,7 @@ if TYPE_CHECKING:
 
 class Jsonrpc(IModule):
 
-    @dataclass
+    @dfn.dataclass
     class ModConfModel(schemas.ModConfModel):
         """The Model containing the module parameters
         """
@@ -141,10 +139,12 @@ class Jsonrpc(IModule):
                         msg=f"[{self.ctx.Config.COLORS.green}JSONRPC INFO{self.ctx.Config.COLORS.nogc}] Shutting down RPC system!", 
                         channel=self.ctx.Config.SERVICE_CHANLOG
                     )
-        self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
 
-        await asyncio.wait_for(self._task_unsubscribe.task, timeout=10)
-        await asyncio.wait_for(self._task_subscribe.task, timeout=10)
+        if self.mod_config.jsonrpc == 1:
+            self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
+            await asyncio.wait_for(self._task_unsubscribe.task, timeout=10)
+            await asyncio.wait_for(self._task_subscribe.task, timeout=10)
+
         self.ctx.Commands.drop_command_by_module(self.module_name)
         self.ctx.Logs.debug(f"Unloading {self.module_name}")
         return None
@@ -153,7 +153,7 @@ class Jsonrpc(IModule):
 
         return None
 
-    async def hcmds(self, user: str, channel: Any, cmd: list[str], fullcmd: list[str] = []) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]]) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.ctx.Config.SERVICE_NICKNAME

@@ -185,7 +185,7 @@ class Autolimit(IModule):
         p = self.ctx.Irc.Protocol
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
             if index == -1:
                 return None
             
@@ -204,7 +204,7 @@ class Autolimit(IModule):
         except Exception as err:
             self.ctx.Logs.error(f"General Error {err}", exc_info=True)
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         """All messages coming from the user commands (Mandatory)
 
         Args:
