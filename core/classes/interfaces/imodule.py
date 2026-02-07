@@ -73,7 +73,7 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]]) -> None:
         """These are the commands recieved from a client
 
         Args:
