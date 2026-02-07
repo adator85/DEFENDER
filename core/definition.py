@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 from json import dumps
 from dataclasses import dataclass, field, asdict, fields, replace
-from typing import Literal, Any, Optional
+from typing import Callable, Literal, Any, Optional
 from os import sep
 from core.classes.interfaces.imodule import IModule
 
@@ -398,7 +398,7 @@ class MRegister:
 @dataclass
 class MIrcdCommand:
     command_name: str
-    func: Any
+    func: Callable[[list[str]], None]
 
 @dataclass
 class DThread(MainModel):
