@@ -4,7 +4,7 @@ import concurrent.futures
 import re
 import ssl
 import threading
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 from core.classes.modules import rehash
 from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
@@ -39,18 +39,12 @@ class Irc:
         # Lancer toutes les 30 secondes des actions de nettoyages
         self.beat = self.ctx.Config.DEFENDER_HEARTBEAT_FREQUENCY
 
-        # Heartbeat active
-        self.hb_active = self.ctx.Config.DEFENDER_HEARTBEAT
-
         # ID du serveur qui accueil le service ( Host Serveur Id )
         self.HSID = self.ctx.Config.HSID
 
         # Charset utiliser pour décoder/encoder les messages
         self.CHARSET = self.ctx.Config.SERVEUR_CHARSET
         """0: utf-8 | 1: iso-8859-1"""
-
-        self.autolimit_started: bool = False
-        """This variable is to make sure the thread is not running"""
 
         # define first reputation score to 0
         self.first_score: int = 0
@@ -312,7 +306,7 @@ class Irc:
                 return None
 
             self.ctx.Logs.debug(f">> {self.ctx.Utils.hide_sensitive_data(original_response)}")
-            pos, parsed_protocol = self.Protocol.get_ircd_protocol_poisition(cmd=original_response, log=True)
+            pos, parsed_protocol = self.Protocol.get_ircd_protocol_position(cmd=original_response, log=True)
             modules = self.ctx.ModuleUtils.model_get_loaded_modules().copy()
 
             for parsed in self.Protocol.Handler.get_ircd_commands():
@@ -326,7 +320,7 @@ class Irc:
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}", exc_info=True)
 
-    async def hcmds(self, user: str, channel: Union[str, None], cmd: list, fullcmd: list = []) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         """Create
 
         Args:
@@ -742,7 +736,6 @@ class Irc:
             case 'quit':
                 try:
                     final_reason = ' '.join(cmd[1:])
-                    self.hb_active = False
                     await rehash.shutdown(self.ctx)
                     self.ctx.Base.execute_periodic_action()
 
@@ -765,7 +758,7 @@ class Irc:
                     if self.writer.is_closing():
                         self.ctx.Logs.debug(f"Defender stopped properly!")
                 except ssl.SSLError as serr:
-                    self.ctx.Logs.error(f"Defender has ended with an SSL Error! - {serr}")
+                    self.ctx.Logs.debug(f"Defender has ended with an SSL Error! - {serr}")
 
             case 'restart':
                 final_reason = ' '.join(cmd[1:])
