@@ -3,6 +3,7 @@ CURRENT_USER := $(shell whoami)
 PYTHON_VERSION := $(shell python3 -V)
 HOME_DIR := $(shell echo $$HOME)
 SHELL := $(shell echo $$0)
+DISTRO := $(shell if [ -f /etc/os-release ]; then . /etc/os-release && echo $$NAME; else echo "Unknown Linux"; fi)
 
 install:
 ifeq ($(wildcard config/configuration.yaml),)
@@ -10,9 +11,8 @@ ifeq ($(wildcard config/configuration.yaml),)
 endif
 
 ifeq ($(OS), Linux)
-    DISTRO := $(shell if [ -f /etc/os-release ]; then . /etc/os-release && echo $$NAME; else echo "Unknown Linux"; fi)
-	$(info Operating System : $(OS))
-	$(info Distribution : $(DISTRO))
+	$(info Operating System: $(OS))
+	$(info Distribution: $(DISTRO))
 	$(info Python version: $(PYTHON_VERSION))
 	$(info Home directory: $(HOME_DIR))
 	$(info Shell type: $(SHELL))
