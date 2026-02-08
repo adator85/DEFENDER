@@ -113,7 +113,8 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
-        self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+        # if self.ctx.Config.DEFENDER_REHASH == 0:
+        #     self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
@@ -179,6 +180,9 @@ class Clone(IModule):
                                 number_of_clones = int(cmd[2])
                                 group = str(cmd[3]).lower()
                                 connection_interval = float(cmd[4]) if len(cmd) == 5 else 0.2
+
+                                # Do not allow an interval less than 0.2
+                                connection_interval = connection_interval if connection_interval >= 0.2 else 0.2
 
                                 self.ctx.DAsyncio.create_task(self.Threads.coro_connect_clones,
                                                               self, number_of_clones, group, False, connection_interval)

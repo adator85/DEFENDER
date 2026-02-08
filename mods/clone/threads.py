@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from mods.clone.mod_clone import Clone
 
 async def coro_connect_clones(uplink: 'Clone', 
-                          number_of_clones:int , 
+                          number_of_clones: int, 
                           group: str = 'Default', 
                           auto_remote_ip: bool = False, 
                           interval: float = 0.2

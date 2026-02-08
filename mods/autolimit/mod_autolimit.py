@@ -295,6 +295,13 @@ class Autolimit(IModule):
                             nick_to=u.nickname,
                             msg=f"[AUTOLIMIT] The system is working {red}{bold}globally{nogc}")
 
+                    if len(self.DB_AL_CHANNELS) < 1:
+                        await self.ctx.Irc.Protocol.send_notice(
+                            nick_from=dnickname,
+                            nick_to=u.nickname,
+                            msg=f"There are no channels in the autolimit database!")
+                        return None
+
                     for autolimit in self.DB_AL_CHANNELS:
                         await self.ctx.Irc.Protocol.send_notice(
                             nick_from=dnickname,
