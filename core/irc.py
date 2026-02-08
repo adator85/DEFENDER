@@ -1,6 +1,4 @@
 import asyncio
-import concurrent
-import concurrent.futures
 import re
 import ssl
 import threading
@@ -763,7 +761,7 @@ class Irc:
             case 'restart':
                 final_reason = ' '.join(cmd[1:])
                 await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{dnickname.capitalize()} is going to restart!")
-                
+
                 # Set restart status to 1 saying that the service will restart
                 self.ctx.Config.DEFENDER_RESTART = 1
 

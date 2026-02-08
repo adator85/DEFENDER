@@ -42,8 +42,17 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
         uplink (Irc): The Irc instance
         reason (str): The reason of the restart.
     """
+    _running_threads = uplink.Base.running_threads.copy()
+    for dthread in _running_threads:
+        if dthread.thread.name == 'heartbeat':
+            dthread.event.clear()
+            while dthread.thread.is_alive():
+                continue
+            uplink.Base.running_threads.remove(dthread)
+
     # unload modules.
-    for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
+    _db_modules = uplink.ModuleUtils.model_get_loaded_modules().copy()
+    for module in _db_modules:
         await uplink.ModuleUtils.unload_one_module(module.module_name)
 
     uplink.Base.garbage_collector_thread()
@@ -52,8 +61,13 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
     uplink.Logs.debug('Restarting Defender ...')
 
+    # Cleaning modules
     for mod in REHASH_MODULES:
-        importlib.reload(sys.modules[mod])
+        if mod in sys.modules:
+            del sys.modules[mod]
+        importlib.import_module(mod)
+
+    del (uplink.Config, uplink.Base)
 
     # Reload configuration
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
@@ -65,17 +79,18 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
 
     # Reload Service modules
-    for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
+    for module in _db_modules:
         await uplink.ModuleUtils.reload_one_module(module.module_name, uplink.Settings.current_admin)
 
+    del _db_modules, _running_threads
     print(f"############ NUMBER OF IO THREADS: {len(uplink.Base.running_iothreads)}")
     print(f"############ NUMBER OF IO TASKS: {len(uplink.Base.running_iotasks)}")
     print(f"############ NUMBER OF THREADS: {len(uplink.Base.running_threads)}")
     await uplink.Irc.run()
     uplink.Config.DEFENDER_RESTART = 0
 
-
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
+    uplink.Config.DEFENDER_REHASH = 1
     need_a_restart = ["SERVEUR_ID"]
     uplink.Settings.set_cache('commands', uplink.Commands.DB_COMMANDS)
     uplink.Settings.set_cache('users', uplink.User.UID_DB)
@@ -91,6 +106,8 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     for dthread in _running_threads:
         if dthread.thread.name == 'heartbeat':
             dthread.event.clear()
+            while dthread.thread.is_alive():
+                continue
             uplink.Base.running_threads.remove(dthread)
 
     _was_rpc_connected = uplink.RpcServer.live
@@ -112,6 +129,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     del uplink.Config
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
+    uplink.Config.DEFENDER_REHASH = config_model_bakcup.DEFENDER_REHASH
     uplink.Config.DEFENDER_INIT = config_model_bakcup.DEFENDER_INIT
     uplink.Config.DEFENDER_RESTART = config_model_bakcup.DEFENDER_RESTART
     uplink.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
@@ -198,6 +216,8 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     _count_reloaded_modules, _running_threads)
 
     gc.collect()
+
+    uplink.Config.DEFENDER_REHASH = 0
 
     return None
 

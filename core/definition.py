@@ -314,6 +314,9 @@ class MConfig(MainModel):
     DEFENDER_RESTART: int = 0
     """Restart flag. When Defender should restart this variable should be set to 1 (default: 0)"""
 
+    DEFENDER_REHASH: int = 0
+    """Rehash flag. When Defender should rehash this variable should be set to 1 (default: 0)"""
+
     DEFENDER_HEARTBEAT: bool = True
     """Activate the hearbeat pulse (default: True)"""
 
