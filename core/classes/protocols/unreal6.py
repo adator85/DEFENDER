@@ -147,7 +147,7 @@ class Unrealircd6(IProtocol):
             user_to         = self._ctx.User.get_user(nick_to) if not nick_to is None else None
 
             if user_from is None:
-                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist")
+                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist {msg}")
                 return None
 
             if not channel is None:

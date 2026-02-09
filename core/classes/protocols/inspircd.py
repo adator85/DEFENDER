@@ -106,7 +106,7 @@ class Inspircd(IProtocol):
             user_to      = self._ctx.User.get_user(nick_to) if nick_to is not None else None
 
             if user_from is None:
-                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist")
+                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist {msg}")
                 return None
 
             if not channel is None:
