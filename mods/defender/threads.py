@@ -1,21 +1,20 @@
 import asyncio
 from typing import TYPE_CHECKING, Optional
+from core.constants import Colors as colors
 
 if TYPE_CHECKING:
     from mods.defender.mod_defender import Defender
 
-async def coro_apply_reputation_sanctions(event: asyncio.Event, uplink: 'Defender'):
+async def coro_apply_reputation_sanctions(event: asyncio.Event, uplink: 'Defender') -> None:
 
     while event.is_set():
         await uplink.mod_utils.action_apply_reputation_santions(uplink)
         await asyncio.sleep(5)
 
-async def coro_cloudfilt_scan(event: asyncio.Event, uplink: 'Defender'):
+async def coro_cloudfilt_scan(event: asyncio.Event, uplink: 'Defender') -> None:
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
-    nogc = uplink.ctx.Config.COLORS.nogc
+    clrs = colors
     p = uplink.ctx.Irc.Protocol
 
     while event.is_set():
@@ -44,7 +43,7 @@ async def coro_cloudfilt_scan(event: asyncio.Event, uplink: 'Defender'):
 
                     await p.send_priv_msg(
                         nick_from=service_id,
-                        msg=f"[ {color_red}CLOUDFILT_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Host: {r_host} | country: {r_countryiso} | listed: {r_listed} | listed by : {r_listedby}",
+                        msg=f"[ {clrs.red}CLOUDFILT_SCAN{clrs.nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Host: {r_host} | country: {r_countryiso} | listed: {r_listed} | listed by : {r_listedby}",
                         channel=service_chanlog)
                     
                     uplink.ctx.Logs.debug(f"[CLOUDFILT SCAN] ({fullname}) connected from ({r_countryiso}), Listed: {r_listed}, by: {r_listedby}")
@@ -68,8 +67,7 @@ async def coro_cloudfilt_scan(event: asyncio.Event, uplink: 'Defender'):
 async def coro_freeipapi_scan(event: asyncio.Event, uplink: 'Defender'):
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
+    clrs = colors
     p = uplink.ctx.Irc.Protocol
     
     while event.is_set():
@@ -92,7 +90,7 @@ async def coro_freeipapi_scan(event: asyncio.Event, uplink: 'Defender'):
 
                     await p.send_priv_msg(
                         nick_from=service_id,
-                        msg=f"[ {color_red}FREEIPAPI_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Proxy: {str(result['isProxy'])} | Country : {str(result['countryCode'])}",
+                        msg=f"[ {clrs.red}FREEIPAPI_SCAN{clrs.nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Proxy: {str(result['isProxy'])} | Country : {str(result['countryCode'])}",
                         channel=service_chanlog)    
                     uplink.ctx.Logs.debug(f"[FREEIPAPI SCAN] ({fullname}) connected from ({result['countryCode']}), Proxy: {result['isProxy']}") 
 
@@ -117,8 +115,7 @@ async def coro_abuseipdb_scan(event: asyncio.Event, uplink: 'Defender'):
 
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
+    clrs = colors
     p = uplink.ctx.Irc.Protocol
     
     while event.is_set():
@@ -141,7 +138,7 @@ async def coro_abuseipdb_scan(event: asyncio.Event, uplink: 'Defender'):
 
                     await p.send_priv_msg(
                         nick_from=service_id,
-                        msg=f"[ {color_red}ABUSEIPDB_SCAN{nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Score: {str(result['score'])} | Country : {result['country']} | Tor : {str(result['isTor'])} | Total Reports : {str(result['totalReports'])}",
+                        msg=f"[ {clrs.red}ABUSEIPDB_SCAN{clrs.nogc} ] : Connexion de {fullname} ({remote_ip}) ==> Score: {str(result['score'])} | Country : {result['country']} | Tor : {str(result['isTor'])} | Total Reports : {str(result['totalReports'])}",
                         channel=service_chanlog
                         )
                     uplink.ctx.Logs.debug(f"[ABUSEIPDB SCAN] ({fullname}) connected from ({result['country']}), Score: {result['score']}, Tor: {result['isTor']}")
@@ -168,8 +165,7 @@ async def coro_local_scan(event: asyncio.Event, uplink: 'Defender'):
 
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
+    clrs = colors
     p = uplink.ctx.Irc.Protocol
 
     while event.is_set():
@@ -192,13 +188,13 @@ async def coro_local_scan(event: asyncio.Event, uplink: 'Defender'):
                     if opened_ports:
                         await p.send_priv_msg(
                             nick_from=service_id,
-                            msg=f"[ {color_red}LOCAL_SCAN{nogc} ] {fullname} ({user.remote_ip}) : The Port(s) {opened_ports} are opened on this remote ip [{user.remote_ip}]",
+                            msg=f"[ {clrs.red}LOCAL_SCAN{clrs.nogc} ] {fullname} ({user.remote_ip}) : The Port(s) {opened_ports} are opened on this remote ip [{user.remote_ip}]",
                             channel=service_chanlog
                             )
                     if closed_ports:
                         await p.send_priv_msg(
                             nick_from=service_id,
-                            msg=f"[ {color_red}LOCAL_SCAN{nogc} ] {fullname} ({user.remote_ip}) : The Port(s) {closed_ports} are closed on this remote ip [{user.remote_ip}]",
+                            msg=f"[ {clrs.red}LOCAL_SCAN{clrs.nogc} ] {fullname} ({user.remote_ip}) : The Port(s) {closed_ports} are closed on this remote ip [{user.remote_ip}]",
                             channel=service_chanlog
                             )
                     
@@ -217,8 +213,7 @@ async def coro_psutil_scan(event: asyncio.Event, uplink: 'Defender'):
 
     service_id = uplink.ctx.Config.SERVICE_ID
     service_chanlog = uplink.ctx.Config.SERVICE_CHANLOG
-    color_red = uplink.ctx.Config.COLORS.red
-    nogc = uplink.ctx.Config.COLORS.nogc
+    clrs = colors
     p = uplink.ctx.Irc.Protocol
 
     while event.is_set():
@@ -238,7 +233,7 @@ async def coro_psutil_scan(event: asyncio.Event, uplink: 'Defender'):
                 fullname = f'{user.nickname}!{user.username}@{user.hostname}'
                 await p.send_priv_msg(
                     nick_from=service_id,
-                    msg=f"[ {color_red}PSUTIL_SCAN{nogc} ] {fullname} ({user.remote_ip}) is using ports {result}",
+                    msg=f"[ {clrs.red}PSUTIL_SCAN{clrs.nogc} ] {fullname} ({user.remote_ip}) is using ports {result}",
                     channel=service_chanlog
                 )
                 await asyncio.sleep(1)

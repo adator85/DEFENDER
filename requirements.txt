@@ -3,6 +3,6 @@ psutil>=7.0.0,<8.0.0
 PyYAML>=6.0.0,<7.0.0
 requests>=2.0.0,<3.0.0
 SQLAlchemy>=2.0.0,<3.0.0
-unrealircd_rpc_py==3.1.6
+unrealircd_rpc_py==3.1.7
 starlette>=0.0.0,<1.0.0
 uvicorn>=0.0.0,<1.0.0

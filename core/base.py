@@ -188,7 +188,6 @@ class Base:
             bool: _description_
         """
         try:
-            response = True
             current_date = self.Utils.get_sdatetime()
             core_table = self.Config.TABLE_CONFIG
 
@@ -206,12 +205,11 @@ class Base:
                 if result_search_query is None:
                     # If param and module_name doesn't exist create the record
                     param_to_insert = {'datetime': current_date,'module_name': module_name,
-                                       'param_key': param_key,'param_value': param_value
-                                    }
+                                       'param_key': param_key,'param_value': param_value}
 
                     insert_query = f'''INSERT INTO {core_table} (datetime, module_name, param_key, param_value) 
                                         VALUES (:datetime, :module_name, :param_key, :param_value)
-                                        '''
+                                    '''
                     execution = await self.db_execute_query(insert_query, param_to_insert)
 
                     if execution.rowcount > 0:
@@ -228,8 +226,7 @@ class Base:
                 if not hasattr(dataclassObj, db_param_key):
                     mes_donnees = {'param_key': db_param_key, 'module_name': db_mod_name}
                     execute_delete = await self.db_execute_query(f'DELETE FROM {core_table} WHERE module_name = :module_name and param_key = :param_key', mes_donnees)
-                    row_affected = execute_delete.rowcount
-                    if row_affected > 0:
+                    if execute_delete.rowcount > 0:
                         self.logs.debug(f'A parameter has been deleted from the database: {db_param_key} --> {db_param_value} | Mod: {db_mod_name}')
 
             # Sync local variable with Database
@@ -244,10 +241,11 @@ class Base:
 
                 setattr(dataclassObj, param, self.convert_to_int(value))
 
-            return response
+            return True
 
         except AttributeError as attrerr:
             self.logs.error(f'Attribute Error: {attrerr}')
+            return False
         except Exception as err:
             self.logs.error(err)
             return False
@@ -654,7 +652,7 @@ class Base:
             bool: True is the email is correct
         """
         try:
-            pattern = '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+            pattern = '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9-.]+$'
             if re.match(pattern, email_to_control):
                 return True
             else:

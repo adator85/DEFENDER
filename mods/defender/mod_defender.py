@@ -5,6 +5,7 @@ import mods.defender.schemas as schemas
 import mods.defender.utils as utils
 import mods.defender.threads as thds
 from core.definition import DTask
+from core.constants import Colors as _colors
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -80,7 +81,7 @@ class Defender(IModule):
 
         # Create module commands (Mandatory)
         self.ctx.Commands.build_command(0, self.module_name, 'code', 'Display the code or key for access')
-        self.ctx.Commands.build_command(1, self.module_name, 'info', 'Provide information about the channel or server')
+        self.ctx.Commands.build_command(1, self.module_name, 'info', 'Provide information about a nickname')
         self.ctx.Commands.build_command(3, self.module_name, 'reputation', 'Check or manage user reputation')
         self.ctx.Commands.build_command(3, self.module_name, 'proxy_scan', 'Scan users for proxy connections')
         self.ctx.Commands.build_command(3, self.module_name, 'flood', 'Handle flood detection and mitigation')
@@ -209,7 +210,7 @@ class Defender(IModule):
         if response is not None:
             q_insert = "INSERT INTO def_trusted (datetime, user, host, vhost) VALUES (?, ?, ?, ?)"
             mes_donnees = {'datetime': self.ctx.Utils.get_datetime(), 'user': nickname, 'host': '*', 'vhost': '*'}
-            exec_query = self.ctx.Base.db_execute_query(q_insert, mes_donnees)
+            exec_query = await self.ctx.Base.db_execute_query(q_insert, mes_donnees)
             pass
 
         return None
@@ -218,6 +219,7 @@ class Defender(IModule):
         """_summary_
         """
         try:
+            _proto = self.ctx.Irc.Protocol
             result = await self.ctx.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.ctx.Config.TABLE_CHANNEL}")
             channels = result.fetchall()
             jail_chan = self.ctx.Config.SALON_JAIL
@@ -228,10 +230,10 @@ class Defender(IModule):
 
             for channel in channels:
                 chan = channel[0]
-                await self.ctx.Irc.Protocol.send_sjoin(chan)
+                await _proto.send_sjoin(chan)
                 if chan == jail_chan:
-                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
-                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
+                    await _proto.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
+                    await _proto.send2socket(f":{service_id} MODE {jail_chan} +{jail_chan_mode}")
 
             return None
 
@@ -245,9 +247,7 @@ class Defender(IModule):
         cmd = data.copy() if isinstance(data, list) else list(data).copy()
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
-            if index == -1:
-                return None
+            command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
 
             match command:
 
@@ -302,33 +302,34 @@ class Defender(IModule):
         fromuser = u.nickname
         channel = fromchannel = channel if self.ctx.Channel.is_valid_channel(channel) else None
 
-        dnickname = self.ctx.Config.SERVICE_NICKNAME            # Defender nickname
-        dchanlog = self.ctx.Config.SERVICE_CHANLOG              # Defender chan log
-        dumodes = self.ctx.Config.SERVICE_UMODES                # Les modes de Defender
-        service_id = self.ctx.Config.SERVICE_ID                 # Defender serveur id
-        jail_chan = self.ctx.Config.SALON_JAIL                  # Salon pot de miel
-        jail_chan_mode = self.ctx.Config.SALON_JAIL_MODES       # Mode du salon "pot de miel"
+        _proto = self.ctx.Irc.Protocol                 # IRC Protocol
+        _gconf = self.ctx.Config                       # Global Configuration
+        _mconf = self.mod_config                       # Module Configuration
+        _logs = self.ctx.Logs                          # Logging module
+        dnickname = _gconf.SERVICE_NICKNAME            # Defender nickname
+        dchanlog = _gconf.SERVICE_CHANLOG              # Defender chan log
+        dumodes = _gconf.SERVICE_UMODES                # Les modes de Defender
+        service_id = _gconf.SERVICE_ID                 # Defender serveur id
+        jail_chan = _gconf.SALON_JAIL                  # Salon pot de miel
+        jail_chan_mode = _gconf.SALON_JAIL_MODES       # Mode du salon "pot de miel"
+        jail_release_chan = _gconf.SALON_LIBERER       # The release channel
 
-        color_green = self.ctx.Config.COLORS.green
-        color_red = self.ctx.Config.COLORS.red
-        color_black = self.ctx.Config.COLORS.black
-        color_nogc = self.ctx.Config.COLORS.nogc
+        colors = _colors
 
         match command:
 
             case 'show_reputation':
-                p = self.ctx.Irc.Protocol
 
-                if self.mod_config.reputation == 0:
-                    await p.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")
+                if _mconf.reputation == 0:
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")
                     return None
 
                 if not self.ctx.Reputation.UID_REPUTATION_DB:
-                    await p.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg="No one is suspected")
                     return None
 
                 for suspect in self.ctx.Reputation.UID_REPUTATION_DB:
-                    await p.send_notice(nick_from=dnickname,
+                    await _proto.send_notice(nick_from=dnickname,
                                         nick_to=fromuser,
                                         msg=f" Uid: {suspect.uid} | Nickname: {suspect.nickname} | Reputation: {suspect.score_connexion} | Secret code: {suspect.secret_code} | Connected on: {suspect.connexion_datetime}")
 
@@ -342,54 +343,50 @@ class Defender(IModule):
                     get_reputation = self.ctx.Reputation.get_reputation(jailed_UID)
 
                     if get_reputation is None:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" No code is requested ...")
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" No code is requested ...")
                         return False
 
                     jailed_IP = get_reputation.remote_ip
-                    jailed_salon = self.ctx.Config.SALON_JAIL
                     reputation_seuil = self.mod_config.reputation_seuil
-                    welcome_salon = self.ctx.Config.SALON_LIBERER
 
-                    self.ctx.Logs.debug(f"IP de {jailed_nickname} : {jailed_IP}")
+                    _logs.debug(f"IP de {jailed_nickname} : {jailed_IP}")
                     link = self.ctx.Config.SERVEUR_LINK
-                    color_green = self.ctx.Config.COLORS.green
-                    color_black = self.ctx.Config.COLORS.black
 
                     if release_code == get_reputation.secret_code:
-                        await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg="Bon mot de passe. Allez du vent !", channel=jailed_salon)
+                        await _proto.send_priv_msg(nick_from=dnickname, msg="Bon mot de passe. Allez du vent !", channel=jail_chan)
 
                         if self.mod_config.reputation_ban_all_chan == 1:
                             for chan in self.ctx.Channel.UID_CHANNEL_DB:
-                                if chan.name != jailed_salon:
-                                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {chan.name} -b {jailed_nickname}!*@*")
+                                if chan.name != jail_chan:
+                                    await _proto.send2socket(f":{service_id} MODE {chan.name} -b {jailed_nickname}!*@*")
 
                         self.ctx.Reputation.delete(jailed_UID)
-                        self.ctx.Logs.debug(f'{jailed_UID} - {jailed_nickname} removed from REPUTATION_DB')
-                        await self.ctx.Irc.Protocol.send_sapart(nick_to_sapart=jailed_nickname, channel_name=jailed_salon)
-                        await self.ctx.Irc.Protocol.send_sajoin(nick_to_sajoin=jailed_nickname, channel_name=welcome_salon)
-                        await self.ctx.Irc.Protocol.send2socket(f":{link} REPUTATION {jailed_IP} {self.mod_config.reputation_score_after_release}")
+                        _logs.debug(f'{jailed_UID} - {jailed_nickname} removed from REPUTATION_DB')
+                        await _proto.send_sapart(nick_to_sapart=jailed_nickname, channel_name=jail_chan)
+                        await _proto.send_sajoin(nick_to_sajoin=jailed_nickname, channel_name=jail_release_chan)
+                        await _proto.send2socket(f":{link} REPUTATION {jailed_IP} {self.mod_config.reputation_score_after_release}")
                         u.score_connexion = reputation_seuil + 1
-                        await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname,
-                                                  msg=f"[{color_green} MOT DE PASS CORRECT {color_black}] : You have now the right to enjoy the network !", 
+                        await _proto.send_priv_msg(nick_from=dnickname,
+                                                  msg=f"[{colors.green} MOT DE PASS CORRECT {colors.nogc}] : You have now the right to enjoy the network !",
                                                   nick_to=jailed_nickname)
 
                     else:
-                        await self.ctx.Irc.Protocol.send_priv_msg(
+                        await _proto.send_priv_msg(
                                 nick_from=dnickname,
-                                msg="Mauvais password", 
-                                channel=jailed_salon
+                                msg="Mauvais password",
+                                channel=jail_chan
                             )
-                        await self.ctx.Irc.Protocol.send_priv_msg(
+                        await _proto.send_priv_msg(
                                 nick_from=dnickname,
-                                msg=f"[{color_green} MAUVAIS PASSWORD {color_black}] You have typed a wrong code. for recall your password is: {self.ctx.Config.SERVICE_PREFIX}code {get_reputation.secret_code}",
+                                msg=f"[{colors.green} MAUVAIS PASSWORD {colors.nogc}] You have typed a wrong code. for recall your password is: {self.ctx.Config.SERVICE_PREFIX}code {get_reputation.secret_code}",
                                 nick_to=jailed_nickname
                             )
 
                 except IndexError as ie:
-                    self.ctx.Logs.error(f'Index Error: {ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} code [code]")
+                    _logs.error(f'Index Error: {ie}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} code [code]")
                 except KeyError as ke:
-                    self.ctx.Logs.error(f'_hcmd code: KeyError {ke}')
+                    _logs.error(f'_hcmd code: KeyError {ke}')
 
             case 'reputation':
                 # .reputation [on/off] --> activate or deactivate reputation system
@@ -399,6 +396,7 @@ class Defender(IModule):
                 # .reputation [arg1] [arg2] [arg3]
                 try:
                     len_cmd = len(cmd)
+                    print(cmd)
                     if len_cmd < 2:
                         raise IndexError("Showing help!")
 
@@ -410,7 +408,7 @@ class Defender(IModule):
                         if activation == 'on':
 
                             if self.mod_config.reputation == 1:
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION{self.ctx.Config.COLORS.black} ] : Already activated", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}REPUTATION{colors.nogc} ] : Already activated", channel=dchanlog)
                                 return None
 
                             await self.update_configuration(key, 1)
@@ -418,17 +416,17 @@ class Defender(IModule):
                                 self.Threads.coro_apply_reputation_sanctions, self, task_flag=True
                             )
 
-                            await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION{self.ctx.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
+                            await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}REPUTATION{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
 
-                            await self.ctx.Irc.Protocol.send_join_chan(uidornickname=dnickname, channel=jail_chan)
-                            await self.ctx.Irc.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
-                            await self.ctx.Irc.Protocol.send_set_mode(f'+{jail_chan_mode}', channel_name=jail_chan)
+                            await _proto.send_join_chan(uidornickname=dnickname, channel=jail_chan)
+                            await _proto.send2socket(f":{service_id} SAMODE {jail_chan} +{dumodes} {dnickname}")
+                            await _proto.send_set_mode(f'+{jail_chan_mode}', channel_name=jail_chan)
 
                             if self.mod_config.reputation_sg == 1:
                                 for chan in self.ctx.Channel.UID_CHANNEL_DB:
                                     if chan.name != jail_chan:
-                                        await self.ctx.Irc.Protocol.send_set_mode('+b', channel_name=chan.name, params='~security-group:unknown-users')
-                                        await self.ctx.Irc.Protocol.send_set_mode(
+                                        await _proto.send_set_mode('+b', channel_name=chan.name, params='~security-group:unknown-users')
+                                        await _proto.send_set_mode(
                                             '+eee', 
                                             channel_name=chan.name, 
                                             params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users'
@@ -439,9 +437,9 @@ class Defender(IModule):
                         if activation == 'off':
 
                             if self.mod_config.reputation == 0:
-                                await self.ctx.Irc.Protocol.send_priv_msg(
+                                await _proto.send_priv_msg(
                                     nick_from=dnickname,
-                                    msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION{self.ctx.Config.COLORS.black} ] : Already deactivated",
+                                    msg=f"[ {colors.green}REPUTATION{colors.nogc} ] : Already deactivated",
                                     channel=dchanlog
                                     )
                                 return None
@@ -449,20 +447,20 @@ class Defender(IModule):
                             await self.update_configuration(key, 0)
                             self.reputation.event.clear()
 
-                            await self.ctx.Irc.Protocol.send_priv_msg(
+                            await _proto.send_priv_msg(
                                     nick_from=dnickname,
-                                    msg=f"[ {self.ctx.Config.COLORS.red}REPUTATION{self.ctx.Config.COLORS.black} ] : Deactivated by {fromuser}",
+                                    msg=f"[ {colors.red}REPUTATION{colors.nogc} ] : Deactivated by {fromuser}",
                                     channel=dchanlog
                                     )
 
-                            await self.ctx.Irc.Protocol.send2socket(f":{service_id} SAMODE {jail_chan} -{dumodes} {dnickname}")
-                            await self.ctx.Irc.Protocol.send_set_mode('-sS', channel_name=jail_chan)
-                            await self.ctx.Irc.Protocol.send_part_chan(service_id, jail_chan)
+                            await _proto.send2socket(f":{service_id} SAMODE {jail_chan} -{dumodes} {dnickname}")
+                            await _proto.send_set_mode('-sS', channel_name=jail_chan)
+                            await _proto.send_part_chan(service_id, jail_chan)
 
                             for chan in self.ctx.Channel.UID_CHANNEL_DB:
                                 if chan.name != jail_chan:
-                                    await self.ctx.Irc.Protocol.send_set_mode('-b', channel_name=chan.name, params='~security-group:unknown-users')
-                                    await self.ctx.Irc.Protocol.send_set_mode(
+                                    await _proto.send_set_mode('-b', channel_name=chan.name, params='~security-group:unknown-users')
+                                    await _proto.send_set_mode(
                                         '-eee', 
                                         channel_name=chan.name, 
                                         params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users'
@@ -482,13 +480,13 @@ class Defender(IModule):
                                 client_obj = self.ctx.User.get_user(str(cmd[2]))
 
                                 if self.mod_config.reputation != 1:
-                                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                    await _proto.send_notice(nick_from=dnickname,
                                                   nick_to=fromuser,
                                                   msg="The reputation system is not activated!")
                                     return None
 
                                 if client_obj is None:
-                                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                    await _proto.send_notice(nick_from=dnickname,
                                                   nick_to=fromuser,
                                                   msg=f"This nickname ({str(cmd[2])}) is not connected to the network!")
                                     return None
@@ -496,33 +494,34 @@ class Defender(IModule):
                                 client_to_release = self.ctx.Reputation.get_reputation(client_obj.uid)
 
                                 if client_to_release is None:
-                                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                    await _proto.send_notice(nick_from=dnickname,
                                                   nick_to=fromuser, msg=f"This nickname ({str(cmd[2])}) doesn't exist in the reputation databalse!")
                                     return None
 
                                 if self.ctx.Reputation.delete(client_to_release.uid):
-                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                    await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION RELEASE{self.ctx.Config.COLORS.black} ] : {client_to_release.nickname} has been released",
+                                                msg=f"[ {colors.green}REPUTATION RELEASE{colors.nogc} ] : {client_to_release.nickname} has been released",
                                                 channel=dchanlog)
-                                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                    await _proto.send_notice(nick_from=dnickname,
                                                   nick_to=fromuser, msg=f"This nickname has been released from reputation system")
                                     
-                                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                    await _proto.send_notice(nick_from=dnickname,
                                                   nick_to=client_to_release.nickname, msg=f"You have been released from the reputation system by ({fromuser})")
                                     
-                                    await self.ctx.Irc.Protocol.send_sapart(nick_to_sapart=client_to_release.nickname, channel_name=jailed_salon)
-                                    await self.ctx.Irc.Protocol.send_sajoin(nick_to_sajoin=client_to_release.nickname, channel_name=welcome_salon)
-                                    await self.ctx.Irc.Protocol.send2socket(f":{link} REPUTATION {client_to_release.remote_ip} {self.mod_config.reputation_score_after_release}")
+                                    await _proto.send_sapart(nick_to_sapart=client_to_release.nickname, channel_name=jailed_salon)
+                                    await _proto.send_sajoin(nick_to_sajoin=client_to_release.nickname, channel_name=welcome_salon)
+                                    await _proto.send2socket(f":{link} REPUTATION {client_to_release.remote_ip} {self.mod_config.reputation_score_after_release}")
                                     return None
                                 else:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                    await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.red}REPUTATION RELEASE ERROR{self.ctx.Config.COLORS.black} ] : "
+                                                msg=f"[ {colors.red}REPUTATION RELEASE ERROR{colors.nogc} ] : "
                                                 f"{client_to_release.nickname} has not been released! as he is not in the reputation database",
                                                 channel=dchanlog
                                             )
-                    if len_cmd > 4:
+
+                    if len_cmd >= 4:
                         get_set = str(cmd[1]).lower()
 
                         if get_set != 'set':
@@ -538,9 +537,9 @@ class Defender(IModule):
                                 if get_value == 'on':
 
                                     if self.mod_config.reputation_ban_all_chan == 1:
-                                        await self.ctx.Irc.Protocol.send_priv_msg(
+                                        await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.red}BAN ON ALL CHANS{self.ctx.Config.COLORS.black} ] : Already activated",
+                                                msg=f"[ {colors.red}BAN ON ALL CHANS{colors.nogc} ] : Already activated",
                                                 channel=dchanlog
                                             )
                                         return False
@@ -548,17 +547,17 @@ class Defender(IModule):
                                     # self.update_db_configuration(key, 1)
                                     await self.update_configuration(key, 1)
 
-                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                    await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}BAN ON ALL CHANS{self.ctx.Config.COLORS.black} ] : Activated by {fromuser}",
+                                                msg=f"[ {colors.green}BAN ON ALL CHANS{colors.nogc} ] : Activated by {fromuser}",
                                                 channel=dchanlog
                                             )
 
                                 elif get_value == 'off':
                                     if self.mod_config.reputation_ban_all_chan == 0:
-                                        await self.ctx.Irc.Protocol.send_priv_msg(
+                                        await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.red}BAN ON ALL CHANS{self.ctx.Config.COLORS.black} ] : Already deactivated",
+                                                msg=f"[ {colors.red}BAN ON ALL CHANS{colors.nogc} ] : Already deactivated",
                                                 channel=dchanlog
                                             )
                                         return False
@@ -566,9 +565,9 @@ class Defender(IModule):
                                     # self.update_db_configuration(key, 0)
                                     await self.update_configuration(key, 0)
 
-                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                    await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}BAN ON ALL CHANS{self.ctx.Config.COLORS.black} ] : Deactivated by {fromuser}",
+                                                msg=f"[ {colors.green}BAN ON ALL CHANS{colors.nogc} ] : Deactivated by {fromuser}",
                                                 channel=dchanlog
                                             )
 
@@ -579,71 +578,86 @@ class Defender(IModule):
                                 # self.update_db_configuration(key, reputation_seuil)
                                 await self.update_configuration(key, reputation_seuil)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(
+                                await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION SEUIL{self.ctx.Config.COLORS.black} ] : Limit set to {str(reputation_seuil)} by {fromuser}",
+                                                msg=f"[ {colors.green}REPUTATION SEUIL{colors.nogc} ] : Limit set to {str(reputation_seuil)} by {fromuser}",
                                                 channel=dchanlog
                                             )
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_seuil}")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_seuil}")
 
                             case 'timer':
                                 reputation_timer = int(cmd[3])
                                 key = 'reputation_timer'
                                 await self.update_configuration(key, reputation_timer)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(
+                                await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION TIMER{self.ctx.Config.COLORS.black} ] : Timer set to {str(reputation_timer)} minute(s) by {fromuser}",
+                                                msg=f"[ {colors.green}REPUTATION TIMER{colors.nogc} ] : Timer set to {str(reputation_timer)} minute(s) by {fromuser}",
                                                 channel=dchanlog
                                             )
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_timer}")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation set to {reputation_timer}")
 
                             case 'score_after_release':
                                 reputation_score_after_release = int(cmd[3])
                                 key = 'reputation_score_after_release'
                                 await self.update_configuration(key, reputation_score_after_release)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(
+                                await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION SCORE AFTER RELEASE{self.ctx.Config.COLORS.black} ] : Reputation score after release set to {str(reputation_score_after_release)} by {fromuser}",
+                                                msg=f"[ {colors.green}REPUTATION SCORE AFTER RELEASE{colors.nogc} ] : Reputation score after release set to {str(reputation_score_after_release)} by {fromuser}",
                                                 channel=dchanlog
                                             )
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_score_after_release}")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_score_after_release}")
+
+                            case 'action':
+                                _key = 'reputation_action'
+                                _action = str(cmd[3]).lower()
+                                _action_available = {'gline', 'kill'}
+
+                                if _action not in _action_available:
+                                    await _proto.send_notice(dnickname, fromuser, "This action is not available. Try gline of kill")
+                                    return None
+                                
+                                await self.update_configuration(_key, _action)
+
+                                await _proto.send_notice(nick_from=dnickname,
+                                                                        nick_to=fromuser,
+                                                                        msg=tr(' Action for the reputation set to %s', _action))
 
                             case 'security_group':
                                 reputation_sg = int(cmd[3])
                                 key = 'reputation_sg'
                                 await self.update_configuration(key, reputation_sg)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(
+                                await _proto.send_priv_msg(
                                                 nick_from=dnickname,
-                                                msg=f"[ {self.ctx.Config.COLORS.green}REPUTATION SECURITY-GROUP{self.ctx.Config.COLORS.black} ] : Reputation Security-group set to {str(reputation_sg)} by {fromuser}",
+                                                msg=f"[ {colors.green}REPUTATION SECURITY-GROUP{colors.nogc} ] : Reputation Security-group set to {str(reputation_sg)} by {fromuser}",
                                                 channel=dchanlog
                                             )
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_sg}")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Reputation score after release set to {reputation_sg}")
 
                             case _:
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation release [nickname]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation release [nickname]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
 
                 except IndexError as ie:
-                    self.ctx.Logs.warning(f'{ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation release [nickname]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
+                    _logs.warning(f'{ie}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation [ON/OFF]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation release [nickname]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set banallchan [ON/OFF]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set limit [1234]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set score_after_release [1234]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set timer [1234]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} reputation set action [kill|None]")
 
                 except ValueError as ve:
-                    self.ctx.Logs.warning(f'{ve}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" La valeur devrait etre un entier >= 0")
+                    _logs.warning(f'{ve}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=" La valeur devrait etre un entier >= 0")
 
             case 'proxy_scan':
 
@@ -656,11 +670,11 @@ class Defender(IModule):
                     set_key = str(cmd[1]).lower()
 
                     if set_key != 'set':
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
 
                     option = str(cmd[2]).lower() # => local_scan, psutil_scan, abuseipdb_scan
                     action = str(cmd[3]).lower() # => on / off
@@ -668,8 +682,8 @@ class Defender(IModule):
                     match option:
                         case 'local_scan':
                             if action == 'on':
-                                if self.mod_config.local_scan == 1:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
+                                if _mconf.local_scan == 1:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.local_scan = self.ctx.DAsyncio.create_task(
@@ -677,21 +691,21 @@ class Defender(IModule):
                                 )
                                 await self.update_configuration(option, 1)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
-                                if self.mod_config.local_scan == 0:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
+                                if _mconf.local_scan == 0:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 await self.update_configuration(option, 0)
                                 self.local_scan.event.clear()
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'psutil_scan':
                             if action == 'on':
-                                if self.mod_config.psutil_scan == 1:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
+                                if _mconf.psutil_scan == 1:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.psutil = self.ctx.DAsyncio.create_task(
@@ -699,21 +713,21 @@ class Defender(IModule):
                                 )
                                 await self.update_configuration(option, 1)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
-                                if self.mod_config.psutil_scan == 0:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
+                                if _mconf.psutil_scan == 0:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 await self.update_configuration(option, 0)
                                 self.psutil.event.clear()
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'abuseipdb_scan':
                             if action == 'on':
-                                if self.mod_config.abuseipdb_scan == 1:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
+                                if _mconf.abuseipdb_scan == 1:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.abuseipdb = self.ctx.DAsyncio.create_task(
@@ -721,21 +735,21 @@ class Defender(IModule):
                                 )
                                 await self.update_configuration(option, 1)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
-                                if self.mod_config.abuseipdb_scan == 0:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
+                                if _mconf.abuseipdb_scan == 0:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 await self.update_configuration(option, 0)
                                 self.abuseipdb.event.clear()
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'freeipapi_scan':
                             if action == 'on':
-                                if self.mod_config.freeipapi_scan == 1:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
+                                if _mconf.freeipapi_scan == 1:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.freeipapi = self.ctx.DAsyncio.create_task(
@@ -743,21 +757,21 @@ class Defender(IModule):
                                 )
                                 await self.update_configuration(option, 1)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
-                                if self.mod_config.freeipapi_scan == 0:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
+                                if _mconf.freeipapi_scan == 0:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 await self.update_configuration(option, 0)
                                 self.freeipapi.event.clear()
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case 'cloudfilt_scan':
                             if action == 'on':
-                                if self.mod_config.cloudfilt_scan == 1:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Already activated", channel=dchanlog)
+                                if _mconf.cloudfilt_scan == 1:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already activated", channel=dchanlog)
                                     return None
 
                                 self.cloudfilt = self.ctx.DAsyncio.create_task(
@@ -765,29 +779,29 @@ class Defender(IModule):
                                 )
                                 await self.update_configuration(option, 1)
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_green}PROXY_SCAN {option.upper()}{color_black} ] : Activated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}PROXY_SCAN {option.upper()}{colors.nogc} ] : Activated by {fromuser}", channel=dchanlog)
                             elif action == 'off':
-                                if self.mod_config.cloudfilt_scan == 0:
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Already Deactivated", channel=dchanlog)
+                                if _mconf.cloudfilt_scan == 0:
+                                    await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Already Deactivated", channel=dchanlog)
                                     return None
 
                                 await self.update_configuration(option, 0)
                                 self.cloudfilt.event.clear()
 
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {color_red}PROXY_SCAN {option.upper()}{color_black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}PROXY_SCAN {option.upper()}{colors.nogc} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                         case _:
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
                 else:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set local_scan [ON/OFF]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set psutil_scan [ON/OFF]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set abuseipdb_scan [ON/OFF]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set freeipapi_scan [ON/OFF]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Right command : /msg {dnickname} proxy_scan set cloudfilt_scan [ON/OFF]')
 
             case 'flood':
                 # .flood on/off
@@ -802,21 +816,21 @@ class Defender(IModule):
                         key = 'flood'
                         if activation == 'on':
                             if self.mod_config.flood == 1:
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Already activated", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}FLOOD{colors.black} ] : Already activated", channel=dchanlog)
                                 return False
 
                             await self.update_configuration(key, 1)
 
-                            await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Activated by {fromuser}", channel=dchanlog)
+                            await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}FLOOD{colors.black} ] : Activated by {fromuser}", channel=dchanlog)
 
                         if activation == 'off':
                             if self.mod_config.flood == 0:
-                                await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.red}FLOOD{self.ctx.Config.COLORS.black} ] : Already Deactivated", channel=dchanlog)
+                                await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.red}FLOOD{colors.black} ] : Already Deactivated", channel=dchanlog)
                                 return False
 
                             await self.update_configuration(key, 0)
 
-                            await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Deactivated by {fromuser}", channel=dchanlog)
+                            await _proto.send_priv_msg(nick_from=dnickname, msg=f"[ {colors.green}FLOOD{colors.black} ] : Deactivated by {fromuser}", channel=dchanlog)
 
                     if len_cmd == 4:
                         set_key = str(cmd[2]).lower()
@@ -828,8 +842,8 @@ class Defender(IModule):
                                     set_value = int(cmd[3])
                                     await self.update_configuration(key, set_value)
 
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                              msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Flood message set to {set_value} by {fromuser}", 
+                                    await _proto.send_priv_msg(nick_from=dnickname, 
+                                                              msg=f"[ {colors.green}FLOOD{colors.black} ] : Flood message set to {set_value} by {fromuser}", 
                                                               channel=dchanlog)
 
                                 case 'flood_time':
@@ -837,8 +851,8 @@ class Defender(IModule):
                                     set_value = int(cmd[3])
                                     await self.update_configuration(key, set_value)
 
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                              msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Flood time set to {set_value} by {fromuser}", 
+                                    await _proto.send_priv_msg(nick_from=dnickname, 
+                                                              msg=f"[ {colors.green}FLOOD{colors.black} ] : Flood time set to {set_value} by {fromuser}", 
                                                               channel=dchanlog)
 
                                 case 'flood_timer':
@@ -846,82 +860,78 @@ class Defender(IModule):
                                     set_value = int(cmd[3])
                                     await self.update_configuration(key, set_value)
 
-                                    await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                              msg=f"[ {self.ctx.Config.COLORS.green}FLOOD{self.ctx.Config.COLORS.black} ] : Flood timer set to {set_value} by {fromuser}", 
+                                    await _proto.send_priv_msg(nick_from=dnickname, 
+                                                              msg=f"[ {colors.green}FLOOD{colors.black} ] : Flood timer set to {set_value} by {fromuser}", 
                                                               channel=dchanlog)
 
                                 case _:
                                     pass
 
                 except ValueError as ve:
-                    self.ctx.Logs.error(f"{self.__class__.__name__} Value Error : {ve}")
+                    _logs.error(f"{self.__class__.__name__} Value Error : {ve}")
 
             case 'status':
-                color_green = self.ctx.Config.COLORS.green
-                color_red = self.ctx.Config.COLORS.red
-                color_black = self.ctx.Config.COLORS.black
-                nogc = self.ctx.Config.COLORS.nogc
                 try:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.mod_config.reputation == 1 else color_red}Reputation{nogc}]                           ==> {self.mod_config.reputation}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_seuil             ==> {self.mod_config.reputation_seuil}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_after_release     ==> {self.mod_config.reputation_score_after_release}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_ban_all_chan      ==> {self.mod_config.reputation_ban_all_chan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_timer             ==> {self.mod_config.reputation_timer}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=' [Proxy_scan]')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.mod_config.local_scan == 1 else color_red}local_scan{nogc}                 ==> {self.mod_config.local_scan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.mod_config.psutil_scan == 1 else color_red}psutil_scan{nogc}                ==> {self.mod_config.psutil_scan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.mod_config.abuseipdb_scan == 1 else color_red}abuseipdb_scan{nogc}             ==> {self.mod_config.abuseipdb_scan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.mod_config.freeipapi_scan == 1 else color_red}freeipapi_scan{nogc}             ==> {self.mod_config.freeipapi_scan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {color_green if self.mod_config.cloudfilt_scan == 1 else color_red}cloudfilt_scan{nogc}             ==> {self.mod_config.cloudfilt_scan}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.mod_config.flood == 1 else color_red}Flood{nogc}]                                ==> {self.mod_config.flood}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg='      flood_action                      ==> Coming soon')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {self.mod_config.flood_message}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_time                        ==> {self.mod_config.flood_time}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_timer                       ==> {self.mod_config.flood_timer}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{color_green if self.mod_config.flood == 1 else color_red}Sentinel{nogc}]                             ==> {self.mod_config.sentinel}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{colors.green if _mconf.reputation == 1 else colors.red}Reputation{colors.nogc}]                           ==> {_mconf.reputation}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_seuil             ==> {_mconf.reputation_seuil}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_after_release     ==> {_mconf.reputation_score_after_release}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_ban_all_chan      ==> {_mconf.reputation_ban_all_chan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'           reputation_timer             ==> {_mconf.reputation_timer}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=' [Proxy_scan]')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {colors.green if _mconf.local_scan == 1 else colors.red}local_scan{colors.nogc}                 ==> {_mconf.local_scan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {colors.green if _mconf.psutil_scan == 1 else colors.red}psutil_scan{colors.nogc}                ==> {_mconf.psutil_scan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {colors.green if _mconf.abuseipdb_scan == 1 else colors.red}abuseipdb_scan{colors.nogc}             ==> {_mconf.abuseipdb_scan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {colors.green if _mconf.freeipapi_scan == 1 else colors.red}freeipapi_scan{colors.nogc}             ==> {_mconf.freeipapi_scan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'             {colors.green if _mconf.cloudfilt_scan == 1 else colors.red}cloudfilt_scan{colors.nogc}             ==> {_mconf.cloudfilt_scan}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{colors.green if _mconf.flood == 1 else colors.red}Flood{colors.nogc}]                                ==> {_mconf.flood}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg='      flood_action                      ==> Coming soon')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_message                     ==> {_mconf.flood_message}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_time                        ==> {_mconf.flood_time}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'      flood_timer                       ==> {_mconf.flood_timer}')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' [{colors.green if _mconf.flood == 1 else colors.red}Sentinel{colors.nogc}]                             ==> {_mconf.sentinel}')
                 except KeyError as ke:
-                    self.ctx.Logs.error(f"Key Error : {ke}")
+                    _logs.error(f"Key Error : {ke}")
 
             case 'info':
                 try:
                     if len(cmd) < 2:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} INFO [nickname]")
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} INFO [nickname]")
                         return None
 
                     nickoruid = cmd[1]
-                    UserObject = self.ctx.User.get_user(nickoruid)
+                    _u = self.ctx.User.get_user(nickoruid)
 
-                    if UserObject is not None:
-                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.ctx.User.clean_uid(uid_in_chan) == UserObject.uid]
+                    if _u is not None:
+                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.ctx.User.clean_uid(uid_in_chan) == _u.uid]
 
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {UserObject.uid}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {UserObject.nickname}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' USERNAME         : {UserObject.username}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' REALNAME         : {UserObject.realname}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' HOSTNAME         : {UserObject.hostname}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' VHOST            : {UserObject.vhost}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' IP               : {UserObject.remote_ip}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Country          : {UserObject.geoip}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' WebIrc           : {UserObject.isWebirc}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' WebWebsocket     : {UserObject.isWebsocket}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' REPUTATION       : {UserObject.score_connexion}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' MODES            : {UserObject.umodes}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CHANNELS         : {", ".join(channels)}')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CONNECTION TIME  : {UserObject.connexion_datetime}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {_u.uid}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {_u.nickname}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' USERNAME         : {_u.username}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' REALNAME         : {_u.realname}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' HOSTNAME         : {_u.hostname}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' VHOST            : {_u.vhost}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' IP               : {_u.remote_ip}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' Country          : {_u.geoip}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' WebIrc           : {_u.isWebirc}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' WebWebsocket     : {_u.isWebsocket}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' REPUTATION       : {_u.score_connexion}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' MODES            : {_u.umodes}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CHANNELS         : {", ".join(channels)}')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' CONNECTION TIME  : {_u.connexion_datetime}')
                     else:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {nickoruid} doesn't exist")
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {nickoruid} doesn't exist")
 
                 except KeyError as ke:
-                    self.ctx.Logs.warning(f"Key error info user : {ke}")
+                    _logs.warning(f"Key error info user : {ke}")
 
             case 'sentinel':
                 # .sentinel on
                 if len(cmd) < 2:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} sentinel [ON | OFF]")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Syntax. /msg {dnickname} sentinel [ON | OFF]")
                     return None
 
                 activation = str(cmd[1]).lower()
-                channel_to_dont_quit = [self.ctx.Config.SALON_JAIL, self.ctx.Config.SERVICE_CHANLOG]
+                channel_to_dont_quit = [jail_chan, dchanlog]
 
                 if activation == 'on':
                     result = await self.ctx.Base.db_execute_query(f"SELECT distinct channel_name FROM {self.ctx.Config.TABLE_CHANNEL}")
@@ -932,9 +942,9 @@ class Defender(IModule):
                     await self.update_configuration('sentinel', 1)
                     for chan in self.ctx.Channel.UID_CHANNEL_DB:
                         if chan.name not in channel_to_dont_quit:
-                            await self.ctx.Irc.Protocol.send_join_chan(uidornickname=dnickname, channel=chan.name)
-                            await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"Sentinel mode activated on {channel}", channel=chan.name)
-                    await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"[ {color_green}SENTINEL{color_nogc} ] Activated by {fromuser}", channel=self.ctx.Config.SERVICE_CHANLOG)
+                            await _proto.send_join_chan(uidornickname=dnickname, channel=chan.name)
+                            await _proto.send_priv_msg(dnickname, f"Sentinel mode activated on {channel}", channel=chan.name)
+                    await _proto.send_priv_msg(dnickname, f"[ {colors.green}SENTINEL{colors.nogc} ] Activated by {fromuser}", channel=dchanlog)
                     return None
 
                 if activation == 'off':
@@ -945,11 +955,11 @@ class Defender(IModule):
                     await self.update_configuration('sentinel', 0)
                     for chan in self.ctx.Channel.UID_CHANNEL_DB:
                         if chan.name not in channel_to_dont_quit:
-                            await self.ctx.Irc.Protocol.send_part_chan(uidornickname=dnickname, channel=chan.name)
-                            await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"Sentinel mode deactivated on {channel}", channel=chan.name)
+                            await _proto.send_part_chan(uidornickname=dnickname, channel=chan.name)
+                            await _proto.send_priv_msg(dnickname, f"Sentinel mode deactivated on {channel}", channel=chan.name)
 
                     await self.join_saved_channels()
-                    await self.ctx.Irc.Protocol.send_priv_msg(dnickname, f"[ {color_red}SENTINEL{color_nogc} ] Deactivated by {fromuser}", channel=self.ctx.Config.SERVICE_CHANLOG)
+                    await _proto.send_priv_msg(dnickname, f"[ {colors.red}SENTINEL{colors.nogc} ] Deactivated by {fromuser}", channel=dchanlog)
                     return None
 
             case _:

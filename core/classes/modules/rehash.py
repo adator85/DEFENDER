@@ -57,39 +57,67 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
 
     uplink.Base.garbage_collector_thread()
 
-    uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
-    await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
-    uplink.Logs.debug('Restarting Defender ...')
-
     # Cleaning modules
     for mod in REHASH_MODULES:
         if mod in sys.modules:
             del sys.modules[mod]
         importlib.import_module(mod)
 
-    del (uplink.Config, uplink.Base)
+    # uplink.ModuleUtils.model_clear()          # Clear loaded modules.
+    # uplink.User.UID_DB.clear()                # Clear User Object
+    # uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
+    # uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
 
+    del (uplink.User, uplink.Admin, uplink.Channel,
+        uplink.Reputation, uplink.ModuleUtils, uplink.Sasl,
+        uplink.Utils, uplink.Config, _running_threads,
+        uplink.Base)
+    
     # Reload configuration
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
+    uplink.Utils = sys.modules['core.utils']
     uplink.Base = uplink.BaseModule.Base(uplink)
+    uplink.User = sys.modules['core.classes.modules.user'].User(uplink)
+    uplink.Admin = sys.modules['core.classes.modules.admin'].Admin(uplink)
+    uplink.Channel = sys.modules['core.classes.modules.channel'].Channel(uplink)
+    uplink.Reputation = sys.modules['core.classes.modules.reputation'].Reputation(uplink)
+    uplink.ModuleUtils = sys.modules['core.module'].Module(uplink)
+    uplink.Sasl = sys.modules['core.classes.modules.sasl'].Sasl(uplink)
 
-    uplink.ModuleUtils.model_clear()          # Clear loaded modules.
-    uplink.User.UID_DB.clear()                # Clear User Object
-    uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-    uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
-
-    # Reload Service modules
-    for module in _db_modules:
-        await uplink.ModuleUtils.reload_one_module(module.module_name, uplink.Settings.current_admin)
-
-    del _db_modules, _running_threads
     print(f"############ NUMBER OF IO THREADS: {len(uplink.Base.running_iothreads)}")
     print(f"############ NUMBER OF IO TASKS: {len(uplink.Base.running_iotasks)}")
     print(f"############ NUMBER OF THREADS: {len(uplink.Base.running_threads)}")
-    await uplink.Irc.run()
+
+    uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
+    await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
+    uplink.Logs.debug('Restarting Defender ...')
+
+    uplink.Irc.signal = False
+    if uplink.Irc.writer:
+        uplink.Irc.writer.close()
+        try:
+            await uplink.Irc.writer.wait_closed()
+        except Exception:
+            pass
+
+    gc.collect()
+
+    if uplink.Irc.writer.is_closing():
+        print("*"*56, uplink.Irc.writer, "CLOSED")
+        del uplink.Irc.writer, uplink.Irc.reader
+
     uplink.Config.DEFENDER_RESTART = 0
+    await uplink.Irc.run()
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
+    _colors = uplink.Const.Colors
+    _protocol = uplink.Irc.Protocol
+    await (_protocol
+           .send_priv_msg(
+               uplink.Config.SERVICE_NICKNAME,
+               msg=f'[ {_colors.blue}{_colors.bold}REHASH INFO{_colors.nogc}{_colors.reset} ] The system is going to rehash!',
+               channel=uplink.Config.SERVICE_CHANLOG))
+
     uplink.Config.DEFENDER_REHASH = 1
     need_a_restart = ["SERVEUR_ID"]
     uplink.Settings.set_cache('commands', uplink.Commands.DB_COMMANDS)
@@ -116,17 +144,15 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     restart_flag = False
     config_model_bakcup = uplink.Config.copy()
-    mods = REHASH_MODULES
-    _count_reloaded_modules = len(mods)
-    for mod in mods:
+    _count_reloaded_modules = len(REHASH_MODULES)
+
+    for mod in REHASH_MODULES:
         if mod in sys.modules:
             del sys.modules[mod]
         importlib.import_module(mod)
 
-    del uplink.Utils
+    del uplink.Utils, uplink.Config
     uplink.Utils = sys.modules['core.utils']
-
-    del uplink.Config
     uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
     uplink.Config.HSID = config_model_bakcup.HSID
     uplink.Config.DEFENDER_REHASH = config_model_bakcup.DEFENDER_REHASH
@@ -157,7 +183,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
         await uplink.Irc.Protocol.send_priv_msg(
             nick_from=uplink.Config.SERVICE_NICKNAME,
             channel=uplink.Config.SERVICE_CHANLOG, 
-            msg='You need to restart defender !')
+            msg='You need to restart defender!')
 
     # Reload Main Commands Module
     del uplink.Commands
@@ -166,13 +192,11 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     uplink.Base.db_close()
 
-    del uplink.Base
-    uplink.Base = uplink.BaseModule.Base(uplink)
-
     del (uplink.User, uplink.Admin, uplink.Channel,
          uplink.Reputation, uplink.ModuleUtils, uplink.Sasl,
-         uplink.Irc.Protocol, uplink.RpcServer)
+         uplink.Irc.Protocol, uplink.RpcServer, uplink.Base)
 
+    uplink.Base = uplink.BaseModule.Base(uplink)
     uplink.User = sys.modules['core.classes.modules.user'].User(uplink)
     uplink.Admin = sys.modules['core.classes.modules.admin'].Admin(uplink)
     uplink.Channel = sys.modules['core.classes.modules.channel'].Channel(uplink)
@@ -201,20 +225,17 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
         await uplink.ModuleUtils.reload_one_module(module.module_name, nickname)
 
-    color_green = uplink.Config.COLORS.green
-    color_reset = uplink.Config.COLORS.nogc
     uplink.Base.create_thread(uplink.Utils.heartbeat, uplink, uplink.Irc.beat, run_once=True)
 
     await uplink.Irc.Protocol.send_priv_msg(
         uplink.Config.SERVICE_NICKNAME,
-        tr("[ %sREHASH INFO%s ] Rehash completed! %s modules reloaded.", color_green, color_reset, _count_reloaded_modules),
-        uplink.Config.SERVICE_CHANLOG
-    )
+        tr("[ %sREHASH INFO%s ] Rehash completed! %s modules reloaded.", _colors.green, _colors.nogc, _count_reloaded_modules),
+        uplink.Config.SERVICE_CHANLOG)
 
-    del (config_dict, _was_rpc_connected, config_model_bakcup
-    , mods, conf_bkp_dict, color_green, color_reset,
-    _count_reloaded_modules, _running_threads)
+    del (config_dict, _was_rpc_connected, config_model_bakcup,
+         conf_bkp_dict, _count_reloaded_modules, _running_threads)
 
+    # Run the python garbage collector.
     gc.collect()
 
     uplink.Config.DEFENDER_REHASH = 0

@@ -25,7 +25,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    def get_ircd_protocol_position(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
+    def get_ircd_protocol_position(self, cmd: list[str], log: bool = True) -> Optional[str]:
         """Get the position of known commands
 
         Args:
@@ -33,7 +33,7 @@ class IProtocol(ABC):
             log (bool): If true it will log in the logger
 
         Returns:
-            tuple[int, Optional[str]]: The position and the command.
+            str: The Server Command or None.
         """
 
     @abstractmethod
@@ -78,19 +78,6 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
-        """Send a gline command to the server
-
-        Args:
-            nickname (str): The nickname of the client.
-            hostname (str): The hostname of the client.
-            set_by (str): The nickname who send the gline
-            expire_timestamp (int): Expire timestamp
-            set_at_timestamp (int): Set at timestamp
-            reason (str): The reason of the gline.
-        """
-
-    @abstractmethod
     async def send_set_nick(self, newnickname: str) -> None:
         """Change nickname of the server
         \n This method will also update the User object
@@ -124,37 +111,6 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_ungline(self, nickname:str, hostname: str) -> None:
-        """_summary_
-
-        Args:
-            nickname (str): _description_
-            hostname (str): _description_
-        """
-
-    @abstractmethod
-    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
-        """_summary_
-
-        Args:
-            nickname (str): _description_
-            hostname (str): _description_
-            set_by (str): _description_
-            expire_timestamp (int): _description_
-            set_at_timestamp (int): _description_
-            reason (str): _description_
-        """
-
-    @abstractmethod
-    async def send_unkline(self, nickname:str, hostname: str) -> None:
-        """_summary_
-
-        Args:
-            nickname (str): _description_
-            hostname (str): _description_
-        """
-
-    @abstractmethod
     async def send_sjoin(self, channel: str) -> None:
         """Server will join a channel with pre defined umodes
 
@@ -178,6 +134,18 @@ class IProtocol(ABC):
         Args:
             nick_to_sajoin (str): _description_
             channel_name (str): _description_
+        """
+
+    @abstractmethod
+    async def send_samode(self, channel_name: str, mode_to_apply: str, params: str = '') -> None:
+        """
+        
+        eg. SAMODE #channel +o nickname
+
+        Args:
+            mode_to_apply (str): _description_
+            channel_name (str): _description_
+            params (str): _description_
         """
 
     @abstractmethod
@@ -297,6 +265,63 @@ class IProtocol(ABC):
 
         Args:
             raw_command (str): The raw command you want to send.
+        """
+
+    # ------------------------------------------------------------------------
+    #                           OFFENSIVE COMMANDS
+    # ------------------------------------------------------------------------
+
+    @abstractmethod
+    async def send_kill(self, nickname: str, reason: str = 'Nickname has been killed') -> None:
+        """Send a kill command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            reason (str): The reason of the kill.
+        """
+
+    @abstractmethod
+    async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        """Send a gline command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            hostname (str): The hostname of the client.
+            set_by (str): The nickname who send the gline
+            expire_timestamp (int): Expire timestamp
+            set_at_timestamp (int): Set at timestamp
+            reason (str): The reason of the gline.
+        """
+
+    @abstractmethod
+    async def send_ungline(self, nickname:str, hostname: str) -> None:
+        """_summary_
+
+        Args:
+            nickname (str): _description_
+            hostname (str): _description_
+        """
+
+    @abstractmethod
+    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        """_summary_
+
+        Args:
+            nickname (str): _description_
+            hostname (str): _description_
+            set_by (str): _description_
+            expire_timestamp (int): _description_
+            set_at_timestamp (int): _description_
+            reason (str): _description_
+        """
+
+    @abstractmethod
+    async def send_unkline(self, nickname:str, hostname: str) -> None:
+        """_summary_
+
+        Args:
+            nickname (str): _description_
+            hostname (str): _description_
         """
 
     # ------------------------------------------------------------------------

@@ -185,10 +185,8 @@ class Autolimit(IModule):
         p = self.ctx.Irc.Protocol
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
-            if index == -1:
-                return None
-            
+            command = p.get_ircd_protocol_position(cmd)
+           
             match command:
                 case 'PART':
                     # ['@unrealircd.org', ':001IN5101', 'PART', '#EFKnockr', ':Closing', 'Window']
@@ -198,7 +196,7 @@ class Autolimit(IModule):
                     # ['@msgid...', ':001', 'SJOIN', '1769989165', '#test', ':@001IN5101']
                     ...
 
-                case _:
+                case None:
                     pass
 
         except Exception as err:
@@ -216,6 +214,7 @@ class Autolimit(IModule):
         u = self.ctx.User.get_user(user)
         c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
         proto = self.ctx.Irc.Protocol
+        colors = self.ctx.Const.Colors
         if u is None:
             return None
 
@@ -285,15 +284,12 @@ class Autolimit(IModule):
 
             case 'list':
                 try:
-                    red = self.ctx.Config.COLORS.red
-                    nogc = self.ctx.Config.COLORS.nogc
-                    bold = self.ctx.Config.COLORS.bold
 
                     if self.mod_config.global_autolimit == 1:
                         await self.ctx.Irc.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=u.nickname,
-                            msg=f"[AUTOLIMIT] The system is working {red}{bold}globally{nogc}")
+                            msg=f"[AUTOLIMIT] The system is working {colors.red}{colors.bold}globally{colors.nogc}")
 
                     if len(self.DB_AL_CHANNELS) < 1:
                         await self.ctx.Irc.Protocol.send_notice(

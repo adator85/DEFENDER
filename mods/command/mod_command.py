@@ -59,6 +59,9 @@ class Command(IModule):
         # Create the database
         await self.create_tables()
 
+        # sync the database with local variable (Mandatory)
+        await self.sync_db()
+
         # Module Utils
         self.mod_utils = utils
         self.user_to_notice: str = ''
@@ -118,7 +121,8 @@ class Command(IModule):
         self.ctx.Commands.build_command(2, self.module_name, 'klinelist', 'List all K-line bans')
         self.ctx.Commands.build_command(3, self.module_name, 'map', 'Show the server network map')
 
-    def unload(self) -> None:
+
+    async def unload(self) -> None:
         self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
 
@@ -127,16 +131,13 @@ class Command(IModule):
             # service_id = self.ctx.Config.SERVICE_ID
             dnickname = self.ctx.Config.SERVICE_NICKNAME
             # dchanlog = self.ctx.Config.SERVICE_CHANLOG
-            red = self.ctx.Config.COLORS.red
-            green = self.ctx.Config.COLORS.green
-            bold = self.ctx.Config.COLORS.bold
-            nogc = self.ctx.Config.COLORS.nogc
+            red = self.ctx.Const.Colors.red
+            green = self.ctx.Const.Colors.green
+            bold = self.ctx.Const.Colors.bold
+            nogc = self.ctx.Const.Colors.nogc
             cmd = list(data).copy()
 
-            pos, parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd=cmd, log=True)
-
-            if pos == -1:
-                return None
+            parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd=cmd)
 
             match parsed_cmd:
                 # [':irc.deb.biz.st', '403', 'Dev-PyDefender', '#Z', ':No', 'such', 'channel']
@@ -501,7 +502,7 @@ class Command(IModule):
                     gnotice_msg = ' '.join(cmd[1:]).strip()
 
                     if gnotice_msg:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.ctx.Config.COLORS.red}GLOBAL NOTICE{self.ctx.Config.COLORS.nogc}] {gnotice_msg}")
+                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.ctx.Const.Colors.red}GLOBAL NOTICE{self.ctx.Const.Colors.nogc}] {gnotice_msg}")
                     else:
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the global notice message")
 
@@ -762,7 +763,7 @@ class Command(IModule):
                     nickname = str(cmd[1])
                     kill_reason = ' '.join(cmd[2:])
 
-                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} KILL {nickname} {kill_reason} ({self.ctx.Config.COLORS.red}{dnickname}{self.ctx.Config.COLORS.nogc})")
+                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} KILL {nickname} {kill_reason} ({self.ctx.Const.Colors.red}{dnickname}{self.ctx.Const.Colors.nogc})")
                 except KeyError as ke:
                     self.ctx.Logs.error(ke)
                 except Exception as err:

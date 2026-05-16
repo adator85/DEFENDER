@@ -108,8 +108,8 @@ class Test(IModule):
         """
 
         cmd = data.copy() if isinstance(data, list) else list(data).copy()
-        index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
-        if index == -1:
+        command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
+        if command is None:
             return None
 
         try:

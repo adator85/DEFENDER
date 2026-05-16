@@ -11,7 +11,6 @@ from core.utils import tr
 
 if TYPE_CHECKING:
     from core.loader import Loader
-    from core.irc import Irc
     from core.classes.interfaces.imodule import IModule
 
 class Module:
@@ -68,7 +67,6 @@ class Module:
 
         for mod_h in self.DB_MODULE_HEADERS:
             if module_name.lower() == mod_h.name.lower():
-                self._ctx.Logs.debug(f"Module Header found: {mod_h}")
                 return mod_h
         
         return None
@@ -129,13 +127,16 @@ class Module:
             self.is_module_compliant(my_class)
             create_instance_of_the_class: 'IModule' = my_class(self._ctx)       # Créer une nouvelle instance de la classe
             await create_instance_of_the_class.load() if self._ctx.Utils.is_coroutinefunction(create_instance_of_the_class.load) else create_instance_of_the_class.load()
+            if not create_instance_of_the_class.is_loaded:
+                raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required methods!')
+
             self.create_module_header(create_instance_of_the_class.MOD_HEADER)
         except AttributeError as attr:
-            red = self._ctx.Config.COLORS.red
-            nogc = self._ctx.Config.COLORS.red
+            red = self._ctx.Const.Colors.red
+            nogc = self._ctx.Const.Colors.nogc
             await self._ctx.Irc.Protocol.send_priv_msg(
                     nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=tr("[%sMODULE ERROR%s] Module %s is facing issues! %s", red, nogc, module_name, attr),
+                    msg=tr("[ %sMODULE ERROR%s ] Module %s is facing issues! %s", red, nogc, module_name, attr),
                     channel=self._ctx.Config.SERVICE_CHANLOG
                 )
             self.drop_module_from_sys_modules(module_name)
@@ -173,14 +174,15 @@ class Module:
             bool: True if the module has been reloaded
         """
         module_folder, module_name, class_name = self.get_module_information(module_name)
-        red = self._ctx.Config.COLORS.red
-        nogc = self._ctx.Config.COLORS.nogc
+        red = self._ctx.Const.Colors.red
+        nogc = self._ctx.Const.Colors.nogc
         try:
             if self.is_module_exist_in_sys_module(module_name):
                 module_model = self.model_get_module(module_name)
                 if module_model:
                     self.delete_module_header(module_model.class_instance.MOD_HEADER['name'])
                     await module_model.class_instance.unload() if self._ctx.Utils.is_coroutinefunction(module_model.class_instance.unload) else module_model.class_instance.unload()
+                    await module_model.class_instance.cleanup() if self._ctx.Utils.is_coroutinefunction(module_model.class_instance.cleanup) else module_model.class_instance.cleanup()
                 else:
                     await self._ctx.Irc.Protocol.send_priv_msg(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
@@ -193,8 +195,13 @@ class Module:
                 # reload module dependencies
                 self.reload_all_modules_with_all_dependencies(f'mods.{module_folder}')
 
-                the_module = sys.modules[f'mods.{module_folder}.{module_name}']
-                importlib.reload(the_module)
+                if sys.modules.get(f'mods.{module_folder}.{module_name}'):
+                    del sys.modules[f'mods.{module_folder}.{module_name}']
+                the_module = importlib.import_module(f'mods.{module_folder}.{module_name}')
+
+                # the_module = sys.modules[f'mods.{module_folder}.{module_name}']
+                # importlib.reload(the_module)
+
                 my_class = getattr(the_module, class_name, None)
                 self.is_module_compliant(my_class)
                 new_instance: 'IModule' = my_class(self._ctx)
@@ -274,8 +281,8 @@ class Module:
         """
         try:
             # Le nom du module. exemple: mod_defender
-            red = self._ctx.Config.COLORS.red
-            nogc = self._ctx.Config.COLORS.nogc
+            red = self._ctx.Const.Colors.red
+            nogc = self._ctx.Const.Colors.nogc
             module_folder, module_name, class_name = self.get_module_information(module_name)
             module = self.model_get_module(module_name)
             if module is None:
@@ -289,14 +296,15 @@ class Module:
                 return False
 
             if module:
-                self.delete_module_header(module.class_instance.MOD_HEADER['name'])
                 await module.class_instance.unload() if self._ctx.Utils.is_coroutinefunction(module.class_instance.unload) else module.class_instance.unload()
+                await module.class_instance.cleanup() if self._ctx.Utils.is_coroutinefunction(module.class_instance.cleanup) else module.class_instance.cleanup()
+                self.delete_module_header(module.class_instance.MOD_HEADER['name'])
                 self.DB_MODULES.remove(module)
 
                 # Delete from the sys.modules.
                 if sys.modules.get(f'mods.{module_folder}.{module_name}'):
                     del sys.modules[f"mods.{module_folder}.{module_name}"]
-                
+
                 if sys.modules.get(f'mods.{module_folder}.{module_name}'):
                     self._ctx.Logs.debug(f"Module mods.{module_folder}.{module_name} still in the sys.modules")
 

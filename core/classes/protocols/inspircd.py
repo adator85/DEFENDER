@@ -23,7 +23,7 @@ class Inspircd(IProtocol):
                                          'MODE', 'QUIT', 'SQUIT',
                                          'VERSION'}
 
-    async def get_ircd_protocol_position(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
+    def get_ircd_protocol_position(self, cmd: list[str], log: bool = True) -> Optional[str]:
         """Get the position of known commands
 
         Args:
@@ -31,16 +31,16 @@ class Inspircd(IProtocol):
             log (bool): if True then print logs
 
         Returns:
-            tuple[int, Optional[str]]: The position and the command.
+            str: The Server Command or None.
         """
         for index, token in enumerate(cmd):
-            if token.upper() in self.known_protocol:
-                return index, token.upper()
+            if token.upper() in self.known_protocol and index < 3:
+                return token.upper()
 
         if log:
             self._ctx.Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
 
-        return -1, None
+        return None
 
     async def register_command(self):
         m = self._ctx.Definition.MIrcdCommand
@@ -657,7 +657,7 @@ class Inspircd(IProtocol):
                 # Initialisation terminé aprés le premier PING
                 self.send_priv_msg(
                     nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Config.COLORS.green, self._ctx.Config.COLORS.nogc, self._ctx.Config.SERVICE_NICKNAME),
+                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Const.Colors.green, self._ctx.Const.Colors.nogc, self._ctx.Config.SERVICE_NICKNAME),
                     channel=self._ctx.Config.SERVICE_CHANLOG
                 )
                 self._ctx.Config.DEFENDER_INIT = 0
@@ -707,9 +707,9 @@ class Inspircd(IProtocol):
             server_msg (list[str]): Original server message
         """
         try:
-            red = self._ctx.Config.COLORS.red
-            green = self._ctx.Config.COLORS.green
-            nogc = self._ctx.Config.COLORS.nogc
+            red = self._ctx.Const.Colors.red
+            green = self._ctx.Const.Colors.green
+            nogc = self._ctx.Const.Colors.nogc
             is_webirc = True if 'webirc' in server_msg[0] else False
             is_websocket = True if 'websocket' in server_msg[0] else False
 
@@ -819,7 +819,7 @@ class Inspircd(IProtocol):
                     self.send_notice(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
                         nick_to=user_trigger,
-                        msg=f"This command [{self._ctx.Config.COLORS.bold}{arg[0]}{self._ctx.Config.COLORS.bold}] is not available"
+                        msg=f"This command [{self._ctx.Const.Colors.bold}{arg[0]}{self._ctx.Const.Colors.bold}] is not available"
                     )
                     return None
 
@@ -1164,8 +1164,8 @@ class Inspircd(IProtocol):
         scopy = server_msg.copy()
         dnickname = self._ctx.Config.SERVICE_NICKNAME
         dchanlog = self._ctx.Config.SERVICE_CHANLOG
-        green = self._ctx.Config.COLORS.green
-        nogc = self._ctx.Config.COLORS.nogc
+        green = self._ctx.Const.Colors.green
+        nogc = self._ctx.Const.Colors.nogc
 
         if 'ssl_cert' in scopy:
             fingerprint = scopy[5]

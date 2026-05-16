@@ -126,9 +126,7 @@ class Clone(IModule):
                 return None
 
             cmd = data.copy() if isinstance(data, list) else list(data).copy()
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
-            if index == -1:
-                return None
+            command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
 
             match command:
 
@@ -139,7 +137,7 @@ class Clone(IModule):
                 case 'QUIT':
                     return None
 
-                case _:
+                case None:
                     return None
 
         except Exception as err:

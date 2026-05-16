@@ -1,11 +1,12 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Optional
-from unrealircd_rpc_py.objects.Definition import LiveRPCResult
 import core.definition as dfn
-from core.classes.interfaces.imodule import IModule
 import mods.jsonrpc.schemas as schemas
 import mods.jsonrpc.threads as thds
+from typing import TYPE_CHECKING, Optional
+from unrealircd_rpc_py.objects.Definition import LiveRPCResult
+from core.classes.interfaces.imodule import IModule
+from core.constants import Colors as colors
 from unrealircd_rpc_py.ConnectionFactory import ConnectionFactory
 from unrealircd_rpc_py.LiveConnectionFactory import LiveConnectionFactory
 
@@ -40,25 +41,24 @@ class Jsonrpc(IModule):
 
     async def callback_sent_to_irc(self, response: LiveRPCResult) -> None:
 
-        dnickname = self.ctx.Config.SERVICE_NICKNAME
-        dchanlog = self.ctx.Config.SERVICE_CHANLOG
-        green = self.ctx.Config.COLORS.green
-        nogc = self.ctx.Config.COLORS.nogc
-        bold = self.ctx.Config.COLORS.bold
-        red = self.ctx.Config.COLORS.red
+        _proto = self.ctx.Irc.Protocol
+        _dnickname = self.ctx.Config.SERVICE_NICKNAME
+        _dchanlog = self.ctx.Config.SERVICE_CHANLOG
+        _json_url = self.ctx.Config.JSONRPC_URL
 
         if response.error.code != 0:
-            await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname,
-                        msg=f"[{bold}{red}JSONRPC ERROR{nogc}{bold}] {response.error.message} ({response.error.code})",
-                        channel=dchanlog)
+            await _proto.send_priv_msg(
+                nick_from=_dnickname,
+                msg=f"[{colors.bold}{colors.red}JSONRPC ERROR{colors.nogc}{colors.bold}] {response.error.message} ({response.error.code})",
+                channel=_dchanlog)
             return None
 
         if isinstance(response.result, bool):
             if response.result:
-                await self.ctx.Irc.Protocol.send_priv_msg(
-                        nick_from=self.ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[{bold}{green}JSONRPC{nogc}{bold}] JSONRPC Event activated on {self.ctx.Config.JSONRPC_URL}",
-                        channel=dchanlog)
+                await _proto.send_priv_msg(
+                        nick_from=_dnickname,
+                        msg=f"[ {colors.bold}{colors.green}JSONRPC INFO{colors.nogc}{colors.bold} ] IRCd json-rpc Event activated on {_json_url}",
+                        channel=_dchanlog)
                 return None
 
         level = response.result.level if hasattr(response.result, 'level') else ''
@@ -67,8 +67,8 @@ class Jsonrpc(IModule):
         log_source = response.result.log_source if hasattr(response.result, 'log_source') else ''
         msg = response.result.msg if hasattr(response.result, 'msg') else ''
 
-        build_msg = f"{green}{log_source}{nogc}: [{bold}{level}{bold}] {subsystem}.{event_id} - {msg}"
-        await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, msg=build_msg, channel=dchanlog)
+        build_msg = f"{colors.green}{log_source}{colors.nogc}: [{colors.bold}{level}{colors.bold}] {subsystem}.{event_id} - {msg}"
+        await _proto.send_priv_msg(nick_from=_dnickname, msg=build_msg, channel=_dchanlog)
         
         return None
 
@@ -122,7 +122,7 @@ class Jsonrpc(IModule):
         except Exception as err:
             await self.ctx.Irc.Protocol.send_priv_msg(
                     nick_from=self.ctx.Config.SERVICE_NICKNAME,
-                    msg=f"[{self.ctx.Config.COLORS.red}JSONRPC ERROR{self.ctx.Config.COLORS.nogc}] {err.__str__()}",
+                    msg=f"[ {self.ctx.Const.Colors.red}JSONRPC ERROR{self.ctx.Const.Colors.nogc} ] {err.__str__()}",
                     channel=self.ctx.Config.SERVICE_CHANLOG
                     )
             self.ctx.Logs.error(f"JSONRPC ERROR: {err.__str__()}")
@@ -136,7 +136,7 @@ class Jsonrpc(IModule):
         if self.is_streaming:
             await self.ctx.Irc.Protocol.send_priv_msg(
                         nick_from=self.ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[{self.ctx.Config.COLORS.green}JSONRPC INFO{self.ctx.Config.COLORS.nogc}] Shutting down RPC system!", 
+                        msg=f"[ {colors.green}JSONRPC INFO{colors.nogc} ] Shutting down IRCd json-rpc system!",
                         channel=self.ctx.Config.SERVICE_CHANLOG
                     )
 
@@ -155,6 +155,8 @@ class Jsonrpc(IModule):
 
     async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]]) -> None:
 
+        _proto = self.ctx.Irc.Protocol
+        _log = self.ctx.Logs
         command = str(cmd[0]).lower()
         dnickname = self.ctx.Config.SERVICE_NICKNAME
         dchannel = self.ctx.Config.SERVICE_CHANLOG
@@ -166,8 +168,8 @@ class Jsonrpc(IModule):
             case 'jsonrpc':
                 try:
                     if len(cmd) < 2:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
                         return None
 
                     option = str(cmd[1]).lower()
@@ -182,12 +184,12 @@ class Jsonrpc(IModule):
                             await self.update_configuration('jsonrpc', 0)
 
                 except IndexError as ie:
-                    self.ctx.Logs.error(ie)
+                    _log.error(ie)
 
             case 'jruser':
                 try:
                     if len(cmd) < 2:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
                         return None
 
                     option = str(cmd[1]).lower()
@@ -198,42 +200,42 @@ class Jsonrpc(IModule):
 
                             UserInfo = rpc.User.get(nickname)
                             if UserInfo.error.code != 0:
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{UserInfo.error.message}')
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{UserInfo.error.message}')
                                 return None
 
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {[chan.name for chan in UserInfo.user.channels]}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {[chan.name for chan in UserInfo.user.channels]}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
 
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
                             
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
 
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
-                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
 
                 except IndexError as ie:
-                    self.ctx.Logs.error(ie)
+                    _log.error(ie)
 
             case 'jrinstances':
                 try:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"GC Collect: {self.ctx.Utils.run_python_garbage_collector()}")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance LiveWebsock: {self.ctx.Utils.get_number_gc_objects(LiveConnectionFactory)}")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance ConnectionFactory: {self.ctx.Utils.get_number_gc_objects(ConnectionFactory)}")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre de toute les instances: {self.ctx.Utils.get_number_gc_objects()}")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"GC Collect: {self.ctx.Utils.run_python_garbage_collector()}")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance LiveWebsock: {self.ctx.Utils.get_number_gc_objects(LiveConnectionFactory)}")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance ConnectionFactory: {self.ctx.Utils.get_number_gc_objects(ConnectionFactory)}")
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre de toute les instances: {self.ctx.Utils.get_number_gc_objects()}")
                 except Exception as err:
-                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    _log.error(f"Unknown Error: {err}")

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import asyncio
 from typing import TYPE_CHECKING, Optional, Union
 from dataclasses import dataclass
 
@@ -22,12 +23,32 @@ class IModule(ABC):
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Log the module
-        self.ctx.Logs.debug(f'Loading Module {self.module_name} ...')
+        self.ctx.Logs.debug(f'Loading Module {self.module_name} {id(self)} ...')
+
+        # Is module compliant
+        self.__loaded = False
+
+    def __del__(self):
+        self.ctx.Logs.info(f"[I-MODULE] Module {self.__class__.__name__} ({id(self)}) has been cleaned-up!")
 
     async def sync_db(self) -> None:
         # Sync the configuration with core configuration (Mandatory)
         await self.ctx.Base.db_sync_core_config(self.module_name, self.mod_config)
+        self.is_loaded = True
         return None
+
+    async def cleanup(self) -> None:
+        for nom in dir(self):
+            if isinstance(getattr(self, nom), self.ctx.Definition.DTask):
+                _dtask = getattr(self, nom)
+                # print(f"  • {nom} - {type(getattr(self, nom))}")
+                try:
+                    await asyncio.wait_for(_dtask.task, timeout=5)
+                    self.ctx.DAsyncio.running_iotasks.remove(_dtask)
+                    self.ctx.Logs.debug(f"[I-MODULE CLEANUP] The module {self.__class__.__name__} has been cleaned up")
+                    # print(f"{task_name} has been removed!")
+                except asyncio.exceptions.TimeoutError:
+                    print("Error Timeout!")
 
     async def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration
@@ -37,6 +58,14 @@ class IModule(ABC):
             param_value (str): The parameter value
         """
         await self.ctx.Base.db_update_core_config(self.module_name, self.mod_config, param_key, param_value)
+
+    @property
+    def is_loaded(self) -> bool:
+        return self.__loaded
+    
+    @is_loaded.setter
+    def is_loaded(self, loaded: bool) -> None:
+        self.__loaded = loaded
 
     @property
     @abstractmethod

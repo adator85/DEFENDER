@@ -107,18 +107,6 @@ class MChannel(MainModel):
     """
 
 @dataclass
-class ColorModel(MainModel):
-    white: str  = "\x0300"
-    black: str  = "\x0301"
-    blue: str   = "\x0302"
-    green: str  = "\x0303"
-    red: str    = "\x0304"
-    yellow: str = "\x0306"
-    bold: str   = "\x02"
-    nogc: str   = "\x03"
-    underline: str = "\x1F"
-
-@dataclass
 class MConfig(MainModel):
     """Model Configuration"""
 
@@ -298,9 +286,6 @@ class MConfig(MainModel):
 
     DB_PATH: str = f"db{sep}"
     """The database path"""
-
-    COLORS: ColorModel = field(default_factory=ColorModel)
-    """Available colors in Defender"""
 
     BATCH_SIZE: int = 400
     """The batch size used for privmsg and notice"""

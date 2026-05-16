@@ -28,11 +28,11 @@ class Votekick(IModule):
         ...
 
     MOD_HEADER: dict[str, str] = {
-        'name':'votekick',
-        'version':'1.0.2',
-        'description':'Channel Democraty',
-        'author':'Defender Team',
-        'core_version':'Defender-6'
+        'name': 'votekick',
+        'version': '1.0.2',
+        'description': 'Channel Democraty',
+        'author': 'Defender Team',
+        'core_version': 'Defender-6'
     }
 
     def __init__(self, context: 'Loader') -> None:
@@ -121,9 +121,7 @@ class Votekick(IModule):
                 return None
 
         cmd = data.copy() if isinstance(data, list) else list(data).copy()
-        index, command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
-        if index == -1:
-            return None
+        command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
 
         try:
 
@@ -380,14 +378,14 @@ class Votekick(IModule):
                                 target_user = self.ctx.User.get_nickname(votec.target_user)
                                 if votec.vote_for >= votec.vote_against:
                                     await self.ctx.Irc.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                      msg=f"User {self.ctx.Config.COLORS.bold}{target_user}{self.ctx.Config.COLORS.nogc} has {votec.vote_against} votes against and {votec.vote_for} votes for. For this reason, it\'ll be kicked from the channel",
+                                                      msg=f"User {self.ctx.Const.Colors.bold}{target_user}{self.ctx.Const.Colors.nogc} has {votec.vote_against} votes against and {votec.vote_for} votes for. For this reason, it\'ll be kicked from the channel",
                                                       channel=channel
                                                       )
                                     await self.ctx.Irc.Protocol.send2socket(f":{dnickname} KICK {channel} {target_user} Following the vote, you are not welcome in {channel}")
                                 else:
                                     await self.ctx.Irc.Protocol.send_priv_msg(
                                             nick_from=dnickname, 
-                                            msg=f"User {self.ctx.Config.COLORS.bold}{target_user}{self.ctx.Config.COLORS.nogc} has {votec.vote_against} votes against and {votec.vote_for} votes for. For this reason, it\'ll remain in the channel",
+                                            msg=f"User {self.ctx.Const.Colors.bold}{target_user}{self.ctx.Const.Colors.nogc} has {votec.vote_against} votes against and {votec.vote_for} votes for. For this reason, it\'ll remain in the channel",
                                             channel=channel
                                             )
                                 

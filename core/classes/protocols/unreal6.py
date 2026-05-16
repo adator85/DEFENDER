@@ -21,7 +21,7 @@ class Unrealircd6(IProtocol):
                                'PROTOCTL', 'SERVER', 'SMOD', 'TKL', 'NETINFO',
                                'SETHOST', '006', '007', '018'}
 
-    def get_ircd_protocol_position(self, cmd: list[str], log: bool = False) -> tuple[int, Optional[str]]:
+    def get_ircd_protocol_position(self, cmd: list[str], log: bool = True) -> Optional[str]:
         """Get the position of known commands
 
         Args:
@@ -33,12 +33,12 @@ class Unrealircd6(IProtocol):
         """
         for index, token in enumerate(cmd):
             if token.upper() in self.known_protocol and index < 3:
-                return index, token.upper()
+                return token.upper()
         
         if log:
             self._ctx.Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
 
-        return -1, None
+        return None
 
     def register_command(self) -> None:
         m = self._ctx.Definition.MIrcdCommand
@@ -65,39 +65,6 @@ class Unrealircd6(IProtocol):
 
         return None
 
-    def parse_server_msg(self, server_msg: list[str]) -> Optional[str]:
-        """Parse the server message and return the command
-
-        Args:
-            server_msg (list[str]): The Original server message >>
-
-        Returns:
-            Union[str, None]: Return the command protocol name
-        """
-        protocol_exception = ['PING', 'SERVER', 'PROTOCTL']
-        increment = 0
-        server_msg_copy = server_msg.copy()
-        first_index = 0
-        second_index = 0
-        for index, element in enumerate(server_msg_copy):
-            # Handle the protocol exceptions ex. ping, server ....
-            if element in protocol_exception and index == 0:
-                return element
-
-            if element.startswith(':'):
-                increment += 1
-                first_index = index + 1 if increment == 1 else first_index
-                second_index = index if increment == 2 else second_index
-
-        second_index = len(server_msg_copy) if second_index == 0 else second_index
-
-        parsed_msg = server_msg_copy[first_index:second_index]
-
-        for cmd in parsed_msg:
-            if cmd in self.known_protocol:
-                return cmd
-
-        return None
 
     async def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -227,23 +194,6 @@ class Unrealircd6(IProtocol):
 
         self._ctx.Logs.debug(f'>> {__name__} Link information sent to the server')
 
-    async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
-        """Send a gline command to the server
-
-        Args:
-            nickname (str): The nickname of the client.
-            hostname (str): The hostname of the client.
-            set_by (str): The nickname who send the gline
-            expire_timestamp (int): Expire timestamp
-            set_at_timestamp (int): Set at timestamp
-            reason (str): The reason of the gline.
-        """
-        # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
-
-        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
-
-        return None
-
     async def send_set_nick(self, newnickname: str) -> None:
         """Change nickname of the server
         \n This method will also update the User object
@@ -299,25 +249,6 @@ class Unrealircd6(IProtocol):
             reason = 'Service Shutdown'
 
         await self.send2socket(f":{server_id} SQUIT {server_link} :{reason}")
-        return None
-
-    async def send_ungline(self, nickname:str, hostname: str) -> None:
-
-        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL - G {nickname} {hostname} {self._ctx.Config.SERVICE_NICKNAME}")
-
-        return None
-
-    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
-        # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
-
-        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
-
-        return None
-
-    async def send_unkline(self, nickname:str, hostname: str) -> None:
-
-        await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL - K {nickname} {hostname} {self._ctx.Config.SERVICE_NICKNAME}")
-
         return None
 
     async def send_sjoin(self, channel: str) -> None:
@@ -397,6 +328,18 @@ class Unrealircd6(IProtocol):
 
         except Exception as err:
             self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+
+    async def send_samode(self, channel_name: str, mode_to_apply: str, params: str = '') -> None:
+        """"""
+        _dnickname = self._ctx.Config.SERVICE_NICKNAME
+        chan_obj = self._ctx.Channel.get_channel(channel_name)
+
+        if chan_obj is None:
+            return None
+
+
+        await self.send2socket(f":{_dnickname} SAMODE {chan_obj.name} {mode_to_apply} {params}")
+        return None
 
     async def send_svspart(self, nick_to_part: str, channels: list[str], reason: str) -> None:
         user_obj = self._ctx.User.get_user(nick_to_part)
@@ -622,6 +565,58 @@ class Unrealircd6(IProtocol):
     async def send_raw(self, raw_command: str) -> None:
 
         await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} {raw_command}")
+
+        return None
+
+    # ------------------------------------------------------------------------
+    #                           OFFENSIVE COMMANDS
+    # ------------------------------------------------------------------------
+
+    async def send_kill(self, nickname: str, reason: str = 'Nickname has been killed') -> None:
+        """Send KILL command
+        """
+        sid = self._ctx.Config.SERVICE_ID
+        await self.send2socket(f":{sid} KILL {nickname} {reason}")
+
+        return None
+
+    async def send_gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        """Send a gline command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            hostname (str): The hostname of the client.
+            set_by (str): The nickname who send the gline
+            expire_timestamp (int): Expire timestamp
+            set_at_timestamp (int): Set at timestamp
+            reason (str): The reason of the gline.
+        """
+        # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
+        server_id = self._ctx.Config.SERVEUR_ID
+
+        await self.send2socket(f":{server_id} TKL + G {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
+
+        return None
+
+    async def send_ungline(self, nickname:str, hostname: str) -> None:
+        server_id = self._ctx.Config.SERVEUR_ID
+        service_nickname = self._ctx.Config.SERVICE_NICKNAME
+        await self.send2socket(f":{server_id} TKL - G {nickname} {hostname} {service_nickname}")
+
+        return None
+
+    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+        # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
+        server_id = self._ctx.Config.SERVEUR_ID
+        await self.send2socket(f":{server_id} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
+
+        return None
+
+    async def send_unkline(self, nickname:str, hostname: str) -> None:
+
+        server_id = self._ctx.Config.SERVEUR_ID
+        service_nickname = self._ctx.Config.SERVICE_NICKNAME
+        await self.send2socket(f":{server_id} TKL - K {nickname} {hostname} {service_nickname}")
 
         return None
 
@@ -1007,7 +1002,7 @@ class Unrealircd6(IProtocol):
                 # Initialisation terminé aprés le premier PING
                 await self.send_priv_msg(
                     nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Config.COLORS.green, self._ctx.Config.COLORS.nogc, self._ctx.Config.SERVICE_NICKNAME),
+                    msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Const.Colors.green, self._ctx.Const.Colors.nogc, self._ctx.Config.SERVICE_NICKNAME),
                     channel=self._ctx.Config.SERVICE_CHANLOG
                 )
                 self._ctx.Config.DEFENDER_INIT = 0
@@ -1125,9 +1120,9 @@ class Unrealircd6(IProtocol):
             # Auto Auth admin via fingerprint
             dnickname = self._ctx.Config.SERVICE_NICKNAME
             dchanlog  = self._ctx.Config.SERVICE_CHANLOG
-            green = self._ctx.Config.COLORS.green
-            red = self._ctx.Config.COLORS.red
-            nogc = self._ctx.Config.COLORS.nogc
+            green = self._ctx.Const.Colors.green
+            red = self._ctx.Const.Colors.red
+            nogc = self._ctx.Const.Colors.nogc
 
             # for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
             #     module.class_instance.cmd(serverMsg)
@@ -1196,7 +1191,7 @@ class Unrealircd6(IProtocol):
                     await self.send_notice(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
                         nick_to=user_trigger,
-                        msg=f"This command [{self._ctx.Config.COLORS.bold}{arg[0]}{self._ctx.Config.COLORS.bold}] is not available"
+                        msg=f"This command [{self._ctx.Const.Colors.bold}{arg[0]}{self._ctx.Const.Colors.bold}] is not available"
                     )
                     return None
 

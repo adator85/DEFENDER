@@ -71,13 +71,13 @@ class JSonRpcServer:
             self._ctx.Logs.debug("JSON-RPC Server off!")
             await self._ctx.Irc.Protocol.send_priv_msg(
                 self._ctx.Config.SERVICE_NICKNAME,
-                "[DEFENDER JSONRPC SERVER] RPC Server Stopped!",
+                "[ DEFENDER JSONRPC SERVER ] RPC Server Stopped!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
         else:
             await self._ctx.Irc.Protocol.send_priv_msg(
                 self._ctx.Config.SERVICE_NICKNAME,
-                "[DEFENDER JSONRPC SERVER] RPC Server is not running!",
+                "[ DEFENDER JSONRPC SERVER ] RPC Server is not running!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
             self._ctx.Logs.debug("JSON-RPC Server is not running!")
