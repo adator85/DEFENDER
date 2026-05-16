@@ -174,6 +174,15 @@ class Irc:
         admin_obj = self.ctx.Admin.get_admin(nickname)
         dnickname = self.ctx.Config.SERVICE_NICKNAME
         current_level = 0
+        _modules = self.ctx.ModuleUtils.model_get_module(module)
+
+        if _modules is None:
+            await proto.send_notice(
+                nick_from=dnickname,
+                nick_to=nickname,
+                msg=f" This module does not exist!"
+            )
+            return None
 
         if admin_obj is not None:
             current_level = admin_obj.level
