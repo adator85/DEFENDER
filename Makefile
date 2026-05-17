@@ -25,9 +25,6 @@ ifeq ($(OS), Linux)
 		exit 1; \
 	fi
 
-	$(info Creating the systemd user folder...)
-	mkdir -p $(HOME_DIR)/.config/systemd/user
-
 	$(info Creating Python Virtual Environment...)
 	python3 -m venv .pyenv
 	@. .pyenv/bin/activate && \
