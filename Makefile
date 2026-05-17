@@ -35,6 +35,16 @@ ifeq ($(OS), Linux)
 		pip cache purge && \
 		pip install -r requirements.txt
 
+	
+	# @if [ $(DISTRO) -eq "Alpine" ]; then \
+	#	@. .pyenv/bin/activate && python core/install.py --install-alpine
+	#	loginctl enable-linger $(CURRENT_USER)
+	#	@sleep 2
+	#	@export echo $DBUS_SESSION_BUS_ADDRESS && \
+	#		systemctl --user daemon-reload && \
+	#		systemctl --user start defender
+	# fi
+
 	@. .pyenv/bin/activate && python core/install.py --install
 	loginctl enable-linger $(CURRENT_USER)
 	@sleep 2

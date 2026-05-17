@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import os
 import sys
 import json
@@ -23,6 +24,7 @@ USER_HOME_DIRECTORY = Path.home()
 SYSTEMD_PATH = Path(USER_HOME_DIRECTORY).joinpath('.config', 'systemd', 'user')
 PY_EXEC = 'defender.py'
 SERVICE_FILE_NAME = 'defender.service'
+CURRENT_USER = getpass.getuser()
 
 @dataclass
 class Package:
@@ -98,7 +100,16 @@ def check_python_requirement():
     if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
 	    raise RuntimeError(f"Your Python Version is not meeting the requirement, System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
 
-def create_service_file():
+def is_openrc() -> bool:
+
+	try:
+		with open('/etc/os-release') as f:
+			return 'Alpine Linux' in f.read()
+
+	except FileNotFoundError:
+		return False
+
+def create_systemd_service_file():
 
 	pyenv = PYENV
 	systemd_path = SYSTEMD_PATH
@@ -132,13 +143,57 @@ WantedBy=default.target
 		print(f"If any issue, you can see the log file for debug {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
 		print(f"#"*24)
 
+def create_openrc_service_file():
+	openrc_path = Path(ROOT_PATH).joinpath('defender.initd')
+
+	contain = f'''#!/sbin/openrc-run
+name="Defender IRC Service"
+description="Defender IRC Bot"
+command="{PYENV}"
+command_args="{ROOT_PATH}/{PY_EXEC}"
+command_background=true
+pidfile="/run/${{RC_SVCNAME}}.pid"
+command_user="{CURRENT_USER}"
+directory="{ROOT_PATH}"
+
+depend() {{
+    need net
+}}
+'''
+
+	with open(openrc_path, "w") as file:
+		file.write(contain)
+
+	os.chmod(openrc_path, 0o755)
+
+	print('OpenRC init script generated: defender.initd')
+	print()
+	print('#' * 24)
+	print("Installation complete!")
+	print()
+	print("Quick start (non-root):")
+	print(f"  {PYENV} {PY_EXEC}")
+	print()
+	print("System service with OpenRC (requires root):")
+	print("  sudo cp defender.initd /etc/init.d/defender")
+	print("  sudo rc-update add defender default")
+	print("  sudo rc-service defender start")
+	print()
+	print(f"Log file: {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
+	print('#' * 24)
+
 def main():
 	if args.check_version:
 		check_python_requirement()
 		sys.exit(0)
 
 	if args.install:
-		create_service_file()
+		
+		if is_openrc():
+			create_openrc_service_file()
+		else:
+			create_systemd_service_file()
+
 		sys.exit(0)
 	
 	if args.git_update:

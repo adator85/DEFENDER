@@ -274,13 +274,11 @@ class Base:
             updated_rows = update.rowcount
             if updated_rows > 0:
                 setattr(dataclass_obj, param_key, self.convert_to_int(param_value))
-                self.logs.debug(f'Parameter updated : {param_key} - {param_value} | Module: {module_name}')
+                self.logs.debug(f'Parameter updated : {param_key}: {param_value} | Module: {module_name}')
             else:
-                self.logs.error(f'Parameter NOT updated : {param_key} - {param_value} | Module: {module_name}')
+                self.logs.error(f'Parameter NOT updated : {param_key}: {param_value} | Module: {module_name}')
         else:
             self.logs.error(f'Parameter and Module do not exist: Param ({param_key}) - Value ({param_value}) | Module ({module_name})')
-
-        self.logs.debug(dataclass_obj)
 
         return True
 
