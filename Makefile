@@ -36,21 +36,28 @@ ifeq ($(OS), Linux)
 		pip install -r requirements.txt
 
 	
-	# @if [ $(DISTRO) -eq "Alpine" ]; then \
-	#	@. .pyenv/bin/activate && python core/install.py --install-alpine
-	#	loginctl enable-linger $(CURRENT_USER)
-	#	@sleep 2
-	#	@export echo $DBUS_SESSION_BUS_ADDRESS && \
-	#		systemctl --user daemon-reload && \
-	#		systemctl --user start defender
-	# fi
-
+ifeq ($(DISTRO), Alpine Linux)
+	@. .pyenv/bin/activate && python core/install.py --install
+	$(info )
+	$(info ============================================)
+	$(info Installation complete!)
+	$(info To start Defender manually:)
+	$(info   .pyenv/bin/python defender.py)
+	$(info )
+	$(info For autostart with OpenRC (as root):)
+	$(info   sudo cp defender.initd /etc/init.d/defender)
+	$(info   sudo rc-update add defender default)
+	$(info   sudo rc-service defender start)
+	$(info ============================================)
+else
+	$(info Creating the systemd user folder...)
+	mkdir -p $(HOME_DIR)/.config/systemd/user
 	@. .pyenv/bin/activate && python core/install.py --install
 	loginctl enable-linger $(CURRENT_USER)
 	@sleep 2
-	@export echo $DBUS_SESSION_BUS_ADDRESS && \
-		systemctl --user daemon-reload && \
-		systemctl --user start defender
+	systemctl --user daemon-reload
+	systemctl --user start defender
+endif
 
 endif
 
