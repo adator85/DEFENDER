@@ -121,7 +121,6 @@ class Command(IModule):
         self.ctx.Commands.build_command(2, self.module_name, 'klinelist', 'List all K-line bans')
         self.ctx.Commands.build_command(3, self.module_name, 'map', 'Show the server network map')
 
-
     async def unload(self) -> None:
         self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
@@ -219,7 +218,9 @@ class Command(IModule):
                         channel_name = cmd[4] if self.ctx.Channel.is_valid_channel(cmd[4]) else None
                         nickname = userObj.nickname if userObj is not None else None
 
-                        if userObj is None:
+                        if userObj is None or channel_name is None:
+                            self.ctx.Logs.error(f"User is empty!") if userObj is None else None
+                            self.ctx.Logs.error(f"Channel name is empty!") if channel_name is None else None
                             return None
 
                         if 'r' not in userObj.umodes and 'o' not in userObj.umodes:

@@ -192,6 +192,9 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
 async def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
     
+    if uplink.mod_config.snitch == 0:
+        return None
+
     sender_obj, reciever_obj, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
 
     if sender_obj is not None:

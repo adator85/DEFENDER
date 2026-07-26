@@ -2,7 +2,8 @@ from core.definition import MainModel, dataclass, field
 
 @dataclass
 class ModConfModel(MainModel):
-    clone_nicknames: list[str] = field(default_factory=list)
+    # clone_nicknames: list[str] = field(default_factory=list)
+    snitch: int = 0
 
 @dataclass
 class MClone(MainModel):

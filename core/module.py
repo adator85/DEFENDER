@@ -376,12 +376,14 @@ class Module:
         Returns:
             Optional[MModule]: The Module Model Object
         """
-        for module in self.DB_MODULES:
-            if module.module_name.lower() == module_name.lower():
-                self._ctx.Logs.debug(f"[MODEL MODULE GET] The module {module_name} has been found in the model DB_MODULES")
-                return module
+        if module_name is not None:
+            for module in self.DB_MODULES:
+                if module.module_name.lower() == module_name.lower():
+                    self._ctx.Logs.debug(f"[MODEL MODULE GET] The module {module_name} has been found in the model DB_MODULES")
+                    return module
         
-        self._ctx.Logs.debug(f"[MODEL MODULE GET] The module {module_name} not found in the model DB_MODULES")
+            self._ctx.Logs.debug(f"[MODEL MODULE GET] The module {module_name} not found in the model DB_MODULES")
+
         return None
 
     def model_drop_module(self, module_name: str) -> bool:

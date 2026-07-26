@@ -35,7 +35,7 @@ class Configuration:
             
             return configuration.get('configuration', None)
         except FileNotFoundError as fe:
-            self.Logs.error(f'FileNotFound: {fe}')
+            self.Logs.error('FileNotFound: %s', fe)
             self.Logs.error('Configuration file not found please create config/configuration.yaml')
             exit("Configuration file not found please create config/configuration.yaml")
 
@@ -56,3 +56,5 @@ class Configuration:
 
         except TypeError as te:
             self.Logs.error(te)
+        except Exception as err:
+            self.Logs.error("General Error: %s", err, exc_info=True)

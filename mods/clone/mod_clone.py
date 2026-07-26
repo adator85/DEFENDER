@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Any
 from core.classes.interfaces.imodule import IModule
+from core.utils import tr
 import mods.clone.utils as utils
 import mods.clone.threads as thds
 import mods.clone.schemas as schemas
@@ -93,7 +94,7 @@ class Clone(IModule):
             self.ctx.Logs.debug(f"Cache Size = {self.ctx.Settings.get_cache_size()}")
 
         # Créer les nouvelles commandes du module
-        self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
+        self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill, snitch and say clones')
 
         await self.ctx.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_sjoin(self.ctx.Config.CLONE_CHANNEL)
@@ -165,6 +166,7 @@ class Clone(IModule):
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group_name | nickname] #channel")
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group_name | nickname] #channel")
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list [group name]")
+                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone snitch [ON|OFF]")
                         return None
 
                     option = str(cmd[1]).lower()
@@ -330,12 +332,69 @@ class Clone(IModule):
                                         msg=f"/msg {dnickname} clone say [clone_nickname] #channel message"
                                     )
 
+                        case 'snitch':
+                            # Syntax. !clone snitch [on|off]
+                            try:
+                                _status = str(cmd[2])
+
+                                if _status.lower() == 'on':
+                                    if self.mod_config.snitch == 1:
+                                        await self.ctx.Irc.Protocol.send_notice(
+                                            nick_from=dnickname,
+                                            nick_to=fromuser,
+                                            msg=tr("[MOD CLONE] snitch is already activated!")
+                                            )
+                                        return None
+                                    await self.update_configuration('snitch', 1)
+
+                                    await self.ctx.Irc.Protocol.send_notice(
+                                        nick_from=dnickname,
+                                        nick_to=fromuser,
+                                        msg=tr("[MOD CLONE] snitch has been activated!")
+                                        )
+
+                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                        nick_from=dnickname,
+                                        msg=tr("[ MOD CLONE ] Snitch mode activated"),
+                                        channel=self.ctx.Config.SERVICE_CHANLOG
+                                    )
+
+                                if _status.lower() == 'off':
+                                    if self.mod_config.snitch == 0:
+                                        await self.ctx.Irc.Protocol.send_notice(
+                                            nick_from=dnickname,
+                                            nick_to=fromuser,
+                                            msg=tr("[ MOD CLONE ] snitch is already deactivated!")
+                                            )
+                                        return None
+                                    await self.update_configuration('snitch', 0)
+
+                                    await self.ctx.Irc.Protocol.send_notice(
+                                        nick_from=dnickname,
+                                        nick_to=fromuser,
+                                        msg=tr("[ MOD CLONE ] snitch has been deactivated!")
+                                        )
+
+                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                        nick_from=dnickname,
+                                        msg=tr("[ MOD CLONE ] Snitch mode deactivated"),
+                                        channel=self.ctx.Config.SERVICE_CHANLOG
+                                    )
+
+                            except IndexError:
+                                await self.ctx.Irc.Protocol.send_notice(
+                                    nick_from=dnickname,
+                                    nick_to=fromuser,
+                                    msg=f"/msg {dnickname} clone snitch [on|off]"
+                                    )
+
                         case _:
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | group name | nickname]")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group name | nickname] #channel")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list [group name]")
+                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone snitch [ON|OFF]")
 
         except Exception as err:
             self.ctx.Logs.error(f'General Error: {err}', exc_info=True)

@@ -161,6 +161,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Config.SSL_VERSION = config_model_bakcup.SSL_VERSION
     uplink.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
     uplink.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
+    uplink.Config.DEFENDER_CONNEXION_DATETIME = config_model_bakcup.DEFENDER_CONNEXION_DATETIME
 
     conf_bkp_dict: dict = config_model_bakcup.to_dict()
     config_dict: dict = uplink.Config.to_dict()
@@ -235,29 +236,54 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     del (config_dict, _was_rpc_connected, config_model_bakcup,
          conf_bkp_dict, _count_reloaded_modules, _running_threads)
 
+    uplink.Config.DEFENDER_REHASH = 0
+
     # Run the python garbage collector.
     gc.collect()
-
-    uplink.Config.DEFENDER_REHASH = 0
 
     return None
 
 async def shutdown(uplink: 'Loader') -> None:
         """Methode qui va préparer l'arrêt complêt du service
         """
+        _tasks: list[asyncio.Task] = []
+        _proto = uplink.Irc.Protocol
+        _colors = uplink.Const.Colors
+
+        await (_proto.send_priv_msg(
+               uplink.Config.SERVICE_NICKNAME,
+               msg=f'[ {_colors.blue}{_colors.bold}QUIT INFO{_colors.nogc}{_colors.reset} ] Shutting down!',
+               channel=uplink.Config.SERVICE_CHANLOG))
+
         # Stop RpcServer if running
-        await uplink.RpcServer.stop_rpc_server()
+        # await uplink.RpcServer.stop_rpc_server()
+        _tasks.append(
+            asyncio.create_task(uplink.RpcServer.stop_rpc_server())
+        )
 
         # unload modules.
         uplink.Logs.debug(f"=======> Unloading all modules!")
         for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
-            await uplink.ModuleUtils.unload_one_module(module.module_name)
+            # await uplink.ModuleUtils.unload_one_module(module.module_name)
+            _tasks.append(
+                asyncio.create_task(
+                    uplink.ModuleUtils.unload_one_module(module.module_name)
+                )
+            )
 
         uplink.Base.stop_all_sockets()
-        await uplink.Base.stop_all_timers()
+        # await uplink.Base.stop_all_timers()
+        _tasks.append(
+            asyncio.create_task(uplink.Base.stop_all_timers())
+        )
         uplink.Base.stop_all_threads()
         uplink.Base.stop_all_io_threads()
-        await uplink.Base.stop_all_tasks()
+        # await uplink.Base.stop_all_tasks()
+        _tasks.append(
+            asyncio.create_task(uplink.Base.stop_all_tasks())
+        )
+
+        await asyncio.gather(*_tasks)
 
         if uplink.Settings.RUNNING_ASYNC_TASKS:
             await asyncio.wait([_dtask.task for _dtask in uplink.Settings.RUNNING_ASYNC_TASKS])

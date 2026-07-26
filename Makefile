@@ -32,7 +32,6 @@ ifeq ($(OS), Linux)
 		pip cache purge && \
 		pip install -r requirements.txt
 
-	
 ifeq ($(DISTRO), Alpine Linux)
 	@. .pyenv/bin/activate && python core/install.py --install
 	$(info )

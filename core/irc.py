@@ -120,6 +120,14 @@ class Irc:
         await self.Protocol.send_link()
 
     async def listen(self):
+
+        query = f"SELECT count(id) as c FROM {self.ctx.Config.TABLE_ADMIN}"
+        result = await self.ctx.Base.db_execute_query(query)
+        result_db = result.fetchone()
+
+        if result_db[0] > 0:
+            self.ctx.Commands.drop_command('firstauth', 'core')
+
         self.ctx.Base.create_thread(self.ctx.Utils.heartbeat, self.ctx, self.beat, run_once=True)
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
@@ -176,30 +184,32 @@ class Irc:
         current_level = 0
         _modules = self.ctx.ModuleUtils.model_get_module(module)
 
-        if _modules is None:
-            await proto.send_notice(
-                nick_from=dnickname,
-                nick_to=nickname,
-                msg=f" This module does not exist!"
-            )
-            return None
+        # if _modules is None:
+        #     await proto.send_notice(
+        #         nick_from=dnickname,
+        #         nick_to=nickname,
+        #         msg=f" This module does not exist!"
+        #     )
+        #     return None
 
         if admin_obj is not None:
             current_level = admin_obj.level
+        
+        _commands = self.ctx.Commands.get_commands_by_level(current_level)
 
         await proto.send_notice(nick_from=dnickname,nick_to=nickname, msg=f" ***************** LISTE DES COMMANDES *****************")
         header = f"  {'Level':<8}| {'Command':<25}| {'Module':<15}| {'Description':<35}"
         line = "-"*75
         await proto.send_notice(nick_from=dnickname,nick_to=nickname, msg=header)
         await proto.send_notice(nick_from=dnickname,nick_to=nickname, msg=f"  {line}")
-        for cmd in self.ctx.Commands.get_commands_by_level(current_level):
+        for cmd in _commands:
             if module is None or cmd.module_name.lower() == module.lower():
                 await proto.send_notice(
                         nick_from=dnickname, 
                         nick_to=nickname, 
                         msg=f"  {co.black}{cmd.command_level:<8}{co.nogc}| {cmd.command_name:<25}| {cmd.module_name:<15}| {cmd.description:<35}"
                         )
-        
+
         return None
 
     def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
@@ -765,7 +775,9 @@ class Irc:
                         msg=f"Arrêt du service {dnickname}"
                     )
                     self.signal = False
-                    await self.Protocol.send_squit(server_id=self.ctx.Config.SERVEUR_ID, server_link=self.ctx.Config.SERVEUR_LINK, reason=final_reason)
+                    await self.Protocol.send_squit(server_id=self.ctx.Config.SERVEUR_ID,
+                                                   server_link=self.ctx.Config.SERVEUR_LINK,
+                                                   reason=final_reason)
                     self.ctx.Logs.info(f'Arrêt du server {dnickname}')
                     self.ctx.Config.DEFENDER_RESTART = 0
 
