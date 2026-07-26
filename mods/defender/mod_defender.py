@@ -319,6 +319,7 @@ class Defender(IModule):
         match command:
 
             case 'show_reputation':
+                p = self.ctx.Irc.Protocol
 
                 if _mconf.reputation == 0:
                     await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg="Reputation system if off!")

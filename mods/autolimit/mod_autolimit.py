@@ -185,8 +185,10 @@ class Autolimit(IModule):
         p = self.ctx.Irc.Protocol
 
         try:
-            command = p.get_ircd_protocol_position(cmd)
-           
+            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
+            if index == -1:
+                return None
+            
             match command:
                 case 'PART':
                     # ['@unrealircd.org', ':001IN5101', 'PART', '#EFKnockr', ':Closing', 'Window']
@@ -196,13 +198,13 @@ class Autolimit(IModule):
                     # ['@msgid...', ':001', 'SJOIN', '1769989165', '#test', ':@001IN5101']
                     ...
 
-                case None:
+                case _:
                     pass
 
         except Exception as err:
             self.ctx.Logs.error(f"General Error {err}", exc_info=True)
 
-    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
         """All messages coming from the user commands (Mandatory)
 
         Args:
@@ -214,7 +216,6 @@ class Autolimit(IModule):
         u = self.ctx.User.get_user(user)
         c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
         proto = self.ctx.Irc.Protocol
-        colors = self.ctx.Const.Colors
         if u is None:
             return None
 
@@ -284,19 +285,15 @@ class Autolimit(IModule):
 
             case 'list':
                 try:
+                    red = self.ctx.Config.COLORS.red
+                    nogc = self.ctx.Config.COLORS.nogc
+                    bold = self.ctx.Config.COLORS.bold
 
                     if self.mod_config.global_autolimit == 1:
                         await self.ctx.Irc.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=u.nickname,
-                            msg=f"[AUTOLIMIT] The system is working {colors.red}{colors.bold}globally{colors.nogc}")
-
-                    if len(self.DB_AL_CHANNELS) < 1:
-                        await self.ctx.Irc.Protocol.send_notice(
-                            nick_from=dnickname,
-                            nick_to=u.nickname,
-                            msg=f"There are no channels in the autolimit database!")
-                        return None
+                            msg=f"[AUTOLIMIT] The system is working {red}{bold}globally{nogc}")
 
                     for autolimit in self.DB_AL_CHANNELS:
                         await self.ctx.Irc.Protocol.send_notice(

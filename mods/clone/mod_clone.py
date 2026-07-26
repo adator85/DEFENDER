@@ -42,9 +42,9 @@ class Clone(IModule):
         self._mod_config: Optional[schemas.ModConfModel] = None
 
         self.stop: bool = False
-        self.Schemas = schemas
-        self.Utils = utils
-        self.Threads = thds
+        self.Schemas: Optional[schemas] = None
+        self.Utils: Optional[utils] = None
+        self.Threads: Optional[thds] = None
         self.Faker: Optional['Faker'] = None
         self.Clone: Optional[CloneManager] = None
 
@@ -61,6 +61,13 @@ class Clone(IModule):
             None: Aucun retour n'es attendu
         """
 
+        # table_channel = '''CREATE TABLE IF NOT EXISTS clone_list (
+        #    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #    datetime TEXT,
+        #    nickname TEXT,
+        #    username TEXT
+        #    )
+        # '''
         # table_channel = '''CREATE TABLE IF NOT EXISTS clone_list (
         #    id INTEGER PRIMARY KEY AUTOINCREMENT,
         #    datetime TEXT,
@@ -114,8 +121,7 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
-        # if self.ctx.Config.DEFENDER_REHASH == 0:
-        #     self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+        self.ctx.Base.create_asynctask(func=self.Threads.thread_kill_clones(self))
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 

@@ -5,6 +5,7 @@ import mods.jsonrpc.schemas as schemas
 import mods.jsonrpc.threads as thds
 from typing import TYPE_CHECKING, Optional
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
+import core.definition as dfn
 from core.classes.interfaces.imodule import IModule
 from core.constants import Colors as colors
 from unrealircd_rpc_py.ConnectionFactory import ConnectionFactory
