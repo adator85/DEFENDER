@@ -42,9 +42,9 @@ class Clone(IModule):
         self._mod_config: Optional[schemas.ModConfModel] = None
 
         self.stop: bool = False
-        self.Schemas: Optional[schemas] = None
-        self.Utils: Optional[utils] = None
-        self.Threads: Optional[thds] = None
+        self.Schemas = None
+        self.Utils = None
+        self.Threads = None
         self.Faker: Optional['Faker'] = None
         self.Clone: Optional[CloneManager] = None
 
@@ -94,11 +94,10 @@ class Clone(IModule):
         self.Threads = thds
         self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
         self.Clone = CloneManager(self)
-        metadata = self.ctx.Settings.get_cache('UID_CLONE_DB')
 
+        metadata = self.ctx.Settings.get_cache('UID_CLONE_DB')
         if metadata is not None:
             self.Clone.UID_CLONE_DB = metadata
-            self.ctx.Logs.debug(f"Cache Size = {self.ctx.Settings.get_cache_size()}")
 
         # Créer les nouvelles commandes du module
         self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill, snitch and say clones')
@@ -121,7 +120,8 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
-        self.ctx.Base.create_asynctask(func=self.Threads.thread_kill_clones(self))
+        if self.ctx.Config.DEFENDER_REHASH == 0:
+            self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 

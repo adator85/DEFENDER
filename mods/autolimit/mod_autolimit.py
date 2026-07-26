@@ -185,9 +185,7 @@ class Autolimit(IModule):
         p = self.ctx.Irc.Protocol
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
-            if index == -1:
-                return None
+            command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
             
             match command:
                 case 'PART':
@@ -198,8 +196,8 @@ class Autolimit(IModule):
                     # ['@msgid...', ':001', 'SJOIN', '1769989165', '#test', ':@001IN5101']
                     ...
 
-                case _:
-                    pass
+                case None:
+                    return None
 
         except Exception as err:
             self.ctx.Logs.error(f"General Error {err}", exc_info=True)
