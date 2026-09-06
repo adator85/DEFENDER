@@ -74,7 +74,7 @@ class Irc:
         self.ctx.Commands.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
         self.ctx.Commands.build_command(4, 'core', 'quit', 'Disconnect the bot or user from the server.')
         self.ctx.Commands.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
-        # self.ctx.Commands.build_command(4, 'core', 'restart', 'Restart the bot or service.') # Memory leaks 
+        self.ctx.Commands.build_command(4, 'core', 'restart', 'Restart the bot or service.') # Memory leaks
         self.ctx.Commands.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
         self.ctx.Commands.build_command(4, 'core', 'print_vars', 'Print users in a file.')
         self.ctx.Commands.build_command(4, 'core', 'show_timers', 'Display active timers')
@@ -129,6 +129,7 @@ class Irc:
             self.ctx.Commands.drop_command('firstauth', 'core')
 
         self.ctx.Base.create_thread(self.ctx.Utils.heartbeat, self.ctx, self.beat, run_once=True)
+        self.ctx.Config.DEFENDER_RESTART = 0
         while self.signal:
             data = await self.reader.readuntil(b'\r\n')
             await self.send_response(data.splitlines())
@@ -526,16 +527,21 @@ class Irc:
                     level = int(user_from_db[2])
                     language = str(user_from_db[3])
                     self.insert_db_admin(current_client.uid, account, level, language)
-                    await self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {Colors.green}{str(command).upper()} SUCCESS{Colors.nogc} ] - {current_client.nickname} ({account}) est désormais connecté a {dnickname}",
-                                                channel=dchanlog)
+                    await self.Protocol.send_priv_msg(nick_from=dnickname,
+                                                      msg=tr("[ %s%s SUCCESS%s ] - %s (%s) is now connected to %s",
+                                                             Colors.green, str(command).upper(), Colors.nogc,
+                                                             current_client.nickname, account, dnickname),
+                                                      channel=dchanlog)
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Successfuly connected to %s", dnickname))
+                    self.ctx.Logs.info("User %s (%s) is now connected to %s", current_client.nickname, account, dnickname)
                     return None
                 else:
                     await self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {Colors.red}{str(command).upper()} FAIL{Colors.nogc} ] - {current_client.nickname} a tapé un mauvais mot de pass",
+                                                msg=tr('[ %s%s FAIL%s ] - %s provided a wrong password!',
+                                                       Colors.red, str(command).upper(), Colors.nogc, current_client.nickname),
                                                 channel=dchanlog)
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Wrong password!"))
+                    self.ctx.Logs.info("Wrong password used by %s (%s) ! Authentication failed!", current_client.nickname, current_client.remote_ip)
                     return None
 
             case 'addaccess':
@@ -554,10 +560,10 @@ class Irc:
                     return None
 
                 except IndexError as ie:
-                    self.ctx.Logs.error(f'_hcmd addaccess: {ie}')
+                    self.ctx.Logs.error('_hcmd addaccess: %s', ie)
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
                 except TypeError as te:
-                    self.ctx.Logs.error(f'_hcmd addaccess: out of index : {te}')
+                    self.ctx.Logs.error('_hcmd addaccess: out of index : %s', te)
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
 
             case 'editaccess':

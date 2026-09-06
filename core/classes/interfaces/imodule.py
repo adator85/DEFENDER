@@ -49,6 +49,8 @@ class IModule(ABC):
                     # print(f"{task_name} has been removed!")
                 except asyncio.exceptions.TimeoutError:
                     print("Error Timeout!")
+                except ValueError as ve:
+                    self.ctx.Logs.error("IO Task %s is not available: %s", _dtask, ve)
 
     async def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration

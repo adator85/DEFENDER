@@ -72,14 +72,14 @@ class Command(IModule):
         for c in new_cmds:
             self.ctx.Irc.Protocol.known_protocol.add(c)
 
-        self.ctx.Commands.build_command(2, self.module_name, 'join', 'Join a channel')
-        self.ctx.Commands.build_command(2, self.module_name, 'part', 'Leave a channel')
+        self.ctx.Commands.build_command(3, self.module_name, 'join', 'Join a channel')
+        self.ctx.Commands.build_command(3, self.module_name, 'part', 'Leave a channel')
         self.ctx.Commands.build_command(2, self.module_name, 'owner', 'Give channel ownership to a user')
         self.ctx.Commands.build_command(2, self.module_name, 'deowner', 'Remove channel ownership from a user')
         self.ctx.Commands.build_command(2, self.module_name, 'protect', 'Protect a user from being kicked')
         self.ctx.Commands.build_command(2, self.module_name, 'deprotect', 'Remove protection from a user')
-        self.ctx.Commands.build_command(2, self.module_name, 'op', 'Grant operator privileges to a user')
-        self.ctx.Commands.build_command(2, self.module_name, 'deop', 'Remove operator privileges from a user')
+        self.ctx.Commands.build_command(1, self.module_name, 'op', 'Grant operator privileges to a user')
+        self.ctx.Commands.build_command(1, self.module_name, 'deop', 'Remove operator privileges from a user')
         self.ctx.Commands.build_command(1, self.module_name, 'halfop', 'Grant half-operator privileges to a user')
         self.ctx.Commands.build_command(1, self.module_name, 'dehalfop', 'Remove half-operator privileges from a user')
         self.ctx.Commands.build_command(1, self.module_name, 'voice', 'Grant voice privileges to a user')
@@ -205,9 +205,9 @@ class Command(IModule):
                                                 )
 
                     except KeyError as ke:
-                        self.ctx.Logs.error(ke)
+                        self.ctx.Logs.error('Key Error: %s', ke)
                     except Exception as err:
-                        self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                        self.ctx.Logs.warning('Unknown Error: %s', str(err))
 
                 case 'SJOIN':
                     # ['@msgid=yldTlbwAGbzCGUcCIHi3ku;time=2024-11-11T17:56:24.297Z', ':001', 'SJOIN', '1728815963', '#znc', ':001LQ0L0C']
@@ -219,8 +219,8 @@ class Command(IModule):
                         nickname = userObj.nickname if userObj is not None else None
 
                         if userObj is None or channel_name is None:
-                            self.ctx.Logs.error(f"User is empty!") if userObj is None else None
-                            self.ctx.Logs.error(f"Channel name is empty!") if channel_name is None else None
+                            self.ctx.Logs.error("User is empty!") if userObj is None else None
+                            self.ctx.Logs.error("Channel name is empty!") if channel_name is None else None
                             return None
 
                         if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
@@ -231,10 +231,10 @@ class Command(IModule):
                         db_result = db_query.fetchone()
                         if db_result:
                             id, mode = db_result
-                            await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVICE_ID} MODE {channel_name} {mode} {userObj.nickname}")
+                            await self.ctx.Irc.Protocol.send_set_mode(mode, nickname=userObj.nickname, channel=channel_name)
 
                     except KeyError as ke:
-                        self.ctx.Logs.error(f"Key Error: {err}")
+                        self.ctx.Logs.error("Key Error: %s", ke)
 
                 case _:
                     pass

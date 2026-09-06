@@ -42,6 +42,29 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
         uplink (Irc): The Irc instance
         reason (str): The reason of the restart.
     """
+    _dconf = uplink.Config
+    _logs = uplink.Logs
+
+    uplink.Config.DEFENDER_RESTART = 1
+    _running_threads = uplink.Base.running_threads.copy()
+    for dthread in _running_threads:
+        dthread.event.clear()
+        uplink.Base.running_threads.remove(dthread)
+
+    # unload modules.
+    _db_modules = uplink.ModuleUtils.model_get_loaded_modules().copy()
+    for module in _db_modules:
+        await uplink.ModuleUtils.unload_one_module(module.module_name)
+
+    uplink.Base.garbage_collector_thread()
+
+    uplink.Irc.signal = False
+    await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
+    uplink.Logs.info('Restarting Defender ...')
+
+    del uplink
+    return None
+
     _running_threads = uplink.Base.running_threads.copy()
     for dthread in _running_threads:
         if dthread.thread.name == 'heartbeat':
@@ -61,12 +84,16 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     for mod in REHASH_MODULES:
         if mod in sys.modules:
             del sys.modules[mod]
-        importlib.import_module(mod)
+            importlib.import_module(mod)
+        else:
+            _logs.error("Module: %s not found!", mod)
+            
 
     # uplink.ModuleUtils.model_clear()          # Clear loaded modules.
     # uplink.User.UID_DB.clear()                # Clear User Object
     # uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-    # uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
+    uplink.Commands.DB_COMMANDS.clear()
+    uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
 
     del (uplink.User, uplink.Admin, uplink.Channel,
         uplink.Reputation, uplink.ModuleUtils, uplink.Sasl,
@@ -90,7 +117,7 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
 
     uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
     await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
-    uplink.Logs.debug('Restarting Defender ...')
+    uplink.Logs.info('Restarting Defender ...')
 
     uplink.Irc.signal = False
     if uplink.Irc.writer:
@@ -106,8 +133,9 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
         print("*"*56, uplink.Irc.writer, "CLOSED")
         del uplink.Irc.writer, uplink.Irc.reader
 
-    uplink.Config.DEFENDER_RESTART = 0
-    await uplink.Irc.run()
+    uplink.Config.DEFENDER_RESTART = 1
+
+    return None
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     _colors = uplink.Const.Colors

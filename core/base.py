@@ -797,6 +797,8 @@ class Base:
             try:
                 await asyncio.wait_for(_task, timeout=2)
             except asyncio.exceptions.TimeoutError:
+                self.logs.debug(f'[IO TASK CRASH] {_task.get_name()} has been forced to cancel Timeout')
+            except asyncio.exceptions.CancelledError:
                 self.logs.debug(f'[IO TASK CRASH] {_task.get_name()} has been forced to cancel')
 
             if not _task.cancel():
