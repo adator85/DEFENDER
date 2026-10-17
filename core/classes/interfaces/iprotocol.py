@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 class IProtocol(ABC):
 
-    Handler: Optional[CommandHandler] = None
+    Handler: CommandHandler
 
     def __init__(self, context: 'Loader'):
         self.name: Optional[str] = None
@@ -51,7 +51,7 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    async def send_priv_msg(self, nick_from: str, msg: str, channel: str | None = None, nick_to: str | None = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -213,7 +213,11 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_uid(self, nickname:str, username: str, hostname: str, uid:str, umodes: str, vhost: str, remote_ip: str, realname: str, geoip: str, print_log: bool = True) -> None:
+    async def send_uid(self, nickname:str, username: str,
+                       hostname: str, uid:str, umodes: str,
+                       vhost: str, remote_ip: str,
+                       realname: str, geoip: str,
+                       print_log: bool = True) -> None:
         """Send UID to the server
         - Insert User to User Object
         Args:
@@ -230,7 +234,9 @@ class IProtocol(ABC):
         """
 
     @abstractmethod
-    async def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    async def send_join_chan(self, uidornickname: str, channel: str,
+                             password: str | None = None,
+                             print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -361,7 +367,7 @@ class IProtocol(ABC):
         Returns:
             tuple(MUser, newnickname(str), timestamp(str)): Tuple of the response.
 
-            >>> MUser, newnickname, timestamp
+            >>> ('MUser', 'newnickname', 'timestamp')
         """
 
     @abstractmethod

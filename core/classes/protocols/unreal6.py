@@ -42,29 +42,29 @@ class Unrealircd6(IProtocol):
 
     def register_command(self) -> None:
         m = self._ctx.Definition.MIrcdCommand
-        self.Handler.register(m(command_name="PING", func=self.on_server_ping))
-        self.Handler.register(m(command_name="UID", func=self.on_uid))
-        self.Handler.register(m(command_name="QUIT", func=self.on_quit))
-        self.Handler.register(m(command_name="SERVER", func=self.on_server))
-        self.Handler.register(m(command_name="SJOIN", func=self.on_sjoin))
-        self.Handler.register(m(command_name="EOS", func=self.on_eos))
-        self.Handler.register(m(command_name="PROTOCTL", func=self.on_protoctl))
-        self.Handler.register(m(command_name="SVS2MODE", func=self.on_svs2mode))
-        self.Handler.register(m(command_name="SQUIT", func=self.on_squit))
-        self.Handler.register(m(command_name="PART", func=self.on_part))
-        self.Handler.register(m(command_name="VERSION", func=self.on_version_msg))
-        self.Handler.register(m(command_name="UMODE2", func=self.on_umode2))
-        self.Handler.register(m(command_name="NICK", func=self.on_nick))
-        self.Handler.register(m(command_name="REPUTATION", func=self.on_reputation))
-        self.Handler.register(m(command_name="SMOD", func=self.on_smod))
-        self.Handler.register(m(command_name="SASL", func=self.on_sasl))
-        self.Handler.register(m(command_name="MD", func=self.on_md))
-        self.Handler.register(m(command_name="PRIVMSG", func=self.on_privmsg))
-        self.Handler.register(m(command_name="KICK", func=self.on_kick))
-        self.Handler.register(m(command_name="SETHOST", func=self.on_sethost))
+        if self.Handler:
+            self.Handler.register(m(command_name="PING", func=self.on_server_ping))
+            self.Handler.register(m(command_name="UID", func=self.on_uid))
+            self.Handler.register(m(command_name="QUIT", func=self.on_quit))
+            self.Handler.register(m(command_name="SERVER", func=self.on_server))
+            self.Handler.register(m(command_name="SJOIN", func=self.on_sjoin))
+            self.Handler.register(m(command_name="EOS", func=self.on_eos))
+            self.Handler.register(m(command_name="PROTOCTL", func=self.on_protoctl))
+            self.Handler.register(m(command_name="SVS2MODE", func=self.on_svs2mode))
+            self.Handler.register(m(command_name="SQUIT", func=self.on_squit))
+            self.Handler.register(m(command_name="PART", func=self.on_part))
+            self.Handler.register(m(command_name="VERSION", func=self.on_version_msg))
+            self.Handler.register(m(command_name="UMODE2", func=self.on_umode2))
+            self.Handler.register(m(command_name="NICK", func=self.on_nick))
+            self.Handler.register(m(command_name="REPUTATION", func=self.on_reputation))
+            self.Handler.register(m(command_name="SMOD", func=self.on_smod))
+            self.Handler.register(m(command_name="SASL", func=self.on_sasl))
+            self.Handler.register(m(command_name="MD", func=self.on_md))
+            self.Handler.register(m(command_name="PRIVMSG", func=self.on_privmsg))
+            self.Handler.register(m(command_name="KICK", func=self.on_kick))
+            self.Handler.register(m(command_name="SETHOST", func=self.on_sethost))
 
         return None
-
 
     async def send2socket(self, message: str, print_log: bool = True) -> None:
         """Envoit les commandes à envoyer au serveur.
@@ -75,10 +75,11 @@ class Unrealircd6(IProtocol):
         """
         try:
             async with self._ctx.Settings.AILOCK:
-                self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[0]))
-                await self._ctx.Irc.writer.drain()
-                if print_log:
-                    self._ctx.Logs.debug(f'<< {message}')
+                if self._ctx.Irc.writer:
+                    self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[0]))
+                    await self._ctx.Irc.writer.drain()
+                    if print_log:
+                        self._ctx.Logs.debug(f'<< {message}')
 
         except UnicodeDecodeError as ude:
             self._ctx.Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
@@ -203,10 +204,14 @@ class Unrealircd6(IProtocol):
         await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} NICK {newnickname}")
 
         user_obj = self._ctx.User.get_user(self._ctx.Config.SERVICE_NICKNAME)
-        self._ctx.User.update_nickname(user_obj.uid, newnickname)
+
+        if user_obj:
+            self._ctx.User.update_nickname(user_obj.uid, newnickname)
+
         return None
 
-    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None,
+                            channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
         """Set a mode to channel or to a nickname or for a user in a channel
         This method will always send as the command as Defender's nickname (service_id)
 

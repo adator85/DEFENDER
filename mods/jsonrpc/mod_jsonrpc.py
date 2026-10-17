@@ -5,7 +5,6 @@ import mods.jsonrpc.schemas as schemas
 import mods.jsonrpc.threads as thds
 from typing import TYPE_CHECKING, Optional
 from unrealircd_rpc_py.objects.Definition import LiveRPCResult
-import core.definition as dfn
 from core.classes.interfaces.imodule import IModule
 from core.constants import Colors as colors
 from unrealircd_rpc_py.ConnectionFactory import ConnectionFactory
@@ -73,7 +72,7 @@ class Jsonrpc(IModule):
         
         return None
 
-    def create_tables(self) -> None:
+    async def create_tables(self) -> None:
         return None
 
     async def load(self) -> None:
@@ -126,12 +125,12 @@ class Jsonrpc(IModule):
                     msg=f"[ {self.ctx.Const.Colors.red}JSONRPC ERROR{self.ctx.Const.Colors.nogc} ] {err.__str__()}",
                     channel=self.ctx.Config.SERVICE_CHANLOG
                     )
-            self.ctx.Logs.error(f"JSONRPC ERROR: {err.__str__()}")
+            self.ctx.Logs.error("JSONRPC ERROR: %s", err.__str__())
 
     async def unload(self) -> None:
 
         if self.ctx.Config.SERVEUR_PROTOCOL != 'unreal6':
-            await self.ctx.ModuleUtils.unload_one_module(self.ctx.Irc, self.module_name, False)
+            await self.ctx.ModuleUtils.unload_one_module(self.module_name, False)
             return None
 
         if self.is_streaming:
@@ -143,18 +142,25 @@ class Jsonrpc(IModule):
 
         if self.mod_config.jsonrpc == 1:
             self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
-            await asyncio.wait_for(self._task_unsubscribe.task, timeout=10)
-            await asyncio.wait_for(self._task_subscribe.task, timeout=10)
+
+            if self._task_unsubscribe is not None and self._task_unsubscribe.task is not None:
+                await asyncio.wait_for(self._task_unsubscribe.task, timeout=10)
+            if self._task_subscribe is not None and self._task_subscribe.task is not None:
+                await asyncio.wait_for(self._task_subscribe.task, timeout=10)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
-        self.ctx.Logs.debug(f"Unloading {self.module_name}")
+        self.ctx.Logs.debug("Unloading %s",self.module_name)
+        del self._task_unsubscribe, self._task_subscribe
+        del self.Rpc, self.LiveRpc
+
         return None
 
-    def cmd(self, data: list[str]) -> None:
-
+    async def cmd(self, data: list[str]) -> None:
         return None
 
-    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]]) -> None:
+    async def hcmds(self, user: str, channel: Optional[str],
+                    cmd: list[str],
+                    fullcmd: Optional[list[str]]) -> None:
 
         _proto = self.ctx.Irc.Protocol
         _log = self.ctx.Logs
@@ -163,6 +169,9 @@ class Jsonrpc(IModule):
         dchannel = self.ctx.Config.SERVICE_CHANLOG
         fromuser = user
         fromchannel = str(channel) if not channel is None else None
+
+        if _proto is None:
+            return None
 
         match command:
 
@@ -184,13 +193,15 @@ class Jsonrpc(IModule):
                             self._task_unsubscribe = self.ctx.DAsyncio.create_safe_task(thds.thread_unsubscribe(self))
                             await self.update_configuration('jsonrpc', 0)
 
-                except IndexError as ie:
-                    _log.error(ie)
+                except IndexError:
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc on')
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jsonrpc off')
+                    return None
 
             case 'jruser':
                 try:
                     if len(cmd) < 2:
-                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'/msg {dnickname} jruser get nickname')
+                        await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'Syntax. /msg {dnickname} jruser get nickname')
                         return None
 
                     option = str(cmd[1]).lower()
@@ -199,38 +210,39 @@ class Jsonrpc(IModule):
                             nickname = str(cmd[2])
                             rpc = self.Rpc
 
-                            UserInfo = rpc.User.get(nickname)
-                            if UserInfo.error.code != 0:
-                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'{UserInfo.error.message}')
+                            user_info = rpc.User.get(nickname)
+                            if user_info.error.code != 0 and user_info.error.message is not None:
+                                await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=user_info.error.message)
                                 return None
 
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'UID                  : {UserInfo.id}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {UserInfo.name}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {UserInfo.user.username}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {UserInfo.user.realname}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {UserInfo.user.modes}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {[chan.name for chan in UserInfo.user.channels]}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {UserInfo.user.security_groups}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {UserInfo.user.reputation}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser,msg=f'UID                  : {user_info.id}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'NICKNAME             : {user_info.name}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'USERNAME             : {user_info.user.username}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REALNAME             : {user_info.user.realname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'MODES                : {user_info.user.modes}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CHANNELS             : {[chan.name for chan in user_info.user.channels]}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SECURITY GROUP       : {user_info.user.security_groups}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'REPUTATION           : {user_info.user.reputation}')
 
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {UserInfo.ip}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {UserInfo.geoip.country_code}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {UserInfo.geoip.asn}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {UserInfo.geoip.asname}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {UserInfo.user.cloakedhost}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {UserInfo.hostname}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {UserInfo.user.vhost}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {UserInfo.client_port}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {UserInfo.server_port}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IP                   : {user_info.ip}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'COUNTRY CODE         : {user_info.geoip.country_code}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASN                  : {user_info.geoip.asn}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'ASNAME               : {user_info.geoip.asname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLOAKED HOST         : {user_info.user.cloakedhost}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'HOSTNAME             : {user_info.hostname}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'VHOST                : {user_info.user.vhost}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CLIENT PORT          : {user_info.client_port}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'SERVER PORT          : {user_info.server_port}')
                             
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {UserInfo.tls.certfp}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {UserInfo.tls.cipher}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CERTFP               : {user_info.tls.certfp}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CIPHER               : {user_info.tls.cipher}')
 
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {UserInfo.idle_since}')
-                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {UserInfo.connected_since}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'IDLE SINCE           : {user_info.idle_since}')
+                            await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f'CONNECTED SINCE      : {user_info.connected_since}')
 
-                except IndexError as ie:
-                    _log.error(ie)
+                except IndexError:
+                    await _proto.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                             msg=f'Syntax. /msg {dnickname} jruser get nickname')
 
             case 'jrinstances':
                 try:
@@ -239,4 +251,7 @@ class Jsonrpc(IModule):
                     await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre d'instance ConnectionFactory: {self.ctx.Utils.get_number_gc_objects(ConnectionFactory)}")
                     await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Nombre de toute les instances: {self.ctx.Utils.get_number_gc_objects()}")
                 except Exception as err:
-                    _log.error(f"Unknown Error: {err}")
+                    _log.error('Unknown Error: %s', err)
+
+            case _:
+                return None

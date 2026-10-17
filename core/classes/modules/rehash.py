@@ -65,6 +65,7 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     del uplink
     return None
 
+    '''
     _running_threads = uplink.Base.running_threads.copy()
     for dthread in _running_threads:
         if dthread.thread.name == 'heartbeat':
@@ -136,6 +137,7 @@ async def restart_service(uplink: 'Loader', reason: str = "Restarting with no re
     uplink.Config.DEFENDER_RESTART = 1
 
     return None
+    '''
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     _colors = uplink.Const.Colors
@@ -274,25 +276,20 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 async def shutdown(uplink: 'Loader') -> None:
         """Methode qui va préparer l'arrêt complêt du service
         """
-        _tasks: list[asyncio.Task] = []
         _proto = uplink.Irc.Protocol
         _colors = uplink.Const.Colors
+        _list_mods = uplink.ModuleUtils.model_get_loaded_modules().copy()
 
         await (_proto.send_priv_msg(
                uplink.Config.SERVICE_NICKNAME,
                msg=f'[ {_colors.blue}{_colors.bold}QUIT INFO{_colors.nogc}{_colors.reset} ] Shutting down!',
                channel=uplink.Config.SERVICE_CHANLOG))
 
-        # Stop RpcServer if running
-        # await uplink.RpcServer.stop_rpc_server()
-        _tasks.append(
-            asyncio.create_task(uplink.RpcServer.stop_rpc_server())
-        )
-
-        # unload modules.
-        uplink.Logs.debug(f"=======> Unloading all modules!")
+        uplink.Logs.debug("=======> Unloading all modules!")
+        _tasks: list[asyncio.Task] = [asyncio.create_task(uplink.RpcServer.stop_rpc_server()),
+                                      asyncio.create_task(uplink.Base.stop_all_timers()),
+                                      asyncio.create_task(uplink.Base.stop_all_tasks())]
         for module in uplink.ModuleUtils.model_get_loaded_modules().copy():
-            # await uplink.ModuleUtils.unload_one_module(module.module_name)
             _tasks.append(
                 asyncio.create_task(
                     uplink.ModuleUtils.unload_one_module(module.module_name)
@@ -300,21 +297,13 @@ async def shutdown(uplink: 'Loader') -> None:
             )
 
         uplink.Base.stop_all_sockets()
-        # await uplink.Base.stop_all_timers()
-        _tasks.append(
-            asyncio.create_task(uplink.Base.stop_all_timers())
-        )
         uplink.Base.stop_all_threads()
         uplink.Base.stop_all_io_threads()
-        # await uplink.Base.stop_all_tasks()
-        _tasks.append(
-            asyncio.create_task(uplink.Base.stop_all_tasks())
-        )
 
         await asyncio.gather(*_tasks)
 
         if uplink.Settings.RUNNING_ASYNC_TASKS:
-            await asyncio.wait([_dtask.task for _dtask in uplink.Settings.RUNNING_ASYNC_TASKS])
+            await asyncio.wait([t.task for t in uplink.Settings.RUNNING_ASYNC_TASKS if t.task is not None])
 
         uplink.Base.running_timers.clear()
         uplink.Base.running_threads.clear()

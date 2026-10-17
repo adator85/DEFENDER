@@ -31,6 +31,7 @@ class Irc:
         # Define Reader and Writer
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
+        self.Protocol: 'IProtocol'
 
         # Date et heure de la premiere connexion de Defender
         self.defender_connexion_datetime = self.ctx.Config.DEFENDER_CONNEXION_DATETIME
@@ -49,7 +50,7 @@ class Irc:
         self.first_score: int = 0
 
         # Define first IP connexion
-        self.first_connexion_ip: str = None
+        self.first_connexion_ip: Optional[str] = None
 
         # Load Commands Utils
         # self.Commands = self.Loader.Commands
@@ -109,15 +110,23 @@ class Irc:
 
     async def connect(self):
 
-        if self.ctx.Config.SERVEUR_SSL:
-            self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP, self.ctx.Config.SERVEUR_PORT, ssl=self.ctx.Utils.get_ssl_context())
-        else:
-            self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP, self.ctx.Config.SERVEUR_PORT)
+        try:
+            if self.ctx.Config.SERVEUR_SSL:
+                self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP,
+                                                                         self.ctx.Config.SERVEUR_PORT,
+                                                                         ssl=self.ctx.Utils.get_ssl_context())
+            else:
+                self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP,
+                                                                         self.ctx.Config.SERVEUR_PORT)
 
-        self.init_service_user()
-        self.Protocol: 'IProtocol' = self.ctx.PFactory.get()
-        self.Protocol.register_command()
-        await self.Protocol.send_link()
+            self.init_service_user()
+            self.Protocol = self.ctx.PFactory.get()
+            self.Protocol.register_command()
+            await self.Protocol.send_link()
+
+        except OSError as err:
+            self.ctx.Logs.critical('Connection Failed: %s', err)
+            self.signal = False
 
     async def listen(self):
 
@@ -125,14 +134,15 @@ class Irc:
         result = await self.ctx.Base.db_execute_query(query)
         result_db = result.fetchone()
 
-        if result_db[0] > 0:
+        if result_db is not None and result_db[0] > 0:
             self.ctx.Commands.drop_command('firstauth', 'core')
 
         self.ctx.Base.create_thread(self.ctx.Utils.heartbeat, self.ctx, self.beat, run_once=True)
         self.ctx.Config.DEFENDER_RESTART = 0
         while self.signal:
-            data = await self.reader.readuntil(b'\r\n')
-            await self.send_response(data.splitlines())
+            if self.reader:
+                data = await self.reader.readuntil(b'\r\n')
+                await self.send_response(data.splitlines())
 
     async def send_response(self, responses:list[bytes]) -> None:
         try:
@@ -169,11 +179,15 @@ class Irc:
         """## Joining saved channels"""
         exec_query = await self.ctx.Base.db_execute_query(f'SELECT distinct channel_name FROM {self.ctx.Config.TABLE_CHANNEL}')
         result_query = exec_query.fetchall()
+        if self.Protocol is None:
+            return None
 
         if result_query:
             for chan_name in result_query:
                 chan = chan_name[0]
                 await self.Protocol.send_sjoin(channel=chan)
+
+        return None
 
     async def generate_help_menu(self, nickname: str, module: Optional[str] = None) -> None:
 
@@ -329,14 +343,13 @@ class Irc:
         Args:
             data (list[str]): Server response splitted in a list
         """
+        _proto = self.Protocol
+        _logs = self.ctx.Logs
+        _utils = self.ctx.Utils
         try:
-            _proto = self.Protocol
-            _logs = self.ctx.Logs
-            _utils = self.ctx.Utils
-
             original_response: list[str] = data.copy()
             if len(original_response) < 2:
-                _logs.warning(f'Size ({str(len(original_response))}) - {original_response}')
+                _logs.warning('Size (%s) - %s',str(len(original_response)), original_response)
                 return None
 
             _logs.debug(f">> {_utils.hide_sensitive_data(original_response)}")
@@ -347,7 +360,11 @@ class Irc:
                 if parsed.command_name.upper() == parsed_protocol:
                     await parsed.func(original_response)
                     for module in modules:
-                        await module.class_instance.cmd(original_response) if _utils.is_coroutinefunction(module.class_instance.cmd) else module.class_instance.cmd(original_response)
+                        if module.class_instance:
+                            if _utils.is_coroutinefunction(module.class_instance.cmd):
+                                await module.class_instance.cmd(original_response)
+                            else:
+                                module.class_instance.cmd(original_response)
 
         except IndexError as ie:
             _logs.error(f"IndexError: {ie}")

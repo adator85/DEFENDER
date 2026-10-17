@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from core.constants import Colors as colors
+from core.constants import Colors
 
 if TYPE_CHECKING:
     from mods.jsonrpc.mod_jsonrpc import Jsonrpc
@@ -11,7 +11,7 @@ async def thread_subscribe(uplink: 'Jsonrpc') -> None:
 
     if uplink.is_streaming:
         await uplink.ctx.Irc.Protocol.send_priv_msg(nick_from=snickname,
-                msg=f"[ {colors.green}JSONRPC INFO{colors.nogc} ] IRCd Json-rpc already connected!", 
+                msg=f"[ {Colors.green}JSONRPC INFO{Colors.nogc} ] IRCd Json-rpc already connected!",
                 channel=schannel
             )
         return None
@@ -24,13 +24,13 @@ async def thread_subscribe(uplink: 'Jsonrpc') -> None:
     if code == 0:
         await uplink.ctx.Irc.Protocol.send_priv_msg(
                 nick_from=snickname,
-                msg=f"[ {colors.green}JSONRPC INFO{colors.nogc} ] Stream is OFF on IRCd json-rpc server!",
+                msg=f"[ {Colors.green}JSONRPC INFO{Colors.nogc} ] Stream is OFF on IRCd json-rpc server!",
                 channel=schannel
             )
     else:
         await uplink.ctx.Irc.Protocol.send_priv_msg(
                 nick_from=snickname,
-                msg=f"[ {colors.red}JSONRPC ERROR{colors.nogc} ] Stream has crashed on IRCd json-rpc server! {code} - {message}",
+                msg=f"[ {Colors.red}JSONRPC ERROR{Colors.nogc} ] Stream has crashed on IRCd json-rpc server! {code} - {message}",
                 channel=schannel
             )
 
@@ -44,7 +44,7 @@ async def thread_unsubscribe(uplink: 'Jsonrpc') -> None:
 
     if not uplink.is_streaming:
         await uplink.ctx.Irc.Protocol.send_priv_msg(nick_from=snickname,
-                msg=f"[ {colors.green}JSONRPC INFO{colors.nogc} ] IRCd Json-rpc is already off!",
+                msg=f"[ {Colors.green}JSONRPC INFO{Colors.nogc} ] IRCd Json-rpc is already off!",
                 channel=schannel
             )
         return None
@@ -58,6 +58,8 @@ async def thread_unsubscribe(uplink: 'Jsonrpc') -> None:
     if code != 0:
         await uplink.ctx.Irc.Protocol.send_priv_msg(
                 nick_from=snickname,
-                msg=f"[{colors.red}JSONRPC ERROR{colors.nogc}] {message} ({code})",
+                msg=f"[{Colors.red}JSONRPC ERROR{Colors.nogc}] {message} ({code})",
                 channel=schannel
             )
+
+    return None

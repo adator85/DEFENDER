@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 from core.classes.interfaces.imodule import IModule
 from core.definition import DTask, MChannel
+from core.constants import Colors
 from mods.autolimit import schemas
 from mods.autolimit.helper import ALHelper
 
@@ -32,11 +33,11 @@ class Autolimit(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
-        self._mod_config: Optional[schemas.ModConfModel] = None
+        self._mod_config: schemas.ModConfModel
+        self.helper: ALHelper
+        self.task_increment_autolimit: Optional[DTask]
         self._is_running = True
         self._io = context.DAsyncio
-        self.task_increment_autolimit: Optional[DTask] = None
-        self.helper: Optional[ALHelper] = None
 
     async def load(self):
         # Variable qui va contenir les options de configuration du module Defender
@@ -228,6 +229,9 @@ class Autolimit(IModule):
         match args:
             case 'set':
                 # Syntax. AUTOLIMIT SET #channel <amount> <interval>
+                if u.nickname is None:
+                    return None
+
                 if self.mod_config.global_autolimit == 1:
                     await proto.send_notice(nick_from=dnickname, nick_to=u.nickname,
                                             msg="The autolimit is set globally! "
@@ -283,9 +287,9 @@ class Autolimit(IModule):
 
             case 'list':
                 try:
-                    red = self.ctx.Config.COLORS.red
-                    nogc = self.ctx.Config.COLORS.nogc
-                    bold = self.ctx.Config.COLORS.bold
+                    red = Colors.red
+                    nogc = Colors.nogc
+                    bold = Colors.bold
 
                     if self.mod_config.global_autolimit == 1:
                         await self.ctx.Irc.Protocol.send_notice(

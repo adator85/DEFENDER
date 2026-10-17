@@ -1,5 +1,5 @@
-from abc import ABC, abstractmethod
 import asyncio
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, Union
 from dataclasses import dataclass
 
@@ -14,6 +14,8 @@ class IModule(ABC):
         """The Model containing the module parameters
         """
 
+    MOD_HEADER: dict[str, str]
+
     def __init__(self, uplink: 'Loader') -> None:
 
         # import the context
@@ -23,13 +25,15 @@ class IModule(ABC):
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
         # Log the module
-        self.ctx.Logs.debug(f'Loading Module {self.module_name} {id(self)} ...')
+        self.ctx.Logs.debug('Loading Module %s (%s) ...',
+                            self.module_name, id(self))
 
         # Is module compliant
         self.__loaded = False
 
     def __del__(self):
-        self.ctx.Logs.info(f"[I-MODULE] Module {self.__class__.__name__} ({id(self)}) has been cleaned-up!")
+        self.ctx.Logs.info("[I-MODULE] Module %s (%s) has been destroyed!",
+                           self.__class__.__name__, id(self))
 
     async def sync_db(self) -> None:
         # Sync the configuration with core configuration (Mandatory)
@@ -45,10 +49,11 @@ class IModule(ABC):
                 try:
                     await asyncio.wait_for(_dtask.task, timeout=5)
                     self.ctx.DAsyncio.running_iotasks.remove(_dtask)
-                    self.ctx.Logs.debug(f"[I-MODULE CLEANUP] The module {self.__class__.__name__} has been cleaned up")
+                    self.ctx.Logs.debug("[I-MODULE CLEANUP] The module %s has been cleaned up (%s)",
+                                        self.__class__.__name__, id(self))
                     # print(f"{task_name} has been removed!")
-                except asyncio.exceptions.TimeoutError:
-                    print("Error Timeout!")
+                except asyncio.exceptions.TimeoutError as iotimeout:
+                    self.ctx.Logs.error("Error Timeout! %s", iotimeout)
                 except ValueError as ve:
                     self.ctx.Logs.error("IO Task %s is not available: %s", _dtask, ve)
 

@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 from dataclasses import dataclass
 from core.classes.interfaces.imodule import IModule
 import mods.command.utils as utils
@@ -25,7 +25,10 @@ class Command(IModule):
 
     def __init__(self, uplink: 'Loader'):
         super().__init__(uplink)
-        self._mod_config: Optional[Command.ModConfModel] = self.ModConfModel()
+        self._mod_config: Command.ModConfModel = self.ModConfModel()
+        self.user_to_notice: str
+        self.show_219: bool
+
     
     @property
     def mod_config(self) -> ModConfModel:
@@ -34,8 +37,6 @@ class Command(IModule):
     async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -62,8 +63,6 @@ class Command(IModule):
         # sync the database with local variable (Mandatory)
         await self.sync_db()
 
-        # Module Utils
-        self.mod_utils = utils
         self.user_to_notice: str = ''
         self.show_219: bool = True
 
@@ -214,24 +213,28 @@ class Command(IModule):
                     # Check if the user has an automode
                     try:
                         user_uid = self.ctx.User.clean_uid(cmd[5])
-                        userObj: MUser = self.ctx.User.get_user(user_uid)
+                        user_obj: MUser | None = self.ctx.User.get_user(user_uid or '')
                         channel_name = cmd[4] if self.ctx.Channel.is_valid_channel(cmd[4]) else None
-                        nickname = userObj.nickname if userObj is not None else None
+                        nickname = user_obj.nickname if user_obj is not None else ''
 
-                        if userObj is None or channel_name is None:
-                            self.ctx.Logs.error("User is empty!") if userObj is None else None
-                            self.ctx.Logs.error("Channel name is empty!") if channel_name is None else None
+                        if user_obj is None or channel_name is None:
+                            if user_obj is None:
+                                self.ctx.Logs.error("User is empty!")
+                            if channel_name is None:
+                                self.ctx.Logs.error("Channel name is empty!")
                             return None
 
-                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
+                        if 'r' not in user_obj.umodes and 'o' not in user_obj.umodes:
                             return None
 
                         db_data: dict[str, str] = {"nickname": nickname.lower(), "channel": channel_name.lower()}
                         db_query = await self.ctx.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE LOWER(nickname) = :nickname AND LOWER(channel) = :channel", db_data)
                         db_result = db_query.fetchone()
                         if db_result:
-                            id, mode = db_result
-                            await self.ctx.Irc.Protocol.send_set_mode(mode, nickname=userObj.nickname, channel=channel_name)
+                            _id, mode = db_result
+                            await self.ctx.Irc.Protocol.send_set_mode(mode,
+                                                                      nickname=user_obj.nickname,
+                                                                      channel_name=channel_name)
 
                     except KeyError as ke:
                         self.ctx.Logs.error("Key Error: %s", ke)
@@ -242,21 +245,20 @@ class Command(IModule):
         except Exception as err:
             self.ctx.Logs.error(f"General Error: {err}", exc_info=True)
 
-    async def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: Optional[str]):
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.ctx.Config.SERVICE_NICKNAME
         service_id = self.ctx.Config.SERVICE_ID
-        dchanlog = self.ctx.Config.SERVICE_CHANLOG
-        self.user_to_notice = uidornickname
-        fromuser = uidornickname
-        fromchannel = channel_name
+        self.user_to_notice = user
+        fromuser = user
+        fromchannel = channel
 
         match command:
 
             case 'automode':
                 try:
-                    await self.mod_utils.set_automode(self, cmd, fromuser)
+                    await utils.set_automode(self, cmd, fromuser)
                 except IndexError:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
@@ -266,170 +268,176 @@ class Command(IModule):
 
             case 'deopall':
                 try:
-                    # await self.mod_utils.set_deopall(self, fromchannel)
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'o')
+                    await utils.set_mode_to_all(self, fromchannel, '-', 'o')
                 except Exception as err:
                     self.ctx.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'devoiceall':
                 try:
-                    # await self.mod_utils.set_devoiceall(self, fromchannel)
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'v')
+                    await utils.set_mode_to_all(self, fromchannel, '-', 'v')
                 except Exception as err:
                     self.ctx.Logs.error(f'Unknown Error: {str(err)}')
 
             case 'voiceall':
                 try:
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'v')
+                    await utils.set_mode_to_all(self, fromchannel, '+', 'v')
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'opall':
                 try:
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'o')
+                    await utils.set_mode_to_all(self, fromchannel, '+', 'o')
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'op':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+o')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+o')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-o')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-o')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'owner':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+q')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+q')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deowner':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-q')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-q')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'protect':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+a')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+a')
 
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'deprotect':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-a')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-a')
 
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'halfop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+h')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+h')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'dehalfop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-h')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-h')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'voice':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+v')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+v')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'devoice':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-v')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-v')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'ban':
                 try:
-                    await self.mod_utils.set_ban(self, cmd, '+', fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd BAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    await utils.set_ban(self, cmd, '+', fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.warning('Unknown Error: %s', str(err))
 
             case 'unban':
                 try:
-                    await self.mod_utils.set_ban(self, cmd, '-', fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd UNBAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    await utils.set_ban(self, cmd, '-', fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kick':
                 try:
-                    await self.mod_utils.set_kick(self, cmd, fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd KICK: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
+                    await utils.set_kick(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'kickban':
                 try:
-                    await self.mod_utils.set_kickban(self, cmd, fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd KICKBAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
+                    await utils.set_kickban(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'join':
                 try:
-                    await self.mod_utils.set_assign_channel_to_service(self, cmd, fromuser)
-                except IndexError as ie:
-                    self.ctx.Logs.debug(f'{ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
+                    await utils.set_assign_channel_to_service(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case 'part':
                 try:
                     # Syntax. !part #channel
-                    await self.mod_utils.set_unassign_channel_to_service(self, cmd, fromuser)
-                except IndexError as ie:
-                    self.ctx.Logs.debug(f'{ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
+                    await utils.set_unassign_channel_to_service(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
@@ -947,4 +955,4 @@ class Command(IModule):
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
 
             case _:
-                pass
+                return None
