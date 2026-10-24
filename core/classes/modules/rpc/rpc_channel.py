@@ -9,7 +9,8 @@ class RPCChannel(IRPC):
     def __init__(self, loader: 'Loader'):
         super().__init__(loader)
     
-    def channel_list(self) -> JSONResponse:
+    def channel_list(self, **kwargs) -> JSONResponse:
         self.reset()
+        _kwargs = kwargs.get('my_arg', None)
         self.response_model['result'] = [chan.to_dict() for chan in self.ctx.Channel.UID_CHANNEL_DB]
         return JSONResponse(self.response_model)

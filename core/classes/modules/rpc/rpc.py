@@ -7,7 +7,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from core.classes.modules.rpc.rpc_user import RPCUser
 from core.classes.modules.rpc.rpc_channel import RPCChannel
 from core.classes.modules.rpc.rpc_command import RPCCommand
@@ -24,7 +24,7 @@ class JSonRpcServer:
         self.port = context.Config.RPC_PORT
         self.routes: list[Route] = []
         self.app_jsonrpc: Starlette
-        self.server: uvicorn.Server
+        self.server: Optional[uvicorn.Server] = None
 
         self.methods: dict = {
             'user.list': RPCUser(context).user_list,
@@ -34,6 +34,9 @@ class JSonRpcServer:
             'command.get.by.name': RPCCommand(context).command_get_by_name,
             'command.get.by.module': RPCCommand(context).command_get_by_module
         }
+
+    def __del__(self):
+        self._ctx.Logs.debug('%s has been destroyed', self.__class__.__name__)
 
     async def start_rpc_server(self):
         
@@ -58,13 +61,25 @@ class JSonRpcServer:
                 "[DEFENDER JSONRPC SERVER] RPC Server started!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
-            await self.server.serve()
+
+            if self.server:
+                await self.server.serve()
+
             self._ctx.Logs.debug("Server is going to shutdown!")
         else:
             self._ctx.Logs.debug("Server already running")
     
     async def stop_rpc_server(self):
         
+        if not self.live:
+            await self._ctx.Irc.Protocol.send_priv_msg(
+                self._ctx.Config.SERVICE_NICKNAME,
+                "[ DEFENDER JSONRPC SERVER ] RPC Server is not running!",
+                self._ctx.Config.SERVICE_CHANLOG
+            )
+            self._ctx.Logs.debug("JSON-RPC Server is not running!")
+            return
+
         if self.server:
             self.server.should_exit = True
             await self.server.shutdown()
