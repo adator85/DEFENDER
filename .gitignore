@@ -13,4 +13,5 @@ configuration_unreal6.json
 test*.py
 users.txt
 modules.txt
+objects.txt
 tracker.py
