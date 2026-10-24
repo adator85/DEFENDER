@@ -22,7 +22,7 @@ async def set_automode(uplink: 'Command', cmd: list[str], client: str) -> None:
 
             nickname = str(cmd[2])
             mode = str(cmd[3])
-            chan: str = str(cmd[4]).lower() if uplink.ctx.Channel.is_valid_channel(cmd[4]) else None
+            chan = str(cmd[4]).lower() if uplink.ctx.Channel.is_valid_channel(cmd[4]) else None
             sign = mode[0] if mode.startswith( ('+', '-')) else None
             clean_mode = mode[1:] if len(mode) > 0 else None
 
@@ -70,10 +70,13 @@ async def set_automode(uplink: 'Command', cmd: list[str], client: str) -> None:
 
                 if db_query.rowcount > 0:
                     await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Automode {mode} applied to {nickname} in {chan}")
-                    if uplink.ctx.Channel.is_user_present_in_channel(chan, uplink.ctx.User.get_uid(nickname)):
+                    if uplink.ctx.Channel.is_user_present_in_channel(chan, uplink.ctx.User.get_uid(nickname) or ''):
                         await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {chan} {mode} {nickname}")
             else:
-                await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"AUTOMODE {mode} cannot be added to {nickname} in {chan} because it doesn't exist")
+                await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                          msg=f"AUTOMODE {mode} cannot be added to {nickname} in {chan} because it doesn't exist")
+
+            return None
 
         case 'list':
             db_query = await uplink.ctx.Base.db_execute_query("SELECT nickname, channel, mode FROM command_automode")
@@ -88,17 +91,22 @@ async def set_automode(uplink: 'Command', cmd: list[str], client: str) -> None:
                 await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
                                             msg=f"Nickname: {db_nickname} | Channel: {db_channel} | Mode: {db_mode}")
 
+            return None
+
         case _:
             await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
             await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
             await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(allowed_modes)}")
 
+            return None
+
 async def set_deopall(uplink: 'Command', channel_name: str) -> None:
 
     service_id = uplink.ctx.Config.SERVICE_ID
-    dnickname = uplink.ctx.User.get_user(service_id)
-    await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} SVSMODE {channel_name} -o")
-    await uplink.ctx.Irc.Protocol.send_set_mode('+o', nickname=dnickname.nickname, channel_name=channel_name)
+    _user = uplink.ctx.User.get_user(service_id)
+    if _user:
+        await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} SVSMODE {channel_name} -o")
+        await uplink.ctx.Irc.Protocol.send_set_mode('+o', nickname=_user.nickname, channel_name=channel_name)
     return None
 
 async def set_devoiceall(uplink: 'Command', channel_name: str) -> None:
@@ -110,12 +118,13 @@ async def set_devoiceall(uplink: 'Command', channel_name: str) -> None:
 async def set_mode_to_all(uplink: 'Command', channel_name: str, action: Literal['+', '-'], pmode: str) -> None:
     
     chan_info = uplink.ctx.Channel.get_channel(channel_name)
+    uids_split = []
     service_id = uplink.ctx.Config.SERVICE_ID
-    dnickname = uplink.ctx.Config.SERVICE_NICKNAME
     set_mode = pmode
     mode:str = ''
     users:str = ''
-    uids_split = [chan_info.uids[i:i + 6] for i in range(0, len(chan_info.uids), 6)]
+    if chan_info:
+        uids_split = [chan_info.uids[i:i + 6] for i in range(0, len(chan_info.uids), 6)]
 
     # await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {channel_name} {action}{set_mode} {dnickname}")
     for uid in uids_split:
@@ -132,10 +141,9 @@ async def set_mode_to_all(uplink: 'Command', channel_name: str, action: Literal[
 async def set_operation(uplink: 'Command', cmd: list[str], channel_name: Optional[str], client: str, mode: str) -> None:
 
     dnickname = uplink.ctx.Config.SERVICE_NICKNAME
-    service_id = uplink.ctx.Config.SERVICE_ID
     if channel_name is None:
         await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=client, msg=f" Right command : /msg {dnickname} {mode} [#SALON] [NICKNAME]")
-        return False
+        return None
 
     if len(cmd) == 1:
         # await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {channel_name} {mode} {client}")
@@ -168,7 +176,7 @@ async def set_ban(uplink: 'Command', cmd: list[str], action: Literal['+', '-'], 
     nickname = cmd[2]
 
     await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {sentchannel} {action}b {nickname}!*@*")
-    uplink.ctx.Logs.debug(f'{client} has banned {nickname} from {sentchannel}')
+    uplink.ctx.Logs.debug('%s has banned %s from %s', client, nickname, sentchannel)
     return None
 
 async def set_kick(uplink: 'Command', cmd: list[str], client: str) -> None:
@@ -180,13 +188,13 @@ async def set_kick(uplink: 'Command', cmd: list[str], client: str) -> None:
     sentchannel = str(cmd[1]) if uplink.ctx.Channel.is_valid_channel(cmd[1]) else None
     if sentchannel is None:
         await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=client, msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
-        return False
+        return None
 
     nickname = cmd[2]
     final_reason = ' '.join(cmd[3:])
 
     await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} KICK {sentchannel} {nickname} {final_reason}")
-    uplink.ctx.Logs.debug(f'{client} has kicked {nickname} from {sentchannel} : {final_reason}')
+    uplink.ctx.Logs.debug('%s has kicked %s from %s : %s', client, nickname, sentchannel, final_reason)
     return None
 
 async def set_kickban(uplink: 'Command', cmd: list[str], client: str) -> None:
@@ -198,13 +206,15 @@ async def set_kickban(uplink: 'Command', cmd: list[str], client: str) -> None:
     sentchannel = str(cmd[1]) if uplink.ctx.Channel.is_valid_channel(cmd[1]) else None
     if sentchannel is None:
         await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=client, msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
-        return False
+        return None
     nickname = cmd[2]
     final_reason = ' '.join(cmd[3:])
 
     await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} KICK {sentchannel} {nickname} {final_reason}")
     await uplink.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {sentchannel} +b {nickname}!*@*")
-    uplink.ctx.Logs.debug(f'{client} has kicked and banned {nickname} from {sentchannel} : {final_reason}')
+    uplink.ctx.Logs.debug('%s has kicked and banned %s from %s : %s',
+                          client, nickname, sentchannel, final_reason)
+    return None
 
 async def set_assign_channel_to_service(uplink: 'Command', cmd: list[str], client: str) -> None:
 
@@ -243,7 +253,7 @@ async def set_unassign_channel_to_service(uplink: 'Command', cmd: list[str], cli
         await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=client, msg=f"[!] CAN'T LEFT {sent_channel} AS IT IS LOG CHANNEL [!]")
         return None
 
-    await uplink.ctx.Irc.Protocol.send_part_chan(uidornickname=dnickname, channel=sent_channel)
+    await uplink.ctx.Irc.Protocol.send_part_chan(uidornickname=dnickname, channel=sent_channel or '')
     await uplink.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=client, msg=f" Has left {sent_channel}")
 
     await uplink.ctx.Channel.db_query_channel('del', uplink.module_name, sent_channel)
