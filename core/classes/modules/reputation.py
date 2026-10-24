@@ -6,8 +6,6 @@ if TYPE_CHECKING:
 
 class Reputation:
 
-    UID_REPUTATION_DB: list[MReputation] = []
-
     def __init__(self, loader: 'Loader'):
         """
 
@@ -15,6 +13,7 @@ class Reputation:
             loader (Loader): The Loader instance.
         """
         self._ctx = loader
+        self.UID_REPUTATION_DB: list[MReputation] = []
 
     def insert(self, new_reputation_user: MReputation) -> bool:
         """Insert a new Reputation User object
@@ -29,11 +28,11 @@ class Reputation:
             self._ctx.Logs.debug('Wrong object, you must pass an MReputation object!')
             return False
 
-        _ruser = self.get_reputation(new_reputation_user.uid)
+        _ruser = self.get_reputation(new_reputation_user.uid or '')
 
         if _ruser is None:
             self.UID_REPUTATION_DB.append(new_reputation_user)
-            self._ctx.Logs.debug(f'New Reputation User Captured: ({new_reputation_user})')
+            self._ctx.Logs.debug('New Reputation User Captured: (%s)', new_reputation_user)
             return True
 
         return False
@@ -69,7 +68,7 @@ class Reputation:
         """
         _ruser = self.get_reputation(uid)
         if _ruser:
-            self._ctx.Logs.debug(f'UID ({_ruser.uid}) has been deleted')
+            self._ctx.Logs.debug('UID (%s) has been deleted', _ruser.uid)
             self.UID_REPUTATION_DB.remove(_ruser)
             return True
 

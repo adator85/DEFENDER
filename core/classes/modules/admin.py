@@ -6,15 +6,13 @@ if TYPE_CHECKING:
 
 class Admin:
 
-    UID_ADMIN_DB: list[MAdmin] = []
-
     def __init__(self, loader: 'Loader') -> None:
         """
-
         Args:
             loader (Loader): The Loader Instance.
         """
         self._ctx = loader
+        self.UID_ADMIN_DB: list[MAdmin] = []
 
     def insert(self, new_admin: MAdmin) -> bool:
         """Insert a new admin object model
@@ -28,11 +26,11 @@ class Admin:
 
         for record in self.UID_ADMIN_DB:
             if record.uid == new_admin.uid:
-                self._ctx.Logs.debug(f'{record.uid} already exist')
+                self._ctx.Logs.debug('[ ADMIN ] %s already exist', record.uid)
                 return False
 
         self.UID_ADMIN_DB.append(new_admin)
-        self._ctx.Logs.debug(f'A new admin ({new_admin.nickname}) has been created')
+        self._ctx.Logs.debug('[ ADMIN ] New admin (%s) has been created', new_admin.nickname)
         return True
 
     def update_nickname(self, uid: str, new_admin_nickname: str) -> bool:
@@ -50,11 +48,14 @@ class Admin:
             if record.uid == uid:
                 # If the admin exist, update and do not go further
                 record.nickname = new_admin_nickname
-                self._ctx.Logs.debug(f'UID ({record.uid}) has been updated with new nickname {new_admin_nickname}')
+                self._ctx.Logs.debug('[ ADMIN ] UID (%s) has been updated with new nickname %s',
+                                     record.uid, new_admin_nickname)
                 return True
 
 
-        self._ctx.Logs.debug(f'The new nickname {new_admin_nickname} was not updated, uid = {uid} - The Client is not an admin')
+        self._ctx.Logs.debug('[ ADMIN ] The new nickname %s was not updated, '
+                             'uid = %s - The Client is not an admin',
+                             new_admin_nickname, uid)
         return False
 
     def update_level(self, nickname: str, new_admin_level: int) -> bool:
@@ -71,10 +72,13 @@ class Admin:
         if admin_obj:
             # If the admin exist, update and do not go further
             admin_obj.level = new_admin_level
-            self._ctx.Logs.debug(f'Admin ({admin_obj.nickname}) has been updated with new level {new_admin_level}')
+            self._ctx.Logs.debug('[ ADMIN ] Admin (%s) has been updated with new level %s',
+                                 admin_obj.nickname, new_admin_level)
             return True
 
-        self._ctx.Logs.debug(f'The new level {new_admin_level} was not updated in local variable, nickname = {nickname} is not logged in')
+        self._ctx.Logs.debug('[ ADMIN ] The new level %s was not updated in local variable, '
+                             'nickname = %s is not logged in!',
+                             new_admin_level, nickname)
 
         return False
 
@@ -90,10 +94,13 @@ class Admin:
         admin_obj = self.get_admin(uidornickname)
         if admin_obj:
             self.UID_ADMIN_DB.remove(admin_obj)
-            self._ctx.Logs.debug(f'UID ({admin_obj.uid}) has been deleted')
+            self._ctx.Logs.debug('[ ADMIN ]UID (%s) has been deleted',
+                                 admin_obj.uid)
             return True
 
-        self._ctx.Logs.debug(f'The UID {uidornickname} was not deleted from the local variable (admin not connected)')
+        self._ctx.Logs.debug('[ ADMIN ]The UID %s was not deleted '
+                             'from the local variable (admin not connected)',
+                             uidornickname)
 
         return False
 
@@ -177,7 +184,7 @@ class Admin:
         Returns:
             bool: True if found
         """
-        if fp is None:
+        if not fp:
             return False
 
         query = f"SELECT user, level, language FROM {self._ctx.Config.TABLE_ADMIN} WHERE fingerprint = :fp"
@@ -193,7 +200,8 @@ class Admin:
                 admin_obj = self._ctx.Definition.MAdmin(**user_obj.to_dict(), account=account, level=level, language=language)
                 if self.insert(admin_obj):
                     self._ctx.Settings.current_admin = admin_obj
-                    self._ctx.Logs.debug(f"[Fingerprint login] {user_obj.nickname} ({admin_obj.account}) has been logged in successfully!")
+                    self._ctx.Logs.debug("[ ADMIN ] %s (%s) has been logged in successfully using fingerprint!",
+                                         user_obj.nickname, admin_obj.account)
                     return True
         
         return False

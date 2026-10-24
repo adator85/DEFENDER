@@ -8,8 +8,6 @@ if TYPE_CHECKING:
 
 class User:
 
-    UID_DB: list['MUser'] = []
-
     @property
     def current_user(self) -> 'MUser':
         return self._current_user
@@ -20,13 +18,14 @@ class User:
 
     def __init__(self, loader: 'Loader'):
         self._ctx = loader
-        self._current_user: Optional['MUser'] = None
+        self._current_user: 'MUser'
+        self.UID_DB: list['MUser'] = []
 
     def insert(self, new_user: 'MUser') -> bool:
         """Insert a new User object
 
         Args:
-            newUser (UserModel): New userModel object
+            new_user (UserModel): New userModel object
 
         Returns:
             bool: True if inserted
@@ -57,7 +56,7 @@ class User:
             return False
 
         user_obj.nickname = new_nickname
-        self._ctx.Logs.debug(f"UID ({uid}) has benn update with new nickname ({new_nickname}).")
+        self._ctx.Logs.debug("UID (%s) has benn update with new nickname (%s).", uid, new_nickname)
         return True
 
     def update_mode(self, uidornickname: str, modes: str) -> bool:
@@ -79,8 +78,8 @@ class User:
         action = modes[0]
         new_modes = modes[1:]
 
-        existing_umodes = user_obj.umodes
-        umodes = user_obj.umodes
+        existing_umodes = user_obj.umodes or ''
+        umodes = user_obj.umodes or ''
 
         if action == '+':
 
@@ -192,7 +191,7 @@ class User:
 
         return user_obj.to_dict()
 
-    def is_exist(self, uidornikname: str) -> bool:
+    def is_exist(self, uidornickname: str) -> bool:
         """Check if the UID or the nickname exist in the USER DB
 
         Args:
@@ -201,14 +200,15 @@ class User:
         Returns:
             bool: True if exist
         """
-        user_obj = self.get_user(uidornickname=uidornikname)
+        user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
             return False
 
         return True
 
-    def clean_uid(self, uid: str) -> Optional[str]:
+    @staticmethod
+    def clean_uid(uid: str) -> Optional[str]:
         """Clean UID by removing @ / % / + / ~ / * / :
 
         Args:
@@ -219,18 +219,18 @@ class User:
         """
 
         pattern = fr'[:|@|%|\+|~|\*]*'
-        parsed_UID = sub(pattern, '', uid)
+        parsed_uid = sub(pattern, '', uid)
 
-        if not parsed_UID:
+        if not parsed_uid:
             return None
 
-        return parsed_UID
+        return parsed_uid
 
     def get_user_uptime_in_minutes(self, uidornickname: str) -> float:
         """Retourne depuis quand l'utilisateur est connecté (in minutes).
 
         Args:
-            uid (str): The uid or le nickname
+            uidornickname (str): The uid or le nickname
 
         Returns:
             int: How long in minutes has the user been connected?
@@ -241,12 +241,12 @@ class User:
             return 0
 
         # Convertir la date enregistrée dans UID_DB en un objet {datetime}
-        connected_time_string = get_user.connexion_datetime
+        _connected_datetime = get_user.connexion_datetime
 
-        if isinstance(connected_time_string, datetime):
-            connected_time = connected_time_string
+        if isinstance(_connected_datetime, datetime):
+            connected_time = _connected_datetime
         else:
-            connected_time = datetime.strptime(connected_time_string, "%Y-%m-%d %H:%M:%S.%f")
+            connected_time = datetime.strptime(str(_connected_datetime), "%Y-%m-%d %H:%M:%S.%f")
 
         # What time is it ?
         current_datetime = datetime.now()

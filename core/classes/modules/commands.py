@@ -6,14 +6,13 @@ if TYPE_CHECKING:
 
 class Command:
 
-    DB_COMMANDS: list['MCommand'] = []
-
     def __init__(self, loader: 'Loader'):
         """
         Args:
             loader (Loader): The Loader instance.
         """
         self._ctx = loader
+        self.DB_COMMANDS: list['MCommand'] = []
 
     def build_command(self, level: int, module_name: str, command_name: str, command_description: str) -> bool:
         """This method build the commands variable
@@ -78,13 +77,13 @@ class Command:
         for c in tmp_model:
             self.DB_COMMANDS.remove(c)
 
-        self._ctx.Logs.debug(f"[COMMAND] Drop command for module {module_name}")
+        self._ctx.Logs.debug("[COMMAND] Drop command for module %s", module_name)
         return True       
 
     def get_ordered_commands(self) -> list[MCommand]:
         return sorted(self.DB_COMMANDS, key=lambda c: (c.command_level, c.module_name))
     
-    def get_commands_by_level(self, level: int = 0) -> Optional[list[MCommand]]:
+    def get_commands_by_level(self, level: int = 0) -> list[MCommand]:
 
         cmd_list = self.get_ordered_commands()
         new_list: list[MCommand] = []
