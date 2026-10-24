@@ -1,4 +1,5 @@
-from core.definition import MainModel, dataclass
+from dataclasses import dataclass
+from core.definition import MainModel
 
 @dataclass
 class ModConfModel(MainModel):
