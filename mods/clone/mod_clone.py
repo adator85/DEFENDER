@@ -11,7 +11,7 @@
 #           sexual harassment, bad intention, violence ...)
 # 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Optional
 from core.classes.interfaces.imodule import IModule
 from core.utils import tr
 import mods.clone.utils as utils
@@ -39,14 +39,14 @@ class Clone(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
-        self._mod_config: Optional[schemas.ModConfModel] = None
+        self._mod_config: schemas.ModConfModel = self.ModConfModel()
 
         self.stop: bool = False
-        self.Schemas = None
-        self.Utils = None
-        self.Threads = None
-        self.Faker: Optional['Faker'] = None
-        self.Clone: Optional[CloneManager] = None
+        self.Schemas = schemas
+        self.Utils = utils
+        self.Threads = thds
+        self.Faker: 'Faker'
+        self.Clone: CloneManager
 
 
     @property
@@ -88,16 +88,12 @@ class Clone(IModule):
         # sync the database with local variable (Mandatory)
         await self.sync_db()
 
-        self.stop = False
-        self.Schemas = schemas
-        self.Utils = utils
-        self.Threads = thds
-        self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
+        self.Faker = self.Utils.create_faker_object('en_GB')
         self.Clone = CloneManager(self)
 
         metadata = self.ctx.Settings.get_cache('UID_CLONE_DB')
         if metadata is not None:
-            self.Clone.UID_CLONE_DB = metadata
+            self.Clone.UID_CLONE_DB = metadata or []
 
         # Créer les nouvelles commandes du module
         self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill, snitch and say clones')
@@ -120,8 +116,11 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
+        # if self.ctx.Config.DEFENDER_REHASH == 0:
+        #    self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+
         if self.ctx.Config.DEFENDER_REHASH == 0:
-            self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+            await self.Threads.thread_kill_clones(self)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
@@ -148,7 +147,7 @@ class Clone(IModule):
                     return None
 
         except Exception as err:
-            self.ctx.Logs.error(f'General Error: {err}', exc_info=True)
+            self.ctx.Logs.error('General Error: %s', err, exc_info=True)
             return None
 
     async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
@@ -247,11 +246,18 @@ class Clone(IModule):
 
                                 else:
                                     if self.Clone.nickname_exists(option):
-                                        clone_uid = self.Clone.get_clone(option).uid
-                                        await self.ctx.Irc.Protocol.send_join_chan(uidornickname=clone_uid, channel=clone_channel_to_join, print_log=False)
+                                        c = self.Clone.get_clone(option)
+                                        if not c:
+                                            return None
+
+                                        await self.ctx.Irc.Protocol.send_join_chan(uidornickname=c.uid,
+                                                                                   channel=clone_channel_to_join,
+                                                                                   print_log=False)
 
                             except IndexError:
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
+                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                                                        nick_to=fromuser,
+                                                                        msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
 
                         case 'part':
                             try:
@@ -300,10 +306,10 @@ class Clone(IModule):
                                             nick_to=fromuser, 
                                             msg=f"  {clone_name.nickname:<12}| {clone_name.realname:<25}| {clone_name.group:<15}| {clone_name.connected:<35}")
                                 else:
-                                    if not self.Clone.group_exists(group_name):
+                                    if not self.Clone.group_exists(group_name or ''):
                                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This Group name doesn't exist!")
                                         return None
-                                    clones = self.Clone.get_clones_from_groupname(group_name)
+                                    clones = self.Clone.get_clones_from_groupname(group_name or '')
                                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  Number of connected clones: {len(clones)}")
                                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  {line}")
                                     for clone in clones:

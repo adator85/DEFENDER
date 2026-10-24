@@ -6,11 +6,10 @@ if TYPE_CHECKING:
 
 class CloneManager:
 
-    UID_CLONE_DB: list[MClone] = []
-
     def __init__(self, uplink: 'Clone'):
 
         self.Logs = uplink.ctx.Logs
+        self.UID_CLONE_DB: list[MClone] = []
 
     def insert(self, new_clone_object: MClone) -> bool:
         """Create new Clone object
@@ -21,18 +20,19 @@ class CloneManager:
         Returns:
             bool: True if inserted
         """
-        if new_clone_object is None:
+        if not new_clone_object:
             self.Logs.debug('New Clone object must not be None')
             return False
 
         for record in self.UID_CLONE_DB:
             if record.nickname == new_clone_object.nickname or record.uid == new_clone_object.uid:
                 # If the user exist then return False and do not go further
-                self.Logs.debug(f'Nickname/UID {record.nickname}/{record.uid} already exist')
+                self.Logs.debug('Nickname/UID %s/%s already exist',
+                                record.nickname, record.uid)
                 return False
 
         self.UID_CLONE_DB.append(new_clone_object)
-        self.Logs.debug(f'New Clone object created: {new_clone_object}')
+        self.Logs.debug('New Clone object created: %s', new_clone_object)
         return True
 
     def delete(self, uidornickname: str) -> bool:
@@ -157,7 +157,7 @@ class CloneManager:
 
         for clone in self.UID_CLONE_DB:
             if clone.nickname == nickname:
-                clone.alive = False # Kill the clone
+                clone.connected = False # Kill the clone
                 response = True
 
         return response

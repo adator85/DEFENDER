@@ -35,10 +35,11 @@ async def coro_connect_clones(uplink: 'Clone',
 
 async def thread_kill_clones(uplink: 'Clone'):
 
-    clone_to_kill = uplink.Clone.UID_CLONE_DB.copy()
+    if uplink.Clone:
+        clone_to_kill = uplink.Clone.UID_CLONE_DB.copy()
 
-    for clone in clone_to_kill:
-        await uplink.ctx.Irc.Protocol.send_quit(clone.uid, 'Gooood bye', print_log=False)
-        uplink.Clone.delete(clone.uid)
+        for clone in clone_to_kill:
+            await uplink.ctx.Irc.Protocol.send_quit(clone.uid, 'Gooood bye', print_log=False)
+            uplink.Clone.delete(clone.uid)
 
-    del clone_to_kill
+        del clone_to_kill
