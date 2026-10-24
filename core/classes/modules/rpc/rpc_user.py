@@ -1,5 +1,4 @@
-from typing import TYPE_CHECKING, Optional
-
+from typing import TYPE_CHECKING
 from starlette.responses import JSONResponse
 from core.classes.interfaces.irpc_endpoint import IRPC
 from core.classes.modules.rpc.rpc_errors import JSONRPCErrorCode
@@ -14,6 +13,7 @@ class RPCUser(IRPC):
     
     def user_list(self, **kwargs) -> JSONResponse:
         self.reset()
+        _kwargs = kwargs.get('my_arg', None)
         users = self.ctx.User.UID_DB.copy()
         copy_users: list['MUser'] = []
 

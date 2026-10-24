@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import Any
+
 
 class JSONRPCErrorCode(Enum):
     PARSE_ERROR = -32700      # Syntax error in the request (malformed JSON)
@@ -30,14 +32,14 @@ class JSONRPCErrorCode(Enum):
         }
         return descriptions.get(self, "Unknown error")
 
-def create_error_response(error_code: JSONRPCErrorCode, details: dict = None) -> dict[str, str]:
+def create_error_response(error_code: JSONRPCErrorCode, details: dict | None = None) -> dict[str, Any]:
         """Create a JSON-RPC error!"""
-        response = {
+        response: dict[str, Any] = {
                 "code": error_code.value,
                 "message": error_code.description(),
             }
         
         if details:
-            response["data"] = details
+            response["data"]: dict = details
         
         return response

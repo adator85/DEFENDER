@@ -7,7 +7,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from core.classes.modules.rpc.rpc_user import RPCUser
 from core.classes.modules.rpc.rpc_channel import RPCChannel
 from core.classes.modules.rpc.rpc_command import RPCCommand
@@ -23,7 +23,8 @@ class JSonRpcServer:
         self.host = context.Config.RPC_HOST
         self.port = context.Config.RPC_PORT
         self.routes: list[Route] = []
-        self.server: Optional[uvicorn.Server] = None
+        self.app_jsonrpc: Starlette
+        self.server: uvicorn.Server
 
         self.methods: dict = {
             'user.list': RPCUser(context).user_list,
@@ -44,7 +45,7 @@ class JSonRpcServer:
                 self._ctx.Config.SERVICE_CHANLOG
             )
             self._ctx.Logs.debug("D-RPC Server is deactivated from the config file!")
-            return None
+            return
 
         if not self.live:
             self.routes = [Route('/api', self.request_handler, methods=['POST'])]
@@ -88,7 +89,7 @@ class JSonRpcServer:
         method = request_data.get("method", None)
         params: dict[str, Any] = request_data.get("params", {})
 
-        auth: JSONResponse = self.authenticate(request.headers, request_data)        
+        auth: JSONResponse = self.authenticate(dict(request.headers), request_data)
         if not json.loads(auth.body).get('result', False):
             return auth
 
@@ -98,9 +99,12 @@ class JSonRpcServer:
             "id": request_data.get('id', 123)
         }
 
-        rip = request.client.host
-        rport = request.client.port
-        http_code = http_status_code.HTTP_200_OK
+        _client = request.client
+        rip = ''
+        rport = ''
+        if _client:
+            rip = _client.host
+            rport = _client.port
 
         if method in self.methods:
             r: JSONResponse = self.methods[method](**params)
@@ -110,7 +114,7 @@ class JSonRpcServer:
             return JSONResponse(resp, r.status_code)
 
         response_data['error'] = rpcerr.create_error_response(rpcerr.JSONRPCErrorCode.METHOD_NOT_FOUND)
-        self._ctx.Logs.debug(f'[RPC ERROR] {method} recieved from {rip}:{rport}')
+        self._ctx.Logs.debug('[DEFENDER RPC ERROR] %s recieved from %s:%s', method, rip, rport)
         http_code = http_status_code.HTTP_404_NOT_FOUND
         return JSONResponse(response_data, http_code)
 
@@ -147,7 +151,8 @@ class JSonRpcServer:
             logs.error(e)
             return self.send_auth_error(body)
    
-    def send_auth_error(self, request_data: dict) -> JSONResponse:
+    @staticmethod
+    def send_auth_error(request_data: dict) -> JSONResponse:
      
         response_data = {
             'jsonrpc': '2.0',
