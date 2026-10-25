@@ -1,15 +1,10 @@
 import asyncio
-import os
-from types import ModuleType, FunctionType
-
 import gc
 import importlib
 import sys
-from typing import TYPE_CHECKING
 import core.classes.modules.check_refs as cr
-from memory_profiler import profile
-# import core.module as module_mod
-# from core.classes.modules import user, admin, channel, reputation, sasl
+from types import ModuleType, FunctionType
+from typing import TYPE_CHECKING
 from core.utils import tr
 
 if TYPE_CHECKING:
@@ -65,7 +60,6 @@ async def restart_service_v2(uplink: 'Loader', reason: str = 'Restarting without
         logs.warning("Signal Off! Defender started manually, this is not recommended. Restaring a new instance.")
         subprocess.Popen(['.pyenv/bin/python', 'defender.py'])
         logs.debug("Kill main process.")
-
 
 async def restart_service(uplink: 'Loader', reason: str = "Restarting with no reason!") -> None:
     """
