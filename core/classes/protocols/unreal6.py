@@ -482,7 +482,9 @@ class Unrealircd6(IProtocol):
                 self._ctx.Definition.MUser(
                             uid=uid, nickname=nickname, username=username, 
                             realname=realname,hostname=hostname, umodes=umodes,
-                            vhost=vhost, remote_ip=remote_ip, geoip=geoip
+                            vhost=vhost, remote_ip=remote_ip, geoip=geoip,
+                            fingerprint=None, tls_cipher=None, isWebirc=False, isWebsocket=False,
+                            score_connexion=28
                         )
                     )
 

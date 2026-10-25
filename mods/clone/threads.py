@@ -22,12 +22,20 @@ async def coro_connect_clones(uplink: 'Clone',
     for clone in uplink.Clone.UID_CLONE_DB:
 
         if uplink.stop:
-            print(f"Stop creating clones ...")
+            uplink.Clone.Logs.debug("Stop creating clones ...")
             uplink.stop = False
             break
 
         if not clone.connected:
-            await uplink.ctx.Irc.Protocol.send_uid(clone.nickname, clone.username, clone.hostname, clone.uid, clone.umodes, clone.vhost, clone.remote_ip, clone.realname, clone.geoip, print_log=False)
+            await uplink.ctx.Irc.Protocol.send_uid(clone.nickname,
+                                                   clone.username,
+                                                   clone.hostname,
+                                                   clone.uid,
+                                                   clone.umodes,
+                                                   clone.vhost,
+                                                   clone.remote_ip,
+                                                   clone.realname,
+                                                   clone.geoip, print_log=False)
             await uplink.ctx.Irc.Protocol.send_join_chan(uidornickname=clone.uid, channel=uplink.ctx.Config.CLONE_CHANNEL, password=uplink.ctx.Config.CLONE_CHANNEL_PASSWORD, print_log=False)
 
         await asyncio.sleep(interval)
