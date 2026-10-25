@@ -13,6 +13,8 @@ parser = argparse.ArgumentParser(description="Python Installation Code")
 parser.add_argument('--check-version', action='store_true', help='Check if the python version is ok!')
 parser.add_argument('--install', action='store_true', help='Run the installation')
 parser.add_argument('--git-update', action='store_true', help='Update from git (main repository)')
+parser.add_argument('--started-from-sysctl', action='store_true', help='Is Defender Start from systemctl?')
+parser.add_argument('--debug-level', type=int, choices=[10, 20, 30, 40, 50], help='Run Defender')
 args = parser.parse_args()
 
 PYTHON_REQUIRED_VERSION = (3, 10, 0)
@@ -128,10 +130,11 @@ def create_systemd_service_file():
 Description=Defender IRC Service
 
 [Service]
-ExecStart={pyenv} {py_exec}
+ExecStart={pyenv} {py_exec} --debug-level 20
 WorkingDirectory={ROOT_PATH}
 SyslogIdentifier=Defender
 Restart=on-failure
+RestartForceExitStatus=42
 
 [Install]
 WantedBy=default.target

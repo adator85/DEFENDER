@@ -144,7 +144,7 @@ class Irc:
                                       task_name='Defender Collect Garbarge',
                                       run_once=True,
                                       task_flag=True)
-        self.ctx.Config.DEFENDER_RESTART = 0
+
         while self.signal:
             if self.reader:
                 data = await self.reader.readuntil(b'\r\n')
@@ -836,8 +836,10 @@ class Irc:
                     self.ctx.Config.DEFENDER_RESTART = 0
 
                     if self.writer:
+                        await self.writer.drain()
                         self.writer.close()
-                        await self.writer.wait_closed()
+                        if not self.writer.is_closing():
+                            self.writer.transport.abort()
 
                 except IndexError as ie:
                     self.ctx.Logs.error('Index Error: %s', ie)
@@ -846,19 +848,20 @@ class Irc:
                         if self.writer.is_closing():
                             self.ctx.Logs.debug("Defender stopped properly!")
                 except ssl.SSLError as serr:
-                    self.ctx.Logs.debug("Defender has ended with an SSL Error! - %s", serr)
+                    self.ctx.Logs.debug("Defender has ended with an SSL Error! - %s", serr, exc_info=True)
 
             case 'restart':
-                final_reason = ' '.join(cmd[1:])
-                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{dnickname.capitalize()} is going to restart!")
+                # final_reason = ' '.join(cmd[1:])
+                # await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{dnickname.capitalize()} is going to restart!")
 
-                # Set restart status to 1 saying that the service will restart
-                self.ctx.Config.DEFENDER_RESTART = 1
+                # # Set restart status to 1 saying that the service will restart
+                # self.ctx.Config.DEFENDER_RESTART = 1
 
-                # set init to 1 saying that the service will be re initiated
-                self.ctx.Config.DEFENDER_INIT = 1
+                # # set init to 1 saying that the service will be re initiated
+                # self.ctx.Config.DEFENDER_INIT = 1
 
-                await rehash.restart_service(self.ctx, final_reason)
+                # await rehash.restart_service(self.ctx, final_reason)
+                await rehash.restart_service_v2(self.ctx)
                 return None
 
             case 'rehash':

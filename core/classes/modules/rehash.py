@@ -1,4 +1,5 @@
 import asyncio
+import os
 from types import ModuleType, FunctionType
 
 import gc
@@ -40,6 +41,31 @@ REHASH_MODULES = [
     'core.classes.protocols.factory',
     # 'core.classes.interfaces.imodule',
 ]
+
+async def restart_service_v2(uplink: 'Loader', reason: str = 'Restarting without reason!'):
+    # Create a new subprocess.
+    # Clean & Quit defender.
+    # Start a new & clean instance of defender
+    import subprocess
+
+    logs = uplink.Logs
+    await shutdown(uplink)
+    uplink.Irc.signal = False
+    uplink.Config.DEFENDER_EXIT_STATUS = 42 # set exit status to 42 (restart mode).
+
+    try:
+        if uplink.Irc.writer:
+            uplink.Irc.writer.close()
+            await uplink.Irc.writer.wait_closed()
+    except Exception:
+        pass
+
+    if not uplink.Config.DEFENDER_STARTED_FROM_SYSTEMCTL:
+        # If defender has started manually! restart through a new subprocess.
+        logs.warning("Signal Off! Defender started manually, this is not recommended. Restaring a new instance.")
+        subprocess.Popen(['.pyenv/bin/python', 'defender.py'])
+        logs.debug("Kill main process.")
+
 
 async def restart_service(uplink: 'Loader', reason: str = "Restarting with no reason!") -> None:
     """

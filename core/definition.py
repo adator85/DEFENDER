@@ -297,8 +297,14 @@ class MConfig(MainModel):
     DEFENDER_RESTART: int = 0
     """Restart flag. When Defender should restart this variable should be set to 1 (default: 0)"""
 
+    DEFENDER_EXIT_STATUS: int = 0
+    """Restart exit status. 0 for success, 1 for failure and 42 for restart (default: 0)"""
+
     DEFENDER_REHASH: int = 0
     """Rehash flag. When Defender should rehash this variable should be set to 1 (default: 0)"""
+
+    DEFENDER_STARTED_FROM_SYSTEMCTL: bool = False
+    """Is defender started as expected from systemctl. (default: False)"""
 
     DEFENDER_HEARTBEAT: bool = True
     """Activate the hearbeat pulse (default: True)"""
