@@ -16,8 +16,8 @@ class Test(IModule):
         just use pass | if you leave it empty, in the load() method just
         init empty object ==> self.ModConfig = ModConfModel()
         """
-        param_exemple1: str
-        param_exemple2: int
+        param_exemple1: str = ''
+        param_exemple2: int = 0
 
     MOD_HEADER: dict[str, str] = {
         'name': 'Test',
@@ -34,7 +34,7 @@ class Test(IModule):
 
     def __init__(self, uplink: 'Loader'):
         super().__init__(uplink)
-        self._mod_config: Optional[Test.ModConfModel] = None
+        self._mod_config: Test.ModConfModel = self.ModConfModel()
 
     async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -84,10 +84,10 @@ class Test(IModule):
         if self.mod_config.param_exemple2 == 1:
             await self.ctx.Irc.Protocol.send_priv_msg(
                 self.ctx.Config.SERVICE_NICKNAME,
-                "Param activated",
+                "Test module is loaded with Param activated",
                 self.ctx.Config.SERVICE_CHANLOG)
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """### This method is called when you unload,
         or you reload the module (Mandatory)"""
         self.ctx.Commands.drop_command_by_module(self.module_name)
@@ -99,7 +99,7 @@ class Test(IModule):
         await asyncio.sleep(2)
         self.ctx.Logs.debug(f"End of the task: {self.__class__.__name__}")
 
-    def cmd(self, data: list[str]) -> None:
+    async def cmd(self, data: list[str]) -> None:
         """All messages coming from the IRCD server will be handled using
         this method (Mandatory)
 
@@ -130,8 +130,8 @@ class Test(IModule):
                 IRCD server. Defaults to [].
         """
         u = self.ctx.User.get_user(user)
-        c = (self.ctx.Channel.get_channel(channel)
-             if self.ctx.Channel.is_valid_channel(channel) else None)
+        c = (self.ctx.Channel.get_channel(channel or '')
+             if self.ctx.Channel.is_valid_channel(channel or '') else None)
         if u is None:
             return None
 

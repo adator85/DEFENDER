@@ -4,7 +4,7 @@ import threading
 from datetime import datetime
 from json import dumps
 from dataclasses import dataclass, field, asdict, fields, replace
-from typing import Callable, Literal, Any, Optional
+from typing import Callable, Literal, Any, Optional, Coroutine
 from os import sep
 from core.classes.interfaces.imodule import IModule
 
@@ -30,30 +30,29 @@ class MainModel:
 @dataclass
 class MUser(MainModel):
     """Model User"""
-
     uid: str
     nickname: str
-    username: str | None = None
-    realname: str | None = None
-    hostname: str | None = None
-    umodes: str | None = None
-    vhost: str | None = None
-    fingerprint: str | None = None
-    tls_cipher: str | None = None
-    isWebirc: bool = False
-    isWebsocket: bool = False
-    remote_ip: str | None = None
-    score_connexion: int = 0
-    geoip: str | None = None
+    username: str
+    realname: str
+    hostname: str
+    umodes: str
+    vhost: str
+    fingerprint: str | None
+    tls_cipher: str | None
+    isWebirc: bool
+    isWebsocket: bool
+    remote_ip: str
+    score_connexion: int
+    geoip: str
     connexion_datetime: datetime = field(default=datetime.now())
 
 @dataclass
 class MAdmin(MainModel):
     """Model Admin"""
 
-    uid: str | None = None
-    account: str | None = None
-    nickname: str | None = None
+    uid: str
+    account: str
+    nickname: str
     username: str | None = None
     realname: str | None = None
     hostname: str | None = None
@@ -94,7 +93,7 @@ class MReputation(MainModel):
 class MChannel(MainModel):
     """Model Channel"""
 
-    name: str | None = None
+    name: str
     """### Channel name 
     It include the #"""
     uids: list[str] = field(default_factory=list[str])
@@ -336,24 +335,25 @@ class MThread(MainModel):
 
 @dataclass
 class MCommand(MainModel):
-    module_name: str | None = None
-    command_name: str | None = None
-    description: str | None = None
+    module_name: str
+    command_name: str
+    description: str
     command_level: int = 0
+
+@dataclass
+class DefenderModuleHeader(MainModel):
+    name: str
+    version: str
+    description: str
+    author: str
+    core_version: str
 
 @dataclass
 class MModule(MainModel):
     module_name: str
     class_name: str
     class_instance: IModule
-
-@dataclass
-class DefenderModuleHeader(MainModel):
-    name: str = ''
-    version: str = ''
-    description: str = ''
-    author: str = ''
-    core_version: str = ''
+    module_header: DefenderModuleHeader
 
 @dataclass
 class MSModule:
@@ -385,7 +385,7 @@ class MRegister:
 @dataclass
 class MIrcdCommand:
     command_name: str
-    func: Callable[[list[str]], None]
+    func: Callable[[list[str]], Coroutine[Any, Any, Any]]
 
 @dataclass
 class DThread(MainModel):
@@ -394,5 +394,5 @@ class DThread(MainModel):
 
 @dataclass
 class DTask(MainModel):
-    task: Optional[asyncio.Task]
+    task: asyncio.Task
     event: Optional[asyncio.Event]

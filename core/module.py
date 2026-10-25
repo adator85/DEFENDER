@@ -15,32 +15,11 @@ if TYPE_CHECKING:
 
 class Module:
 
-    DB_MODULES: list[MModule] = []
-    DB_MODULE_HEADERS: list[DefenderModuleHeader] = []
-
     def __init__(self, loader: 'Loader') -> None:
         self._ctx = loader
+        self.DB_MODULES: list[MModule] = []
 
-    def is_module_compliant(self, obj: object) -> bool:
-        class_name = obj.__name__
-        is_compliant = True
-        attributs = {'MOD_HEADER', 'mod_config'}
-        methods = {'load', 'unload', 'create_tables', 'cmd', 'hcmds', 'ModConfModel'}
-
-        obj_attributs: set = set([attribut for attribut in dir(obj) if not callable(getattr(obj, attribut)) and not attribut.startswith('__')])
-        obj_methods: set = set([method for method in dir(obj) if callable(getattr(obj, method)) and not method.startswith('__')])
-
-        if not attributs.issubset(obj_attributs):
-            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
-            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
-
-        if not methods.issubset(obj_methods):
-            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
-            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
-
-        return is_compliant
-
-    def get_all_available_modules(self) -> list[str]:
+    def discover(self) -> list[str]:
         """Get list of all main modules
         using this pattern mod_*.py
         all files starting with mod_
@@ -49,56 +28,8 @@ class Module:
         """
         base_path = Path('mods')
         modules_available = [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
-        self._ctx.Logs.debug(f"Modules available: {modules_available}")
+        self._ctx.Logs.debug("Modules available: %s", modules_available)
         return modules_available
-
-    def get_module_information(self, module_name: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
-        # module_name : mod_defender
-        if not module_name.lower().startswith('mod_'):
-            self._ctx.Logs.error("Not a valid module name: %s", module_name)
-            return None, None, None
-
-        module_name = module_name.lower() # --> mod_defender
-        module_folder = module_name.split('_')[1].lower() # --> defender
-        class_name = module_name.split('_')[1].capitalize() # --> Defender
-        self._ctx.Logs.debug("Module information Folder: %s, Name: %s, Class: %s",
-                             module_folder, module_name, class_name)
-        return module_folder, module_name, class_name
-
-    def get_module_header(self, module_name: str) -> Optional[DefenderModuleHeader]:
-
-        for mod_h in self.DB_MODULE_HEADERS:
-            if module_name.lower() == mod_h.name.lower():
-                return mod_h
-        
-        return None
-
-    def create_module_header(self, module_header: dict[str, str]) -> bool:
-        """Create a new module header into DB_MODULE_HEADERS
-
-        Args:
-            module_header (dict[str, str]): The module header
-
-        Returns:
-            bool: True if the module header has been created.
-        """
-        mod_header = DefenderModuleHeader(**module_header)
-        if self.get_module_header(mod_header.name) is None:
-            self._ctx.Logs.debug(f"[MOD_HEADER] The module header has been created! ({mod_header.name} v{mod_header.version})")
-            self.DB_MODULE_HEADERS.append(mod_header)
-            return True
-       
-        return False
-
-    def delete_module_header(self, module_name: str) -> bool:
-        mod_header = self.get_module_header(module_name)
-        if mod_header is not None:
-            self._ctx.Logs.debug(f"[MOD_HEADER] The module header has been deleted ({mod_header.name} v{mod_header.version})")
-            self.DB_MODULE_HEADERS.remove(mod_header)
-            return True
-
-        self._ctx.Logs.debug(f"[MOD_HEADER ERROR] Impossible to remove the module header ({module_name})")
-        return False
 
     async def _import_module(self, module_folder: str, module_name: str, class_name: str) -> 'IModule':
 
@@ -123,65 +54,151 @@ class Module:
             raise AttributeError(
                 f'[{class_name}] Your module is not valid make sure you have implemented required methods!')
 
-        self.create_module_header(_new_instance.MOD_HEADER)
+        self._ctx.Logs.debug('[MODULE IMPORT] Module %s.%s imported into sys.modules',
+                             module_folder, module_name)
         return _new_instance
 
-    async def load_one_module(self, module_name: str, nickname: str, is_default: bool = False) -> bool:
+    async def load_one_module(self, module_name: str, nickname: str, *,
+                              is_default: bool = False,
+                              load_modules_dependencies: bool = False) -> bool:
 
-        module_folder, module_name, class_name = self.get_module_information(module_name)
-
-        if module_folder is None or module_name is None or class_name is None or self._ctx.Irc.Protocol is None:
-            self._ctx.Logs.error("There is an error with the module name! %s, %s, %s",
-                                 module_folder, module_name, class_name)
-            return False
-        
-        if self.is_module_exist_in_sys_module(module_name):
-            self._ctx.Logs.debug(f"Module [{module_folder}.{module_name}] already loaded!")
-            if self.model_is_module_exist(module_name):
-                # Si le module existe dans la variable globale retourne False
-                self._ctx.Logs.debug(f"Module [{module_folder}.{module_name}] exist in the local variable!")
-                await self._ctx.Irc.Protocol.send_priv_msg(
-                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=f"Le module {module_name} est déja chargé ! si vous souhaiter le recharge tapez {self._ctx.Config.SERVICE_PREFIX}reload {module_name}",
-                    channel=self._ctx.Config.SERVICE_CHANLOG
-                )
-                return False
-            reload_mod = await self.reload_one_module(module_name, nickname)
-            return reload_mod
-        
-        # Charger le module
+        _proto = self._ctx.Irc.Protocol
+        _log = self._ctx.Logs
+        _red = self._ctx.Const.Colors.red
+        _nogc = self._ctx.Const.Colors.nogc
         try:
-            create_instance_of_the_class = await self._import_module(module_folder, module_name, class_name)
-        except AttributeError as attr:
-            red = self._ctx.Const.Colors.red
-            nogc = self._ctx.Const.Colors.nogc
-            await self._ctx.Irc.Protocol.send_priv_msg(
-                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                    msg=tr("[ %sMODULE ERROR%s ] Module %s is facing issues! %s", red, nogc, module_name, attr),
-                    channel=self._ctx.Config.SERVICE_CHANLOG
-                )
-            self.drop_module_from_sys_modules(module_name)
-            await self.db_delete_module(module_name)
-            self._ctx.Logs.error(msg=attr, exc_info=True)
+            module_folder, m_name, class_name = self.sanitize_module_information(module_name)
+        except SyntaxError as se:
+            _log.critical("[MODULE ERROR]: %s", se)
             return False
 
-        # Charger la nouvelle class dans la variable globale
-        if self.model_insert_module(MModule(module_name, class_name, create_instance_of_the_class)):
-            # Enregistrer le module dans la base de données
-            await self.db_register_module(module_name, nickname, is_default)
-            await self._ctx.Irc.Protocol.send_priv_msg(
+        async def _cleanup_module(_m_folder, _m_name):
+            self.drop_module_from_sys_modules(_m_folder, _m_name)
+            self.model_drop_module(_m_name)
+            await self.db_delete_module(_m_name)
+
+        try:
+            if self.model_is_module_exist(m_name):
+                # Module exist in sys.module
+                _log.debug('[LOAD ONE MODULE] Module %s already exist!', m_name)
+                await _proto.send_priv_msg(
+                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                    msg=tr("Module %s already loaded!", m_name),
+                    channel=self._ctx.Config.SERVICE_CHANLOG)
+                return False
+
+            # Load the module.
+            # reload module dependencies
+            if load_modules_dependencies:
+                self.reload_all_modules_with_all_dependencies(f'mods.{module_folder}')
+
+            create_instance_of_the_class = await self._import_module(module_folder, m_name, class_name)
+            mod_header = DefenderModuleHeader(**create_instance_of_the_class.MOD_HEADER)
+            mod_obj = MModule(
+                m_name,
+                class_name,
+                create_instance_of_the_class,
+                mod_header
+            )
+
+            # Create Module object
+            if self.model_insert_module(mod_obj):
+                # Enregistrer le module dans la base de données
+                await self.db_register_module(m_name, nickname, is_default)
+                await _proto.send_priv_msg(
+                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                    msg=tr("Module %s loaded!", m_name),
+                    channel=self._ctx.Config.SERVICE_CHANLOG)
+                _log.debug("Module %s has been loaded", class_name)
+                return True
+            else:
+                _log.debug("[LOAD ONE MODULE INFO] Module %s has not been loaded", m_name)
+                await _cleanup_module(module_folder, m_name)
+                return False
+
+        except AttributeError as attr:
+            await _proto.send_priv_msg(
+                    nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                    msg=tr("[ %sMODULE ERROR%s ] Module %s is facing issues! %s",
+                           _red, _nogc, m_name, attr),
+                    channel=self._ctx.Config.SERVICE_CHANLOG
+                )
+            await _cleanup_module(module_folder, m_name)
+            _log.error(msg=attr, exc_info=True)
+            return False
+
+    async def unload_one_module(self, module_name: str, keep_in_db: bool = True) -> bool:
+        """Unload a module
+
+        Args:
+            module_name (str): Module name ex mod_defender
+            keep_in_db (bool): Keep in database
+        Returns:
+            bool: True if success
+        """
+        # Le nom du module. exemple: mod_defender
+        red = self._ctx.Const.Colors.red
+        nogc = self._ctx.Const.Colors.nogc
+        _proto = self._ctx.Irc.Protocol
+        _log = self._ctx.Logs
+        try:
+            module_folder, m_name, class_name = self.sanitize_module_information(module_name)
+        except SyntaxError as se:
+            _log.critical("[MODULE ERROR]: %s", se)
+            return False
+
+        if not self.is_module_exist_in_sys_module(m_name):
+            _log.debug("[ UNLOAD MODULE ] This module (%s) is not loaded in the sys.modules!",
+                       m_name)
+            return False
+
+        try:
+            module = self.model_get_module(m_name)
+            if module is None:
+                _log.debug("[ UNLOAD MODULE ERROR ] This module (%s) is not loaded!",
+                           m_name)
+                await self.db_delete_module(m_name)
+                await _proto.send_priv_msg(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=tr("Module %s loaded!", module_name),
+                        msg=f"[ {red}UNLOAD MODULE ERROR{nogc} ] This module {m_name} is not loaded!",
                         channel=self._ctx.Config.SERVICE_CHANLOG
                     )
+                return False
 
-            self._ctx.Logs.debug("Module %s has been loaded", class_name)
-            return True
+            if module:
+                # Drop the module from the model
+                self.model_drop_module(m_name)
 
-        return False
+                # Clean the module
+                await module.class_instance.unload()
+                await module.class_instance.cleanup()
 
-    def load_all_modules(self) -> bool:
-        ...
+                # Delete from the sys.modules.
+                if not self.drop_module_from_sys_modules(module_folder, m_name):
+                    self._ctx.Logs.debug("Module mods.%s.%s still in the sys.modules",
+                                         module_folder, m_name)
+
+                # Supprimer le module de la base de données
+                if not keep_in_db:
+                    await self.db_delete_module(m_name)
+
+                await _proto.send_priv_msg(
+                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                        msg=f"[ UNLOAD MODULE INFO ] Module {m_name} has been unloaded!",
+                        channel=self._ctx.Config.SERVICE_CHANLOG
+                    )
+                _log.debug("[ UNLOAD MODULE ] %s has been unloaded!", m_name)
+
+                del module.class_instance
+                del module
+                return True
+
+            _log.debug("[UNLOAD MODULE]: Module %s not found in DB_MODULES variable!", m_name)
+            return False
+
+        except Exception as err:
+            _log.error("General Error: %s", err, exc_info=True)
+            return False
 
     async def reload_one_module(self, module_name: str, nickname: str) -> bool:
         """Reloading one module and insert it into the model as well as the database
@@ -193,72 +210,43 @@ class Module:
         Returns:
             bool: True if the module has been reloaded
         """
-        module_folder, module_name, class_name = self.get_module_information(module_name)
         _proto = self._ctx.Irc.Protocol
-        red = self._ctx.Const.Colors.red
-        nogc = self._ctx.Const.Colors.nogc
-        if _proto is None or module_name is None or class_name is None or module_folder is None:
-            return False
+        _log = self._ctx.Logs
+        _red = self._ctx.Const.Colors.red
+        _green = self._ctx.Const.Colors.green
+        _nogc = self._ctx.Const.Colors.nogc
+
         try:
-            if self.is_module_exist_in_sys_module(module_name):
-                mm = self.model_get_module(module_name)
-                if mm:
-                    if mm.class_instance:
-                        self.delete_module_header(mm.class_instance.MOD_HEADER['name'])
-                        await mm.class_instance.unload() if self._ctx.Utils.is_coroutinefunction(mm.class_instance.unload) else mm.class_instance.unload()
-                        await mm.class_instance.cleanup() if self._ctx.Utils.is_coroutinefunction(mm.class_instance.cleanup) else mm.class_instance.cleanup()
-                else:
+            module_folder, m_name, class_name = self.sanitize_module_information(module_name)
+        except SyntaxError as se:
+            _log.critical("[MODULE ERROR]: %s", se)
+            return False
+
+        try:
+            if not await self.unload_one_module(m_name):
+                return False
+            else:
+                if await self.load_one_module(m_name, nickname, load_modules_dependencies=True):
                     await _proto.send_priv_msg(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[ {red}RELOAD MODULE ERROR{nogc} ] Module [{module_folder}.{module_name}] hasn't been reloaded! You must use {self._ctx.Config.SERVICE_PREFIX}load {module_name}",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
+                        channel=self._ctx.Config.SERVICE_CHANLOG,
+                        msg=tr('[ %sMODULE RELOADED%s ] Module %s has been reloaded!',
+                               _green, _nogc, m_name)
                     )
-                    self._ctx.Logs.debug(f"Module [{module_folder}.{module_name}] not found! Please use {self._ctx.Config.SERVICE_PREFIX}load {module_name}")
-                    return False
+                    return True
 
-                # reload module dependencies
-                self.reload_all_modules_with_all_dependencies(f'mods.{module_folder}')
-
-                if sys.modules.get(f'mods.{module_folder}.{module_name}'):
-                    del sys.modules[f'mods.{module_folder}.{module_name}']
-
-                mm.class_instance = await self._import_module(module_folder, module_name, class_name)
-
-                # Créer le module dans la base de données
-                await self.db_register_module(module_name, nickname)
-                await _proto.send_priv_msg(
-                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"Module [{module_folder}.{module_name}] has been reloaded!",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
-                    )
-                self._ctx.Logs.debug("Module [ %s.%s ] reloaded!", module_folder, module_name)
-                return True
-            else:
-                # Module is not loaded! Nothing to reload
-                self._ctx.Logs.debug("[RELOAD MODULE ERROR] [%s.%s] is not loaded! You must use %sload %s",
-                                     module_folder, module_name,
-                                     self._ctx.Config.SERVICE_PREFIX,
-                                     module_name)
-                await _proto.send_priv_msg(
-                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[ {red}RELOAD MODULE ERROR{nogc} ] Module [{module_folder}.{module_name}] is not loaded! You must use {self._ctx.Config.SERVICE_PREFIX}load {module_name}",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
-                    )
-                return False
-
-        except (TypeError, AttributeError, KeyError, Exception) as err:
-            self._ctx.Logs.error(f"[RELOAD MODULE ERROR]: {err}", exc_info=True)
-            await _proto.send_priv_msg(
-                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[RELOAD MODULE ERROR]: {err}",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
-                    )
-            self.drop_module_from_sys_modules(module_name)
-            await self.db_delete_module(module_name)
             return False
 
-    def reload_all_modules(self) -> bool:
-        ...
+        except (TypeError, AttributeError, KeyError, Exception) as err:
+            _log.error("[RELOAD MODULE ERROR]: %s", err, exc_info=True)
+            await _proto.send_priv_msg(
+                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
+                        msg=f"[ {_red}RELOAD MODULE ERROR {_nogc}]: {err}",
+                        channel=self._ctx.Config.SERVICE_CHANLOG
+                    )
+            self.drop_module_from_sys_modules(module_folder, m_name)
+            await self.db_delete_module(m_name)
+            return False
 
     def reload_all_modules_with_all_dependencies(self, prefix: str = 'mods') -> None:
         """
@@ -287,75 +275,14 @@ class Module:
             except Exception as err:
                 _log.error(f'[LOAD_MODULE] Module {module} failed [!] - {err}')
 
-    async def unload_one_module(self, module_name: str, keep_in_db: bool = True) -> bool:
-        """Unload a module
+    def load_all_modules(self) -> bool:
+        raise NotImplementedError('load_all_modules')
 
-        Args:
-            module_name (str): Module name ex mod_defender
-            keep_in_db (bool): Keep in database
-        Returns:
-            bool: True if success
-        """
-        try:
-            # Le nom du module. exemple: mod_defender
-            red = self._ctx.Const.Colors.red
-            nogc = self._ctx.Const.Colors.nogc
-            _proto = self._ctx.Irc.Protocol
-            module_folder, module_name, class_name = self.get_module_information(module_name)
-
-            if _proto is None or module_name is None:
-                return False
-
-            module = self.model_get_module(module_name)
-            if module is None:
-                self._ctx.Logs.debug(f"[ UNLOAD MODULE ERROR ] This module {module_name} is not loaded!")
-                await self.db_delete_module(module_name)
-                await _proto.send_priv_msg(
-                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[ {red}UNLOAD MODULE ERROR{nogc} ] This module {module_name} is not loaded!",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
-                    )
-                return False
-
-            if module:
-                if module.class_instance is None:
-                    return False
-
-                await module.class_instance.unload() if self._ctx.Utils.is_coroutinefunction(module.class_instance.unload) else module.class_instance.unload()
-                await module.class_instance.cleanup() if self._ctx.Utils.is_coroutinefunction(module.class_instance.cleanup) else module.class_instance.cleanup()
-                self.delete_module_header(module.class_instance.MOD_HEADER['name'])
-                self.DB_MODULES.remove(module)
-
-                # Delete from the sys.modules.
-                if sys.modules.get(f'mods.{module_folder}.{module_name}'):
-                    del sys.modules[f"mods.{module_folder}.{module_name}"]
-
-                if sys.modules.get(f'mods.{module_folder}.{module_name}'):
-                    self._ctx.Logs.debug(f"Module mods.{module_folder}.{module_name} still in the sys.modules")
-
-                # Supprimer le module de la base de données
-                if not keep_in_db:
-                    await self.db_delete_module(module_name)
-
-                await _proto.send_priv_msg(
-                        nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        msg=f"[ UNLOAD MODULE INFO ] Module {module_name} has been unloaded!",
-                        channel=self._ctx.Config.SERVICE_CHANLOG
-                    )
-                self._ctx.Logs.debug(f"[ UNLOAD MODULE ] {module_name} has been unloaded!")
-
-                # del module, module_folder, module_name, class_name
-                return True
-
-            self._ctx.Logs.debug(f"[UNLOAD MODULE]: Module {module_name} not found in DB_MODULES variable!")
-            return False
-
-        except Exception as err:
-            self._ctx.Logs.error(f"General Error: {err}", exc_info=True)
-            return False
+    def reload_all_modules(self) -> bool:
+        raise NotImplementedError('reload_all_modules')
 
     def unload_all_modules(self) -> bool:
-        ...
+        raise NotImplementedError('unload_all_modules')
 
     def is_module_exist_in_sys_module(self, module_name: str) -> bool:
         """Check if the module exist in the sys.modules
@@ -366,36 +293,40 @@ class Module:
         Returns:
             bool: True if the module exist
         """
-        module_folder, module_name, class_name = self.get_module_information(module_name)
-        if module_folder is None or module_name is None:
+        try:
+            module_folder, m_name, class_name = self.sanitize_module_information(module_name)
+        except SyntaxError as se:
+            self._ctx.Logs.critical("[MODULE ERROR]: %s", se)
             return False
 
         if "mods." + module_folder + "." + module_name in sys.modules:
-            self._ctx.Logs.debug(f"[SYS MODULE] (mods.{module_folder}.{module_name}) found in sys.modules")
             return True
-        self._ctx.Logs.debug(f"[SYS MODULE] (mods.{module_folder}.{module_name}) not found in sys.modules")
+
         return False
 
-    def drop_module_from_sys_modules(self, module_name: str) -> bool:
-        """_summary_
+    @staticmethod
+    def drop_module_from_sys_modules(module_folder: str, module_name: str) -> bool:
+        """Drop module from sys.modules
 
         Args:
-            module_name (str): _description_
+            module_folder (str): The folder of the module
+            module_name (str): The name of the module
 
         Returns:
-            bool: _description_
+            bool: True if success or False
         """
-        module_folder, module_name, class_name = self.get_module_information(module_name)
-        if module_folder is None or module_name is None:
+        full_path = f'mods.{module_folder}.{module_name}'
+        module = sys.modules.pop(full_path, None)
+        parent_name, _, child_name = full_path.rpartition('.')
+        parent = sys.modules.get(parent_name, None)
+        if parent is not None:
+            if getattr(parent, child_name, None) is module and module is not None:
+                delattr(parent, child_name)
+
+        if sys.modules.get(f'mods.{module_folder}.{module_name}'):
             return False
 
-        full_module_name = "mods." + module_folder + "." + module_name
-        del sys.modules[full_module_name]
-
-        if not self.is_module_exist_in_sys_module(module_name):
-            return True
-
-        return False
+        return True
 
     '''
         ALL METHODS RELATED TO THE MModule MODEL DATACLASS
@@ -460,7 +391,7 @@ class Module:
             self._ctx.Logs.debug(f"[MODEL MODULE INSERT] The module {module_model.module_name} has been inserted in the local variable model DB_MODULES")
             return True
         
-        self._ctx.Logs.debug(f"[MODEL MODULE INSERT] The module {module_model.module_name} already exist in the local variable model DB_MODULES")
+        self._ctx.Logs.debug(f"[MODEL MODULE INSERT ERROR] The module {module_model.module_name} already exist in the local variable model DB_MODULES")
         return False
 
     def model_clear(self) -> None:
@@ -499,7 +430,7 @@ class Module:
         self._ctx.Logs.debug("[DB LOAD MODULE] Loading modules from the database!")
         result = await self._ctx.Base.db_execute_query(f"SELECT module_name FROM {self._ctx.Config.TABLE_MODULE}")
         for r in result.fetchall():
-            await self.load_one_module(r[0], 'sys', True)
+            await self.load_one_module(r[0], 'sys', is_default=True)
 
         return True
  
@@ -577,3 +508,51 @@ class Module:
 
         self._ctx.Logs.debug(f"[DB MODULE DELETE] The module {module_name} is not available in the database! Nothing to delete!")
         return False
+
+    '''
+        UTILS DEDICATED TO MODULE
+    '''
+
+    def sanitize_module_information(self, module_name: str) -> tuple[str, str, str]:
+        """
+        Sanitize the module name, and it returns a tuple with needed information
+        eg. module name must start with mod_
+        it return:
+            - module_folder: defender
+            - module_name: mod_defender
+            - class_name: Defender
+        It raise SyntaxError if the module name does not start with "mod_"
+        """
+        # module_name : mod_defender
+        if not module_name.lower().startswith('mod_'):
+            self._ctx.Logs.critical("Not a valid module name: %s",
+                                 module_name)
+            raise SyntaxError(f'This module name ({module_name}) does not start with "mod_"')
+
+        module_name = module_name.lower() # --> mod_defender
+        module_folder = module_name.split('_')[1].lower() # --> defender
+        class_name = module_name.split('_')[1].capitalize() # --> Defender
+
+        return module_folder, module_name, class_name
+
+    def is_module_compliant(self, obj: object) -> bool:
+        """
+        It check if the module is compliant.
+        It raises AttributeError if the module is not compliant
+        """
+        class_name = obj.__name__
+        attributs = {'MOD_HEADER', 'mod_config'}
+        methods = {'load', 'unload', 'create_tables', 'cmd', 'hcmds', 'ModConfModel'}
+
+        obj_attributs: set = set([attribut for attribut in dir(obj) if not callable(getattr(obj, attribut)) and not attribut.startswith('__')])
+        obj_methods: set = set([method for method in dir(obj) if callable(getattr(obj, method)) and not method.startswith('__')])
+
+        if not attributs.issubset(obj_attributs):
+            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
+            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required attributes {attributs}')
+
+        if not methods.issubset(obj_methods):
+            self._ctx.Logs.error(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
+            raise AttributeError(f'[{class_name}] Your module is not valid make sure you have implemented required methods {methods}')
+
+        return True

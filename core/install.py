@@ -19,7 +19,7 @@ PYTHON_REQUIRED_VERSION = (3, 10, 0)
 PYTHON_SYSTEM_VERSION = tuple(map(int, python_version_tuple()))
 ROOT_PATH = os.getcwd()
 PYENV = Path(ROOT_PATH).joinpath('.pyenv/bin/python') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/python.exe')
-PIPENV = Path(f'{ROOT_PATH}/.pyenv/bin/pip') if os.name != 'nt' else Path(f'{ROOT_PATH}/.pyenv/Scripts/pip.exe')
+PIPENV = Path(ROOT_PATH).joinpath('.pyenv/bin/pip') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/pip.exe')
 USER_HOME_DIRECTORY = Path.home()
 SYSTEMD_PATH = Path(USER_HOME_DIRECTORY).joinpath('.config', 'systemd', 'user')
 PY_EXEC = 'defender.py'
@@ -28,14 +28,14 @@ CURRENT_USER = getpass.getuser()
 
 @dataclass
 class Package:
-	name: str = None
-	version: str = None
+	name: str
+	version: str
 
-def __load_required_package_versions() -> list[Package]:
+def __load_required_package_versions() -> list[Package] | None:
 	"""This will create Package model with package names and required version
         """
 	try:
-		DB_PACKAGES: list[Package] = []		
+		db_packages: list[Package] = []
 		version_filename = Path(ROOT_PATH).joinpath('version.json')  # f'.{os.sep}version.json'
 		with open(version_filename, 'r') as version_data:
 			package_info:dict[str, str] = json.load(version_data)
@@ -43,31 +43,31 @@ def __load_required_package_versions() -> list[Package]:
 		for name, version in package_info.items():
 			if name == 'version':
 				continue
-			DB_PACKAGES.append(
+			db_packages.append(
 				Package(name=name, version=version)
 				)
 
-		return DB_PACKAGES
+		return db_packages
 
 	except FileNotFoundError as fe:
 		print(f"File not found: {fe}")
 	except Exception as err:
 		print(f"General Error: {err}")
 
-def update_packages() -> None:
+def update_packages() -> bool:
 	try:
-		newVersion = False
-		db_packages = __load_required_package_versions()
+		new_version = False
+		db_packages = __load_required_package_versions() or []
 
 		if sys.prefix not in PYENV.__str__():
 			print(f"You are probably running a new installation or you are not using your virtual env {PYENV}")
-			return newVersion
+			return new_version
 
 		print(f"> Checking for dependencies versions ==> WAIT")
 		for package in db_packages:
-			newVersion = False
+			new_version = False
 			_required_version = package.version
-			_installed_version: str = None
+			_installed_version: str = ''
 			output = check_output([PIPENV, 'show', package.name])
 			for line in output.decode().splitlines():
 				if line.startswith('Version:'):
@@ -79,26 +79,30 @@ def update_packages() -> None:
 
 			if required_version > installed_version:
 				print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
-				newVersion = True
+				new_version = True
 
-			if newVersion:
-				check_call([PIPENV, 'install', '--upgrade', package.name])
+			if new_version:
+				try:
+					check_call([PIPENV, 'install', '--upgrade', package.name])
+				except CalledProcessError:
+					print(f"[!] Package {package.name} not installed [!]")
+					return False
 
-		print(f"> Dependencies versions ==> OK")
-		return newVersion
+		print("> Dependencies versions ==> OK")
+		return new_version
 
-	except CalledProcessError:
-		print(f"[!] Package {package.name} not installed [!]")
 	except Exception as err:
 		print(f"UpdatePackage Error: {err}")
 		traceback.print_exc()
+		return False
 
 def run_git_update() -> None:
 	check_call(['git', 'pull', 'origin', 'main'])
 
 def check_python_requirement():
-    if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
-	    raise RuntimeError(f"Your Python Version is not meeting the requirement, System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
+	if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
+		raise RuntimeError(f"Your Python Version is not meeting the requirement, "
+						   f"System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
 
 def is_openrc() -> bool:
 
@@ -200,6 +204,5 @@ def main():
 		run_git_update()
 		sys.exit(0)
 
-
 if __name__ == "__main__":
-    main()
+	main()

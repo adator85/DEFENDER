@@ -24,15 +24,18 @@ class IModule(ABC):
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
+        # Separate The Logger
+        self.logs = self.ctx.Logs
+
         # Log the module
-        self.ctx.Logs.debug('Loading Module %s (%s) ...',
+        self.logs.debug('Loading Module %s (%s) ...',
                             self.module_name, id(self))
 
         # Is module compliant
-        self.__loaded = False
+        self.__loaded: bool = False
 
     def __del__(self):
-        self.ctx.Logs.info("[I-MODULE] Module %s (%s) has been destroyed!",
+        self.logs.info("[I-MODULE] Module %s (%s) has been destroyed!",
                            self.__class__.__name__, id(self))
 
     async def sync_db(self) -> None:
@@ -42,10 +45,10 @@ class IModule(ABC):
         return None
 
     async def cleanup(self) -> None:
+        self.is_loaded = False
         for nom in dir(self):
             if isinstance(getattr(self, nom), self.ctx.Definition.DTask):
                 _dtask = getattr(self, nom)
-                # print(f"  • {nom} - {type(getattr(self, nom))}")
                 try:
                     await asyncio.wait_for(_dtask.task, timeout=5)
                     self.ctx.DAsyncio.running_iotasks.remove(_dtask)
@@ -56,6 +59,14 @@ class IModule(ABC):
                     self.ctx.Logs.error("Error Timeout! %s", iotimeout)
                 except ValueError as ve:
                     self.ctx.Logs.error("IO Task %s is not available: %s", _dtask, ve)
+
+        for key in list(vars(self)):
+            try:
+                if key not in ['logs', '_IModule__loaded']:
+                    delattr(self, key)
+            except AttributeError as ae:
+                self.logs.error('AttributeError: %s', ae)
+
 
     async def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration

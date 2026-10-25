@@ -28,7 +28,7 @@ class Votekick(IModule):
         ...
 
     MOD_HEADER: dict[str, str] = {
-        'name': 'votekick',
+        'name': 'Votekick',
         'version': '1.0.2',
         'description': 'Channel Democraty',
         'author': 'Defender Team',
@@ -37,7 +37,7 @@ class Votekick(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
-        self._mod_config: Optional[schemas.VoteChannelModel] = None
+        self._mod_config: schemas.VoteChannelModel = self.ModConfModel()
 
     @property
     def mod_config(self) -> ModConfModel:
@@ -115,7 +115,7 @@ class Votekick(IModule):
         except Exception as err:
             self.ctx.Logs.error(f'General Error: {err}')
 
-    def cmd(self, data: list) -> None:
+    async def cmd(self, data: list) -> None:
 
         if not data or len(data) < 2:
                 return None

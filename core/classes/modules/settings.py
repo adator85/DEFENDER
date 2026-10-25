@@ -22,7 +22,7 @@ class Settings:
     RUNNING_SOCKETS: list[socket]               = []
     RUNNING_ASYNC_TASKS: list[DTask]            = []
     RUNNING_ASYNC_THREADS: list[MThread]        = []
-    PERIODIC_FUNC: dict[str, Any]               = {}
+    PERIODIC_FUNC: dict[int, Any]               = {}
 
     THLOCK: RLock                               = RLock()
     AILOCK: Lock                                = Lock()

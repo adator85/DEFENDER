@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
 from core.classes.interfaces.iprotocol import IProtocol
-from core.utils import is_coroutinefunction, tr
+from core.utils import is_coroutinefunction, tr, write_gc_to_file
 
 if TYPE_CHECKING:
     from core.definition import MSasl, MUser, MChannel
@@ -100,7 +100,10 @@ class Unrealircd6(IProtocol):
         except AttributeError as ae:
             self._ctx.Logs.critical(f"Attribute Error: {ae}")
 
-    async def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    async def send_priv_msg(self, nick_from: str,
+                            msg: str,
+                            channel: str | None = None,
+                            nick_to: str | None = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -465,6 +468,7 @@ class Unrealircd6(IProtocol):
             vhost (str): vhost of the client you want to create
             remote_ip (str): remote_ip of the client you want to create
             realname (str): realname of the client you want to create
+            geoip (str): geoip of the client you want to create
             print_log (bool, optional): print logs if true. Defaults to True.
         """
         # {self.Config.SERVEUR_ID} UID 
@@ -1022,6 +1026,8 @@ class Unrealircd6(IProtocol):
 
                 await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} SMOD :L:Defender:1.0.0 :L:Command:1.0.0")
 
+                write_gc_to_file()
+
                 return None
         except IndexError as ie:
             self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
@@ -1081,7 +1087,7 @@ class Unrealircd6(IProtocol):
             hostname = str(scopy[7])
             umodes = str(scopy[10])
             vhost = str(scopy[11])
-            remote_ip = '127.0.0.1' if 'S' in umodes else self._ctx.Base.decode_ip(str(scopy[13]))
+            remote_ip = '127.0.0.1' if 'S' in umodes else self._ctx.Base.decode_ip(str(scopy[13])) or '127.0.0.2'
             
             # extract realname
             realname = ' '.join(scopy[14:]).lstrip(':')
@@ -1089,7 +1095,7 @@ class Unrealircd6(IProtocol):
             # Extract Geoip information
             pattern = r'^.*geoip=cc=(\S{2}).*$'
             geoip_match = match(pattern, scopy[0])
-            geoip = geoip_match.group(1) if geoip_match else None
+            geoip = geoip_match.group(1) if geoip_match else 'XX'
 
             # Extract Fingerprint information
             pattern = r'^.*certfp=([^;]+).*$'
@@ -1195,16 +1201,16 @@ class Unrealircd6(IProtocol):
                     self._ctx.Logs.debug(f"This command {arg[0]} is not available")
                     await self.send_notice(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
-                        nick_to=user_trigger,
+                        nick_to=user_trigger or '',
                         msg=f"This command [{self._ctx.Const.Colors.bold}{arg[0]}{self._ctx.Const.Colors.bold}] is not available"
                     )
                     return None
 
                 cmd_to_send = convert_to_string.replace(':','')
-                await self._ctx.Base.log_cmd(user_trigger, cmd_to_send)
+                await self._ctx.Base.log_cmd(user_trigger or '', cmd_to_send)
 
                 fromchannel = str(cmd[2]).lower() if self._ctx.Channel.is_valid_channel(cmd[2]) else None
-                await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                await self._ctx.Irc.hcmds(user_trigger or '', fromchannel, arg, cmd)
 
             if cmd[2] == self._ctx.Config.SERVICE_ID:
                 pattern = fr'^:.*?:(.*)$'
@@ -1235,13 +1241,13 @@ class Unrealircd6(IProtocol):
                         return None
 
                     cmd_to_send = convert_to_string.replace(':','')
-                    await self._ctx.Base.log_cmd(user_trigger, cmd_to_send)
+                    await self._ctx.Base.log_cmd(user_trigger or '', cmd_to_send)
                     fromchannel = None
 
                     if len(arg) >= 2:
                         fromchannel = str(arg[1]).lower() if self._ctx.Channel.is_valid_channel(arg[1]) else None
 
-                    await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                    await self._ctx.Irc.hcmds(user_trigger or '', fromchannel, arg, cmd)
             return None
 
         except KeyError as ke:

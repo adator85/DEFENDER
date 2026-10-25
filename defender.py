@@ -29,7 +29,7 @@ if __name__ == "__main__":
             print("Restart Flag set to: ", restart_flag)
 
     except KeyboardInterrupt:
-        tq = concurrent.futures.thread._threads_queues.copy()
+        tq = dict(concurrent.futures.thread._threads_queues).copy()
         for t, q in tq.items():
             concurrent.futures.thread._threads_queues.pop(t, None)
     except RuntimeError:
