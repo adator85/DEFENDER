@@ -8,6 +8,7 @@ class ModConfModel(MainModel):
     reputation_score_after_release: int = 27
     reputation_ban_all_chan: int = 0
     reputation_sg: int = 1
+    reputation_action: str = 'kill'
     local_scan: int = 0
     psutil_scan: int = 0
     abuseipdb_scan: int = 0

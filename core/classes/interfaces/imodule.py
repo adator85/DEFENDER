@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, Union
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ class IModule(ABC):
         """The Model containing the module parameters
         """
 
+    MOD_HEADER: dict[str, str]
+
     def __init__(self, uplink: 'Loader') -> None:
 
         # import the context
@@ -21,13 +24,49 @@ class IModule(ABC):
         # Module name (Mandatory)
         self.module_name = 'mod_' + str(self.__class__.__name__).lower()
 
+        # Separate The Logger
+        self.logs = self.ctx.Logs
+
         # Log the module
-        self.ctx.Logs.debug(f'Loading Module {self.module_name} ...')
+        self.logs.debug('Loading Module %s (%s) ...',
+                            self.module_name, id(self))
+
+        # Is module compliant
+        self.__loaded: bool = False
+
+    def __del__(self):
+        self.logs.info("[I-MODULE] Module %s (%s) has been destroyed!",
+                           self.__class__.__name__, id(self))
 
     async def sync_db(self) -> None:
         # Sync the configuration with core configuration (Mandatory)
         await self.ctx.Base.db_sync_core_config(self.module_name, self.mod_config)
+        self.is_loaded = True
         return None
+
+    async def cleanup(self) -> None:
+        self.is_loaded = False
+        for nom in dir(self):
+            if isinstance(getattr(self, nom), self.ctx.Definition.DTask):
+                _dtask = getattr(self, nom)
+                try:
+                    await asyncio.wait_for(_dtask.task, timeout=5)
+                    self.ctx.DAsyncio.running_iotasks.remove(_dtask)
+                    self.ctx.Logs.debug("[I-MODULE CLEANUP] The module %s has been cleaned up (%s)",
+                                        self.__class__.__name__, id(self))
+                    # print(f"{task_name} has been removed!")
+                except asyncio.exceptions.TimeoutError as iotimeout:
+                    self.ctx.Logs.error("Error Timeout! %s", iotimeout)
+                except ValueError as ve:
+                    self.ctx.Logs.error("IO Task %s is not available: %s", _dtask, ve)
+
+        for key in list(vars(self)):
+            try:
+                if key not in ['logs', '_IModule__loaded']:
+                    delattr(self, key)
+            except AttributeError as ae:
+                self.logs.error('AttributeError: %s', ae)
+
 
     async def update_configuration(self, param_key: str, param_value: Union[str, int]) -> None:
         """Update the local and core configuration
@@ -37,6 +76,14 @@ class IModule(ABC):
             param_value (str): The parameter value
         """
         await self.ctx.Base.db_update_core_config(self.module_name, self.mod_config, param_key, param_value)
+
+    @property
+    def is_loaded(self) -> bool:
+        return self.__loaded
+    
+    @is_loaded.setter
+    def is_loaded(self, loaded: bool) -> None:
+        self.__loaded = loaded
 
     @property
     @abstractmethod
@@ -73,7 +120,7 @@ class IModule(ABC):
         """
 
     @abstractmethod
-    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list[str], fullcmd: Optional[list[str]]) -> None:
         """These are the commands recieved from a client
 
         Args:

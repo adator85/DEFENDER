@@ -1,6 +1,8 @@
 """
 Main utils library.
 """
+import asyncio
+import inspect
 import gc
 import ssl
 from pathlib import Path
@@ -12,7 +14,7 @@ from time import time, sleep
 from random import choice
 from hashlib import md5, sha3_512
 from core.classes.modules.settings import global_settings
-from asyncio import iscoroutinefunction
+from inspect import iscoroutinefunction
 
 if TYPE_CHECKING:
     from threading import Event
@@ -135,7 +137,7 @@ def run_python_garbage_collector() -> int:
     """
     return gc.collect()
 
-def get_number_gc_objects(your_object_to_count: Optional[Any] = None) -> int:
+def get_number_gc_objects(your_object_to_count: Optional[type] = None) -> int:
     """Get The number of objects tracked by the collector (excluding the list returned).
 
     Returns:
@@ -151,6 +153,8 @@ def heartbeat(event: 'Event', loader: 'Loader', beat: float) -> None:
     x étant définit a l'initialisation de cette class (self.beat)
 
     Args:
+        event (Event): the event loop object
+        loader (Loader): The loader object
         beat (float): Nombre de secondes entre chaque exécution
     """
     loader.Logs.debug(f"Thread started from {threading.current_thread().name}")
@@ -160,6 +164,14 @@ def heartbeat(event: 'Event', loader: 'Loader', beat: float) -> None:
 
     loader.Logs.debug("Heartbeat is off!")
     return None
+
+async def run_garbage_collector(event: asyncio.Event, ctx: 'Loader') -> None:
+    while event.is_set():
+        collected = run_python_garbage_collector()
+        if collected > 0:
+            ctx.Logs.debug('Garbage collector collected %s references', collected)
+
+        await asyncio.sleep(20) # 10 minutes
 
 def generate_random_string(lenght: int) -> str:
     """Retourn une chaîne aléatoire en fonction de la longueur spécifiée.
@@ -206,7 +218,7 @@ def get_all_modules() -> list[str]:
     base_path = Path('mods')
     return [file.name.replace('.py', '') for file in base_path.rglob('mod_*.py')]
 
-def clean_uid(uid: str) -> Optional[str]:
+def clean_uid(uid: str) -> str:
     """Clean UID by removing @ / % / + / ~ / * / :
 
     Args:
@@ -215,8 +227,8 @@ def clean_uid(uid: str) -> Optional[str]:
     Returns:
         str: Clean UID without any sign
     """
-    if uid is None:
-        return None
+    if not uid:
+        return uid
 
     pattern = fr'[:|@|%|\+|~|\*]*'
     parsed_uid = sub(pattern, '', uid)
@@ -269,3 +281,68 @@ def is_coroutinefunction(func: Any) -> bool:
         bool: True if the function is a coroutine
     """
     return iscoroutinefunction(func)
+
+def get_gc_objects() -> list[dict[str, str]]:
+    _result = []
+    _obj = {}
+    _exclude = ['builtins', 'types', 'click.types', 'weakref', 'operator',
+                'dataclasses', 'typing', 'starlette']
+    for obj in gc.get_objects():
+        try:
+            classe = ''
+            file = ''
+            method = ''
+            if inspect.ismethod(obj):
+                cible = obj.__func__
+                owner = obj.__self__
+                classe = owner if inspect.isclass(owner) else type(owner)
+                method = cible.__qualname__
+            elif inspect.isfunction(obj):
+                cible = obj
+                method = obj.__qualname__
+            else:
+                classe = obj if inspect.isclass(obj) else type(obj)
+                cible = classe
+
+            try:
+                file = inspect.getfile(cible)
+            except (TypeError, OSError):
+                pass
+            if not file.startswith('/usr/') and file != ''\
+                    and not file.startswith('/home/adator/Documents/Development/Python/DEFENDER/.pyenv/lib/python3.13/'):
+                _result.append({
+                    'id': id(obj),
+                    'type': type(obj).__name__,
+                    'file': file,
+                    'classe': f'{classe.__name__}.{classe.__qualname__}' if classe is not None else None,
+                    'method': method
+                })
+        except Exception as err:
+            continue
+
+    return _result
+
+def get_number_of_instances(module_name: str):
+    run_python_garbage_collector()
+
+    classes = [
+        obj for obj in gc.get_objects()
+        if isinstance(obj, type)
+        and getattr(obj, "__module__", None) == module_name
+    ]
+
+    print(
+        f"Module {module_name!r} : "
+        f"{len(classes)} classes encore vivantes"
+    )
+
+    return classes
+
+def write_gc_to_file():
+    objects = get_gc_objects()
+    with open('objects.txt', 'a') as f:
+        f.write("\n")
+        f.write("--------------------------------------------------------------\n")
+        for o in objects:
+            if 'core' in o['file']:
+                f.write(f"{o}\n")

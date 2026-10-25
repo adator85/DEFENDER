@@ -28,8 +28,9 @@ class DAsyncio:
         largs = list(args)
         if task_flag:
             task_event = asyncio.Event()
-            task_event.set()
-            largs.insert(0, task_event)
+            if task_event:
+                task_event.set()
+                largs.insert(0, task_event)
         
         _task = self.__create_asynctask(func(*tuple(largs)),
                                         async_name=task_name,
@@ -41,9 +42,9 @@ class DAsyncio:
         return _dtask
 
     def create_safe_task(self, func: Coroutine[Any, Any, Any], *,
-                         async_name: str = None,
+                         async_name: str | None = None,
                          run_once: bool = False
-                         ) -> Optional[dfn.DTask]:
+                         ) -> dfn.DTask:
         """Create a new asynchrone and store it into running_iotasks variable
         WARNING: Use this is you are sure that the func will be stopped.
         Args:
@@ -61,7 +62,10 @@ class DAsyncio:
         if run_once:
             for task in asyncio.all_tasks():
                 if task.get_name().lower() == name.lower():
-                    return None
+                    for _t in self.running_iotasks:
+                        if _t.task is task:
+                            self.logs.debug('Task name found: %s', task.get_name())
+                            return _t
 
         _task = asyncio.create_task(func, name=name)
         _task.add_done_callback(self.__asynctask_done, context=io_ctx)
@@ -80,6 +84,7 @@ class DAsyncio:
 
         Args:
             func (Callable[..., Any]): The blocking IO function
+            thread_name (str): The thread name
             run_once (bool, optional): If it should be run once.. Defaults to False.
             thread_flag (bool, optional): If you are using a endless loop, use the threading Event object. Defaults to False.
 
@@ -104,8 +109,9 @@ class DAsyncio:
         thread_event: Optional[threading.Event] = None
         if thread_flag:
             thread_event = threading.Event()
-            thread_event.set()
-            largs.insert(0, thread_event)
+            if thread_event:
+                thread_event.set()
+                largs.insert(0, thread_event)
 
         future = loop.run_in_executor(executor, func, *tuple(largs))
         future.add_done_callback(self.__asynctask_done, context=io_ctx)
@@ -127,7 +133,9 @@ class DAsyncio:
         self.running_iothreads.remove(id_obj)
         return result
 
-    def __create_asynctask(self, func: Coroutine[Any, Any, Any], *, async_name: str = None, run_once: bool = False) -> Optional[asyncio.Task]:
+    def __create_asynctask(self, func: Coroutine[Any, Any, Any], *,
+                           async_name: str | None = None,
+                           run_once: bool = False) -> asyncio.Task:
         """Create a new asynchrone and store it into running_iotasks variable
 
         Args:
@@ -145,7 +153,7 @@ class DAsyncio:
         if run_once:
             for task in asyncio.all_tasks():
                 if task.get_name().lower() == name.lower():
-                    return None
+                    return task
 
         task = asyncio.create_task(func, name=name)
         task.add_done_callback(self.__asynctask_done, context=io_ctx)

@@ -1,15 +1,11 @@
 from re import findall
-from typing import Any, Optional, Literal, TYPE_CHECKING
+from typing import Optional, Literal, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.definition import MChannel
     from core.loader import Loader
 
 class Channel:
-
-    UID_CHANNEL_DB: list['MChannel'] = []
-    """List that contains all the Channels objects (ChannelModel)
-    """
 
     def __init__(self, loader: 'Loader'):
         """
@@ -18,6 +14,9 @@ class Channel:
             loader (Loader): The Loader Instance
         """
         self._ctx = loader
+        self.UID_CHANNEL_DB: list['MChannel'] = []
+        """List that contains all the Channels objects (ChannelModel)
+        """
 
     def insert(self, new_channel: 'MChannel') -> bool:
         """This method will insert a new channel and if the channel exist it will update the user list (uids)
@@ -58,7 +57,7 @@ class Channel:
             # self._ctx.Logs.debug(f'New Channel Created: ({new_channel})')
 
         if not result:
-            self._ctx.Logs.critical(f'The Channel Object was not inserted {new_channel}')
+            self._ctx.Logs.critical('The Channel Object was not inserted %s', new_channel)
 
         self.clean_channel()
 
@@ -109,7 +108,7 @@ class Channel:
 
             return result
         except ValueError as ve:
-            self._ctx.Logs.error(f'{ve}')
+            self._ctx.Logs.error('ValueError: %s', ve)
             return False
 
     def delete_user_from_all_channel(self, uid:str) -> bool:
@@ -134,7 +133,7 @@ class Channel:
 
             return result
         except ValueError as ve:
-            self._ctx.Logs.error(f'{ve}')
+            self._ctx.Logs.error('ValueError: %s', ve)
             return False
 
     def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
@@ -152,7 +151,7 @@ class Channel:
 
             if chan_obj is None:
                 # Create a new channel if the channel don't exist
-                self._ctx.Logs.debug(f"New channel will be created ({channel_name} - {uid})")
+                self._ctx.Logs.debug("New channel will be created (%s - %s)", channel_name, uid)
                 return self.insert(MChannel(channel_name, uids=[uid]))
 
             chan_obj.uids.append(uid)
@@ -161,7 +160,7 @@ class Channel:
 
             return True
         except Exception as err:
-            self._ctx.Logs.error(f'{err}')
+            self._ctx.Logs.error('GeneralError: %s', err)
             return False
 
     def is_user_present_in_channel(self, channel_name: str, uid: str) -> bool:
@@ -195,7 +194,7 @@ class Channel:
 
             return None
         except Exception as err:
-            self._ctx.Logs.error(f'{err}')
+            self._ctx.Logs.error('GeneralError: %s', err)
 
     def get_channel(self, channel_name: str) -> Optional['MChannel']:
         """Get the channel object
@@ -224,7 +223,7 @@ class Channel:
         """
         try:
             
-            if channel_to_check is None:
+            if not channel_to_check:
                 return False
 
             pattern = fr'^#'
@@ -235,10 +234,10 @@ class Channel:
             else:
                 return True
         except TypeError as te:
-            self._ctx.Logs.error(f'TypeError: [{channel_to_check}] - {te}')
+            self._ctx.Logs.error('TypeError: [%s] - %s', channel_to_check, te)
             return False
         except Exception as err:
-            self._ctx.Logs.error(f'Error Not defined: {err}')
+            self._ctx.Logs.error('GeneralError: %s', err)
             return False
 
     async def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:
@@ -257,7 +256,7 @@ class Channel:
             core_table = self._ctx.Base.Config.TABLE_CHANNEL
 
             if not channel_name:
-                self._ctx.Logs.warning(f'The channel [{channel_name}] is not correct')
+                self._ctx.Logs.warning('The channel [%s] is not correct', channel_name)
                 return False
 
             match action:
@@ -270,9 +269,12 @@ class Channel:
                     if is_channel_exist is None:
                         mes_donnees = {'datetime': self._ctx.Utils.get_sdatetime(), 'channel_name': channel_name, 'module_name': module_name}
                         insert = await self._ctx.Base.db_execute_query(f"INSERT INTO {core_table} (datetime, channel_name, module_name) VALUES (:datetime, :channel_name, :module_name)", mes_donnees)
-                        if insert.rowcount:
-                            self._ctx.Logs.debug(f'Channel added to DB: channel={channel_name} / module_name={module_name}')
+                        if insert.rowcount > 0:
+                            self._ctx.Logs.debug('Channel added to DB: channel=%s / module_name=%s',
+                                                 channel_name, module_name)
                             return True
+                        else:
+                            return False
                     else:
                         return False
 
@@ -281,14 +283,14 @@ class Channel:
                     response = await self._ctx.Base.db_execute_query(f"DELETE FROM {core_table} WHERE channel_name = :channel_name AND module_name = :module_name", mes_donnes)
 
                     if response.rowcount > 0:
-                        self._ctx.Logs.debug(f'Channel deleted from DB: channel={channel_name} / module: {module_name}')
+                        self._ctx.Logs.debug('Channel deleted from DB: channel=%s / module: %s',
+                                             channel_name, module_name)
                         return True
                     else:
                         return False
 
-
         except Exception as err:
-            self._ctx.Logs.error(err)
+            self._ctx.Logs.error('GeneralError: %s', err)
             return False
 
     async def db_join_saved_channels(self) -> None:

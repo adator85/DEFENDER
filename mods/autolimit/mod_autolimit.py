@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 from core.classes.interfaces.imodule import IModule
 from core.definition import DTask, MChannel
-from mods.autolimit import schemas
+from core.constants import Colors
+from mods.autolimit.schemas import ALChannel, ModConfModel
 from mods.autolimit.helper import ALHelper
 
 if TYPE_CHECKING:
@@ -11,19 +12,19 @@ if TYPE_CHECKING:
 
 class Autolimit(IModule):
 
-    DB_AL_CHANNELS: list[schemas.ALChannel] = []
+    DB_AL_CHANNELS: list[ALChannel] = []
     __TABLENAME__: str = 'autolimit_channels'
 
     MOD_HEADER: dict[str, str] = {
         'name': 'Autolimit',
-        'version': '0.0.2',
+        'version': '0.0.3',
         'description': 'Autolimit module by channel or globally',
         'author': 'Defender Team',
         'core_version': 'Defender-6'
     }
 
     @dataclass
-    class ModConfModel(schemas.ModConfModel):
+    class ModConfModel(ModConfModel):
         ...
 
     @property
@@ -32,15 +33,15 @@ class Autolimit(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
-        self._mod_config: Optional[schemas.ModConfModel] = None
+        self._mod_config: ModConfModel
+        self.helper: ALHelper
+        self.task_increment_autolimit: Optional[DTask]
         self._is_running = True
         self._io = context.DAsyncio
-        self.task_increment_autolimit: Optional[DTask] = None
-        self.helper: Optional[ALHelper] = None
 
     async def load(self):
         # Variable qui va contenir les options de configuration du module Defender
-        self._mod_config: schemas.ModConfModel  = self.ModConfModel()
+        self._mod_config: ModConfModel  = self.ModConfModel()
 
         # Create tables
         await self.create_tables()
@@ -57,9 +58,16 @@ class Autolimit(IModule):
         self.task_increment_autolimit = self._io.create_task(self.increment_autolimit, task_flag=True)
 
     async def unload(self):
-        self.task_increment_autolimit.event.clear()
-        for _channel in self.ctx.Channel.UID_CHANNEL_DB:
-            await self.ctx.Irc.Protocol.send_set_mode('-l', channel_name=_channel.name)
+        if self.task_increment_autolimit:
+            if self.task_increment_autolimit.event:
+                self.task_increment_autolimit.event.clear()
+
+            '''
+            if self.task_increment_autolimit.task:
+                self.task_increment_autolimit.task.cancel()
+            '''
+            for _channel in self.ctx.Channel.UID_CHANNEL_DB:
+                await self.ctx.Irc.Protocol.send_set_mode('-l', channel_name=_channel.name)
 
     async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
@@ -80,23 +88,26 @@ class Autolimit(IModule):
         await self.ctx.Base.db_execute_query(table_autolimit)
         return None
 
-    async def apply_mode(self, mchan: MChannel, db_chan: Optional[schemas.ALChannel] = None):
+    async def apply_mode(self, mchan: MChannel, db_chan: Optional[ALChannel] = None):
         if self.mod_config.global_autolimit == 1:
             _interval = self.mod_config.global_interval
             _amount = self.mod_config.global_amount
             _channel = mchan.name
         else:
-            _interval = db_chan.interval
-            _amount = db_chan.amount
-            _channel = db_chan.channel
+            if db_chan:
+                _interval = db_chan.interval
+                _amount = db_chan.amount
+                _channel = db_chan.channel
+            else:
+                return
 
         await asyncio.sleep(_interval)
         await self.ctx.Irc.Protocol.send_set_mode('+l', channel_name=_channel, params=len(mchan.uids) + _amount)
 
     async def increment_autolimit(self, event: asyncio.Event) -> None:
 
-        _static_serv_chans_gauto: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
-        _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+        _static_serv_chans_gauto: list[dict[str, Any]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+        _static_serv_chans: list[dict[str, Any]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
 
         _static_serv_chan_list: list[str] = [c.name for c in self.ctx.Channel.UID_CHANNEL_DB]
         _static_al_chan_list = [c.channel for c in self.DB_AL_CHANNELS]
@@ -108,7 +119,7 @@ class Autolimit(IModule):
             if self.mod_config.global_autolimit == 1:
                 __id = 1
                 if __flag != __id:
-                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    _static_serv_chans: list[dict[str, Any]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
                     __flag = __id
 
                 # Save online server channel list
@@ -140,13 +151,13 @@ class Autolimit(IModule):
             else:
                 __id = 2
                 if __flag != __id:
-                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    _static_serv_chans: list[dict[str, Any]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
                     __flag = __id
 
                 _online_al_chans_list = [c.channel for c in self.DB_AL_CHANNELS]
 
                 if len(self.DB_AL_CHANNELS) == 0:
-                    _static_serv_chans: list[dict[str, int]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
+                    _static_serv_chans: list[dict[str, Any]] = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB]
                     _static_al_chan_list = _online_al_chans_list
 
                 diff = list(set(filter(lambda x: x not in _online_al_chans_list, _static_al_chan_list)))
@@ -185,9 +196,7 @@ class Autolimit(IModule):
         p = self.ctx.Irc.Protocol
 
         try:
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
-            if index == -1:
-                return None
+            command = p.get_ircd_protocol_position(cmd)
             
             match command:
                 case 'PART':
@@ -198,11 +207,11 @@ class Autolimit(IModule):
                     # ['@msgid...', ':001', 'SJOIN', '1769989165', '#test', ':@001IN5101']
                     ...
 
-                case _:
-                    pass
+                case None:
+                    return None
 
         except Exception as err:
-            self.ctx.Logs.error(f"General Error {err}", exc_info=True)
+            self.ctx.Logs.error("General Error: %s", err, exc_info=True)
 
     async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
         """All messages coming from the user commands (Mandatory)
@@ -214,7 +223,7 @@ class Autolimit(IModule):
             fullcmd (list, optional): The full messages coming from the IRCD server. Defaults to [].
         """
         u = self.ctx.User.get_user(user)
-        c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
+        # c = self.ctx.Channel.get_channel(channel) if self.ctx.Channel.is_valid_channel(channel) else None
         proto = self.ctx.Irc.Protocol
         if u is None:
             return None
@@ -250,7 +259,8 @@ class Autolimit(IModule):
                     return None
 
                 if not _channel:
-                    await proto.send_notice(nick_from=dnickname, nick_to=u.nickname, msg=f"The channel ({_channel}) is not valid!")
+                    await proto.send_notice(nick_from=dnickname, nick_to=u.nickname,
+                                            msg=f"The channel ({str(cmd[2])}) is not valid!")
                     return None
 
                 _query = f'SELECT id FROM {self.__TABLENAME__} WHERE channel=:channel'
@@ -278,16 +288,16 @@ class Autolimit(IModule):
                 
                 result = await self.ctx.Base.db_execute_query(_query, _params)
                 if result.rowcount > 0:
-                    self.helper.insert_al_channel(schemas.ALChannel(_channel.lower(), _amount, _interval))
+                    self.helper.insert_al_channel(ALChannel(_channel.lower(),_amount, _interval))
                     await proto.send_notice(nick_from=dnickname, nick_to=u.nickname, msg=f"{_channel} has been added to the autolimit database!")
 
                 return None
 
             case 'list':
                 try:
-                    red = self.ctx.Config.COLORS.red
-                    nogc = self.ctx.Config.COLORS.nogc
-                    bold = self.ctx.Config.COLORS.bold
+                    red = Colors.red
+                    nogc = Colors.nogc
+                    bold = Colors.bold
 
                     if self.mod_config.global_autolimit == 1:
                         await self.ctx.Irc.Protocol.send_notice(
@@ -304,7 +314,7 @@ class Autolimit(IModule):
                     return None
 
                 except Exception as err:
-                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    self.ctx.Logs.error("General Error: %s", err)
                     return None
 
             case 'del':
@@ -326,7 +336,7 @@ class Autolimit(IModule):
                         await proto.send_notice(nick_from=dnickname, nick_to=u.nickname, msg="The confirmation channel is not matching!")
                         return None
 
-                    _db_channel = self.helper.get_al_channel(_channel)
+                    _db_channel = self.helper.get_al_channel(_channel or '')
                     if _db_channel is None:
                         await proto.send_notice(nick_from=dnickname, nick_to=u.nickname,
                                                 msg=f"{_channel} is not available in the autolimit database")
@@ -346,7 +356,7 @@ class Autolimit(IModule):
                     return None
 
                 except Exception as err:
-                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    self.ctx.Logs.error("General Error: %s", err)
                     return None
 
             case 'global':
@@ -423,7 +433,7 @@ class Autolimit(IModule):
                                                 msg='[AUTOLIMIT] Global autolimit deactivated!')
 
                 except Exception as err:
-                    self.ctx.Logs.error(f"Unknown Error: {err}")
+                    self.ctx.Logs.error("General Error: %s", err)
                     return None
 
             case _:

@@ -71,7 +71,7 @@ def generate_realname_for_clone(faker_instance: 'Faker') -> tuple[int, str, str]
 
     return age, gender, department
 
-def generate_nickname_for_clone(faker_instance: 'Faker', gender: Optional[str] = 'AUTO') -> Optional[str]:
+def generate_nickname_for_clone(faker_instance: 'Faker', gender: str = 'AUTO') -> str:
     """Generate nickname for clone
 
     Args:
@@ -91,7 +91,7 @@ def generate_nickname_for_clone(faker_instance: 'Faker', gender: Optional[str] =
     elif gender.upper() == 'M':
         return faker_instance.first_name_male()
 
-    return None
+    return ''
 
 def generate_ipv4_for_clone(faker_instance: 'Faker', auto: bool = True) -> str:
     """Generate remote ipv4 for clone
@@ -131,7 +131,10 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
     """Create a new Clone object in the DB_CLONES.
 
     Args:
-        faker_instance (Faker): The Faker instance
+        uplink (Clone): The Clone Object
+        faker_instance (Faker): The Faker object
+        group (str): The Clone Group
+        auto_remote_ip (bool): Auto Remote IP.
 
     Returns:
         bool: True if it was created
@@ -158,7 +161,7 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
     geoip = generate_country_code_for_clone(faker)
 
-    check_nickname = uplink.Clone.nickname_exists(nickname)
+    check_nickname = uplink.Clone.nickname_exists(nickname or '')
     check_uid = uplink.Clone.uid_exists(uid=uid)
 
     while check_nickname:
@@ -192,6 +195,9 @@ def create_new_clone(uplink: 'Clone', faker_instance: 'Faker', group: str = 'Def
 
 async def handle_on_privmsg(uplink: 'Clone', srvmsg: list[str]) -> None:
     
+    if uplink.mod_config.snitch == 0:
+        return None
+
     sender_obj, reciever_obj, channel, message = uplink.ctx.Irc.Protocol.parse_privmsg(srvmsg)
 
     if sender_obj is not None:

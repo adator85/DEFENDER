@@ -22,15 +22,15 @@ class Settings:
     RUNNING_SOCKETS: list[socket]               = []
     RUNNING_ASYNC_TASKS: list[DTask]            = []
     RUNNING_ASYNC_THREADS: list[MThread]        = []
-    PERIODIC_FUNC: dict[str, Any]               = {}
+    PERIODIC_FUNC: dict[int, Any]               = {}
 
     THLOCK: RLock                               = RLock()
     AILOCK: Lock                                = Lock()
 
     CONSOLE: bool                               = False
 
-    MAIN_SERVER_HOSTNAME: str                   = None
-    MAIN_SERVER_ID: str                         = None
+    MAIN_SERVER_HOSTNAME: str                   = ''
+    MAIN_SERVER_ID: str                         = ''
     PROTOCTL_PREFIX_MODES_SIGNES : dict[str, str] = {}
     PROTOCTL_PREFIX_SIGNES_MODES : dict[str, str] = {}
     PROTOCTL_USER_MODES: list[str]              = []
@@ -107,7 +107,7 @@ class Settings:
         self.__LANG = lang
 
     @property
-    def global_user(self) -> 'User':
+    def global_user(self) -> Optional['User']:
         return self.__INSTANCE_OF_USER_UTILS
 
     @global_user.setter
@@ -115,7 +115,7 @@ class Settings:
         self.__INSTANCE_OF_USER_UTILS = user_utils_instance
 
     @property
-    def current_admin(self) -> MAdmin:
+    def current_admin(self) -> Optional['MAdmin']:
         """Current admin data model."""
         return self.__CURRENT_ADMIN
 
@@ -124,7 +124,7 @@ class Settings:
         self.__CURRENT_ADMIN = current_admin
 
     @property
-    def global_logger(self) -> Logger:
+    def global_logger(self) -> Optional['Logger']:
         """Global logger Instance"""
         return self.__LOGGER
 

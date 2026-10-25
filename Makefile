@@ -3,6 +3,7 @@ CURRENT_USER := $(shell whoami)
 PYTHON_VERSION := $(shell python3 -V)
 HOME_DIR := $(shell echo $$HOME)
 SHELL := $(shell echo $$0)
+DISTRO := $(shell if [ -f /etc/os-release ]; then . /etc/os-release && echo $$NAME; else echo "Unknown Linux"; fi)
 
 install:
 ifeq ($(wildcard config/configuration.yaml),)
@@ -10,7 +11,8 @@ ifeq ($(wildcard config/configuration.yaml),)
 endif
 
 ifeq ($(OS), Linux)
-	$(info Installation for os : $(OS))
+	$(info Operating System: $(OS))
+	$(info Distribution: $(DISTRO))
 	$(info Python version: $(PYTHON_VERSION))
 	$(info Home directory: $(HOME_DIR))
 	$(info Shell type: $(SHELL))
@@ -23,9 +25,6 @@ ifeq ($(OS), Linux)
 		exit 1; \
 	fi
 
-	$(info Creating the systemd user folder...)
-	mkdir -p $(HOME_DIR)/.config/systemd/user
-
 	$(info Creating Python Virtual Environment...)
 	python3 -m venv .pyenv
 	@. .pyenv/bin/activate && \
@@ -33,12 +32,28 @@ ifeq ($(OS), Linux)
 		pip cache purge && \
 		pip install -r requirements.txt
 
+ifeq ($(DISTRO), Alpine Linux)
+	@. .pyenv/bin/activate && python core/install.py --install
+	$(info )
+	$(info ============================================)
+	$(info Installation complete!)
+	$(info To start Defender manually:)
+	$(info   .pyenv/bin/python defender.py)
+	$(info )
+	$(info For autostart with OpenRC (as root):)
+	$(info   sudo cp defender.initd /etc/init.d/defender)
+	$(info   sudo rc-update add defender default)
+	$(info   sudo rc-service defender start)
+	$(info ============================================)
+else
+	$(info Creating the systemd user folder...)
+	mkdir -p $(HOME_DIR)/.config/systemd/user
 	@. .pyenv/bin/activate && python core/install.py --install
 	loginctl enable-linger $(CURRENT_USER)
 	@sleep 2
-	@export echo $DBUS_SESSION_BUS_ADDRESS && \
-		systemctl --user daemon-reload && \
-		systemctl --user start defender
+	systemctl --user daemon-reload
+	systemctl --user start defender
+endif
 
 endif
 

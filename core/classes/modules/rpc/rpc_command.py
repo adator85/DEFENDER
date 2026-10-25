@@ -12,6 +12,7 @@ class RPCCommand(IRPC):
     
     def command_list(self, **kwargs) -> JSONResponse:
         self.reset()
+        _kwargs = kwargs.get('my_arg', None)
         self.response_model['result'] = [command.to_dict() for command in self.ctx.Commands.DB_COMMANDS]
         return JSONResponse(self.response_model)
     

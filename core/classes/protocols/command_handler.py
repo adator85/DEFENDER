@@ -6,15 +6,14 @@ if TYPE_CHECKING:
 
 class CommandHandler:
     
-    DB_IRCDCOMMS: list['MIrcdCommand'] = []
-    DB_SUBSCRIBE: list = []
-
     def __init__(self, loader: 'Loader'):
         """Init method
 
         Args:
             loader (Loader): The loader Object
         """
+        self.DB_IRCDCOMMS: list['MIrcdCommand'] = []
+        self.DB_SUBSCRIBE: list = []
         self.__Logs = loader.Logs
 
     def register(self, ircd_command_model: 'MIrcdCommand') -> None:
@@ -52,3 +51,9 @@ class CommandHandler:
             list[MIrcdCommand]: a list of all registred commands
         """
         return self.DB_IRCDCOMMS.copy()
+
+    def destroy(self):
+        self.DB_IRCDCOMMS.clear()
+        self.DB_SUBSCRIBE.clear()
+        del self.DB_IRCDCOMMS
+        del self.DB_SUBSCRIBE

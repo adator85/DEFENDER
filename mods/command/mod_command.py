@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any
 from dataclasses import dataclass
 from core.classes.interfaces.imodule import IModule
 import mods.command.utils as utils
@@ -25,7 +25,10 @@ class Command(IModule):
 
     def __init__(self, uplink: 'Loader'):
         super().__init__(uplink)
-        self._mod_config: Optional[Command.ModConfModel] = self.ModConfModel()
+        self._mod_config: Command.ModConfModel = self.ModConfModel()
+        self.user_to_notice: str
+        self.show_219: bool
+
     
     @property
     def mod_config(self) -> ModConfModel:
@@ -34,8 +37,6 @@ class Command(IModule):
     async def create_tables(self) -> None:
         """Methode qui va créer la base de donnée si elle n'existe pas.
            Une Session unique pour cette classe sera crée, qui sera utilisé dans cette classe / module
-        Args:
-            database_name (str): Nom de la base de données ( pas d'espace dans le nom )
 
         Returns:
             None: Aucun retour n'es attendu
@@ -59,8 +60,9 @@ class Command(IModule):
         # Create the database
         await self.create_tables()
 
-        # Module Utils
-        self.mod_utils = utils
+        # sync the database with local variable (Mandatory)
+        await self.sync_db()
+
         self.user_to_notice: str = ''
         self.show_219: bool = True
 
@@ -69,14 +71,14 @@ class Command(IModule):
         for c in new_cmds:
             self.ctx.Irc.Protocol.known_protocol.add(c)
 
-        self.ctx.Commands.build_command(2, self.module_name, 'join', 'Join a channel')
-        self.ctx.Commands.build_command(2, self.module_name, 'part', 'Leave a channel')
+        self.ctx.Commands.build_command(3, self.module_name, 'join', 'Join a channel')
+        self.ctx.Commands.build_command(3, self.module_name, 'part', 'Leave a channel')
         self.ctx.Commands.build_command(2, self.module_name, 'owner', 'Give channel ownership to a user')
         self.ctx.Commands.build_command(2, self.module_name, 'deowner', 'Remove channel ownership from a user')
         self.ctx.Commands.build_command(2, self.module_name, 'protect', 'Protect a user from being kicked')
         self.ctx.Commands.build_command(2, self.module_name, 'deprotect', 'Remove protection from a user')
-        self.ctx.Commands.build_command(2, self.module_name, 'op', 'Grant operator privileges to a user')
-        self.ctx.Commands.build_command(2, self.module_name, 'deop', 'Remove operator privileges from a user')
+        self.ctx.Commands.build_command(1, self.module_name, 'op', 'Grant operator privileges to a user')
+        self.ctx.Commands.build_command(1, self.module_name, 'deop', 'Remove operator privileges from a user')
         self.ctx.Commands.build_command(1, self.module_name, 'halfop', 'Grant half-operator privileges to a user')
         self.ctx.Commands.build_command(1, self.module_name, 'dehalfop', 'Remove half-operator privileges from a user')
         self.ctx.Commands.build_command(1, self.module_name, 'voice', 'Grant voice privileges to a user')
@@ -118,7 +120,7 @@ class Command(IModule):
         self.ctx.Commands.build_command(2, self.module_name, 'klinelist', 'List all K-line bans')
         self.ctx.Commands.build_command(3, self.module_name, 'map', 'Show the server network map')
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         self.ctx.Commands.drop_command_by_module(self.module_name)
         return None
 
@@ -127,16 +129,13 @@ class Command(IModule):
             # service_id = self.ctx.Config.SERVICE_ID
             dnickname = self.ctx.Config.SERVICE_NICKNAME
             # dchanlog = self.ctx.Config.SERVICE_CHANLOG
-            red = self.ctx.Config.COLORS.red
-            green = self.ctx.Config.COLORS.green
-            bold = self.ctx.Config.COLORS.bold
-            nogc = self.ctx.Config.COLORS.nogc
+            red = self.ctx.Const.Colors.red
+            green = self.ctx.Const.Colors.green
+            bold = self.ctx.Const.Colors.bold
+            nogc = self.ctx.Const.Colors.nogc
             cmd = list(data).copy()
 
-            pos, parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd=cmd, log=True)
-
-            if pos == -1:
-                return None
+            parsed_cmd = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd=cmd)
 
             match parsed_cmd:
                 # [':irc.deb.biz.st', '403', 'Dev-PyDefender', '#Z', ':No', 'such', 'channel']
@@ -148,11 +147,11 @@ class Command(IModule):
                             nick_to=self.user_to_notice,
                             msg=f"[{red}ERROR MSG{nogc}] {message}"
                         )
-                        self.ctx.Logs.error(f"{cmd[1]} - {message}")
+                        self.ctx.Logs.error('%s - %s', cmd[1], message)
                     except KeyError as ke:
-                        self.ctx.Logs.error(ke)
+                        self.ctx.Logs.error('Key Error: %s', ke)
                     except Exception as err:
-                        self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                        self.ctx.Logs.error('General Error: %s', str(err))
 
                 case '006' | '018':
                     try:
@@ -165,9 +164,9 @@ class Command(IModule):
                             msg=f"[{green}SERVER MSG{nogc}] {message}"
                         )
                     except KeyError as ke:
-                        self.ctx.Logs.error(ke)
+                        self.ctx.Logs.error('Key Error: %s', ke)
                     except Exception as err:
-                        self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                        self.ctx.Logs.error('General Error: %s', str(err))
 
                 case '219':
                     try:
@@ -188,9 +187,9 @@ class Command(IModule):
                                 await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,nick_to=self.user_to_notice, msg="No kline")
 
                     except KeyError as ke:
-                        self.ctx.Logs.error(ke)
+                        self.ctx.Logs.error('Key Error: %s', ke)
                     except Exception as err:
-                        self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                        self.ctx.Logs.error('General Error: %s', str(err))
 
                 case '223':
                     try:
@@ -205,231 +204,244 @@ class Command(IModule):
                                                 )
 
                     except KeyError as ke:
-                        self.ctx.Logs.error(ke)
+                        self.ctx.Logs.error('Key Error: %s', ke)
                     except Exception as err:
-                        self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                        self.ctx.Logs.error('General Error: %s', err)
 
                 case 'SJOIN':
                     # ['@msgid=yldTlbwAGbzCGUcCIHi3ku;time=2024-11-11T17:56:24.297Z', ':001', 'SJOIN', '1728815963', '#znc', ':001LQ0L0C']
                     # Check if the user has an automode
                     try:
                         user_uid = self.ctx.User.clean_uid(cmd[5])
-                        userObj: MUser = self.ctx.User.get_user(user_uid)
+                        user_obj: MUser | None = self.ctx.User.get_user(user_uid or '')
                         channel_name = cmd[4] if self.ctx.Channel.is_valid_channel(cmd[4]) else None
-                        nickname = userObj.nickname if userObj is not None else None
+                        nickname = user_obj.nickname if user_obj is not None else ''
 
-                        if userObj is None:
+                        if user_obj is None or channel_name is None:
+                            if user_obj is None:
+                                self.ctx.Logs.error("User is empty!")
+                            if channel_name is None:
+                                self.ctx.Logs.error("Channel name is empty!")
                             return None
 
-                        if 'r' not in userObj.umodes and 'o' not in userObj.umodes:
+                        if 'r' not in user_obj.umodes and 'o' not in user_obj.umodes:
                             return None
 
                         db_data: dict[str, str] = {"nickname": nickname.lower(), "channel": channel_name.lower()}
                         db_query = await self.ctx.Base.db_execute_query("SELECT id, mode FROM command_automode WHERE LOWER(nickname) = :nickname AND LOWER(channel) = :channel", db_data)
                         db_result = db_query.fetchone()
                         if db_result:
-                            id, mode = db_result
-                            await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVICE_ID} MODE {channel_name} {mode} {userObj.nickname}")
+                            _id, mode = db_result
+                            await self.ctx.Irc.Protocol.send_set_mode(mode,
+                                                                      nickname=user_obj.nickname,
+                                                                      channel_name=channel_name)
 
                     except KeyError as ke:
-                        self.ctx.Logs.error(f"Key Error: {err}")
+                        self.ctx.Logs.error('Key Error: %s', ke)
+                    except Exception as err:
+                        self.ctx.Logs.error('General Error: %s', err)
 
                 case _:
                     pass
 
         except Exception as err:
-            self.ctx.Logs.error(f"General Error: {err}", exc_info=True)
+            self.ctx.Logs.error('General Error: %s', err, exc_info=True)
 
-    async def hcmds(self, uidornickname: str, channel_name: Optional[str], cmd: list, fullcmd: list = []):
+    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
 
         command = str(cmd[0]).lower()
         dnickname = self.ctx.Config.SERVICE_NICKNAME
         service_id = self.ctx.Config.SERVICE_ID
-        dchanlog = self.ctx.Config.SERVICE_CHANLOG
-        self.user_to_notice = uidornickname
-        fromuser = uidornickname
-        fromchannel = channel_name
+        self.user_to_notice = user
+        fromuser = user
+        fromchannel = channel
 
         match command:
 
             case 'automode':
                 try:
-                    await self.mod_utils.set_automode(self, cmd, fromuser)
+                    await utils.set_automode(self, cmd, fromuser)
                 except IndexError:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.ctx.Settings.PROTOCTL_PREFIX)}")
                 except Exception as err:
-                    self.ctx.Logs.error(f"General Error: {err}")
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'deopall':
                 try:
-                    # await self.mod_utils.set_deopall(self, fromchannel)
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'o')
+                    await utils.set_mode_to_all(self, fromchannel, '-', 'o')
                 except Exception as err:
-                    self.ctx.Logs.error(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'devoiceall':
                 try:
-                    # await self.mod_utils.set_devoiceall(self, fromchannel)
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '-', 'v')
+                    await utils.set_mode_to_all(self, fromchannel, '-', 'v')
                 except Exception as err:
-                    self.ctx.Logs.error(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'voiceall':
                 try:
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'v')
+                    await utils.set_mode_to_all(self, fromchannel, '+', 'v')
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'opall':
                 try:
-                    await self.mod_utils.set_mode_to_all(self, fromchannel, '+', 'o')
+                    await utils.set_mode_to_all(self, fromchannel, '+', 'o')
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'op':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+o')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+o')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} op [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'deop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-o')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-o')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} deop [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'owner':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+q')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+q')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} owner [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'deowner':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-q')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-q')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} deowner [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'protect':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+a')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+a')
 
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'deprotect':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-a')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-a')
 
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd DEOWNER: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'halfop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+h')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+h')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'dehalfop':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-h')
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-h')
 
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} dehalfop [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'voice':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '+v')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '+v')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} voice [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'devoice':
                 try:
-                    await self.mod_utils.set_operation(self, cmd, fromchannel, fromuser, '-v')
-                except IndexError as e:
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
+                    await utils.set_operation(self, cmd, fromchannel, fromuser, '-v')
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} devoice [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'ban':
                 try:
-                    await self.mod_utils.set_ban(self, cmd, '+', fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd BAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    await utils.set_ban(self, cmd, '+', fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'unban':
                 try:
-                    await self.mod_utils.set_ban(self, cmd, '-', fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd UNBAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
+                    await utils.set_ban(self, cmd, '-', fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'kick':
                 try:
-                    await self.mod_utils.set_kick(self, cmd, fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd KICK: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
+                    await utils.set_kick(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'kickban':
                 try:
-                    await self.mod_utils.set_kickban(self, cmd, fromuser)
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd KICKBAN: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
+                    await utils.set_kickban(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON] [NICKNAME] [REASON]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'join':
                 try:
-                    await self.mod_utils.set_assign_channel_to_service(self, cmd, fromuser)
-                except IndexError as ie:
-                    self.ctx.Logs.debug(f'{ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
+                    await utils.set_assign_channel_to_service(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'part':
                 try:
                     # Syntax. !part #channel
-                    await self.mod_utils.set_unassign_channel_to_service(self, cmd, fromuser)
-                except IndexError as ie:
-                    self.ctx.Logs.debug(f'{ie}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
+                    await utils.set_unassign_channel_to_service(self, cmd, fromuser)
+                except IndexError:
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'topic':
                 try:
@@ -452,9 +464,9 @@ class Command(IModule):
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the topic")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'wallops':
                 try:
@@ -470,9 +482,9 @@ class Command(IModule):
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the wallops message")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'globops':
                 try:
@@ -488,9 +500,9 @@ class Command(IModule):
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the globops message")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'gnotice':
                 try:
@@ -501,14 +513,14 @@ class Command(IModule):
                     gnotice_msg = ' '.join(cmd[1:]).strip()
 
                     if gnotice_msg:
-                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.ctx.Config.COLORS.red}GLOBAL NOTICE{self.ctx.Config.COLORS.nogc}] {gnotice_msg}")
+                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to='$*.*', msg=f"[{self.ctx.Const.Colors.red}GLOBAL NOTICE{self.ctx.Const.Colors.nogc}] {gnotice_msg}")
                     else:
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You need to specify the global notice message")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'whois':
                 try:
@@ -527,9 +539,9 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f':{dnickname} WHOIS {nickname}')
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'names':
                 try:
@@ -547,9 +559,9 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f':{dnickname} NAMES {chan}')
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'invite':
                 try:
@@ -573,9 +585,9 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f':{dnickname} INVITE {nickname} {chan}')
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(f"KeyError: {ke}")
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'inviteme':
                 try:
@@ -586,9 +598,9 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f':{dnickname} INVITE {fromuser} {self.ctx.Config.SERVICE_CHANLOG}')
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(f"KeyError: {ke}")
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'map':
                 try:
@@ -596,9 +608,9 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f':{dnickname} MAP')
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(f"KeyError: {ke}")
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'umode':
                 try:
@@ -611,10 +623,11 @@ class Command(IModule):
                     umode = str(cmd[2])
 
                     await self.ctx.Irc.Protocol.send_svsmode(nickname=nickname, user_mode=umode)
+
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s ', ke)
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'mode':
                 # .mode #channel +/-mode
@@ -643,17 +656,18 @@ class Command(IModule):
                         await self.ctx.Irc.Protocol.send2socket(f":{service_id} MODE {provided_channel} {channel_mode}")
                         return None
 
-                except IndexError as e:
-                    self.ctx.Logs.warning(f'_hcmd OP: {str(e)}')
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
+                except IndexError as ie:
+                    self.ctx.Logs.error('Index Error: %s', ie)
+                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                            msg=f" Right command : /msg {dnickname} {command.upper()} [#CHANNEL] [+/-]mode")
                 except Exception as err:
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'get_mode':
                 try:
                     await self.ctx.Irc.Protocol.send2socket(f'MODE {fromchannel}')
                 except Exception as err:
-                    self.ctx.Logs.error(f"General Error {err}")
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'svsjoin':
                 try:
@@ -669,10 +683,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_svsjoin(nickname, channels, keys)
                 except IndexError as ke:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]")
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Index Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSJOIN <nick> <channel>[,<channel2>..] [key1[,key2[..]]]")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'svspart':
                 try:
@@ -688,10 +702,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_svspart(nickname, channels, reason)
                 except IndexError as ke:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART <nick> <channel>[,<channel2>..] [<comment>]")
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Index Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSPART <nick> <channel>[,<channel2>..] [<comment>]")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'svsnick':
                 try:
@@ -712,10 +726,10 @@ class Command(IModule):
 
                 except IndexError as ke:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Index Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname newnickname")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'sajoin':
                 try:
@@ -729,10 +743,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_sajoin(nick_to_sajoin=nickname, channel_name=channel)
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'sapart':
                 try:
@@ -746,10 +760,10 @@ class Command(IModule):
 
                     await self.ctx.Irc.Protocol.send_sapart(nick_to_sapart=nickname, channel_name=channel)
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname #channel")
-                    self.ctx.Logs.error(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'kill':
                 try:
@@ -762,12 +776,12 @@ class Command(IModule):
                     nickname = str(cmd[1])
                     kill_reason = ' '.join(cmd[2:])
 
-                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} KILL {nickname} {kill_reason} ({self.ctx.Config.COLORS.red}{dnickname}{self.ctx.Config.COLORS.nogc})")
+                    await self.ctx.Irc.Protocol.send2socket(f":{service_id} KILL {nickname} {kill_reason} ({self.ctx.Const.Colors.red}{dnickname}{self.ctx.Const.Colors.nogc})")
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} SVSNICK nickname newnickname")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'gline':
                 try:
@@ -791,10 +805,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_gline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'ungline':
                 try:
@@ -812,10 +826,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_ungline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'kline':
                 try:
@@ -839,10 +853,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_kline(nickname=nickname, hostname=hostname, set_by=dnickname, expire_timestamp=expire_time, set_at_timestamp=set_at_timestamp, reason=gline_reason)
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'unkline':
                 try:
@@ -859,10 +873,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_unkline(nickname=nickname, hostname=hostname)
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'shun':
                 try:
@@ -886,10 +900,10 @@ class Command(IModule):
 
                     await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_ID} TKL + s {nickname} {hostname} {dnickname} {expire_time} {set_at_timestamp} :{shun_reason}")
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname host reason")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'unshun':
                 try:
@@ -906,10 +920,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVEUR_ID} TKL - s {nickname} {hostname} {dnickname}")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()} nickname hostname")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'glinelist':
                 try:
@@ -917,7 +931,7 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVICE_ID} STATS G")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
                     self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
@@ -928,10 +942,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVICE_ID} STATS s")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case 'klinelist':
                 try:
@@ -939,10 +953,10 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send2socket(f":{self.ctx.Config.SERVICE_ID} STATS k")
 
                 except KeyError as ke:
-                    self.ctx.Logs.error(ke)
+                    self.ctx.Logs.error('Key Error: %s', ke)
                 except Exception as err:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" /msg {dnickname} {command.upper()}")
-                    self.ctx.Logs.warning(f'Unknown Error: {str(err)}')
+                    self.ctx.Logs.error('General Error: %s', err)
 
             case _:
-                pass
+                return None

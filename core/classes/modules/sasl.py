@@ -6,8 +6,6 @@ if TYPE_CHECKING:
 
 class Sasl:
 
-    DB_SASL: list['MSasl'] = []
-
     def __init__(self, loader: 'Loader'):
         """
 
@@ -15,6 +13,7 @@ class Sasl:
             loader (Loader): The Loader instance.
         """
         self.Logs = loader.Logs # logger
+        self.DB_SASL: list['MSasl'] = []
 
     def insert_sasl_client(self, psasl: 'MSasl') -> bool:
         """Insert a new Sasl authentication
@@ -26,10 +25,10 @@ class Sasl:
             bool: True if inserted
         """
 
-        if psasl is None:
+        if not psasl:
             return False
 
-        sasl_obj = self.get_sasl_obj(psasl.client_uid)
+        sasl_obj = self.get_sasl_obj(psasl.client_uid or '')
 
         if sasl_obj is not None:
             # User already created return False

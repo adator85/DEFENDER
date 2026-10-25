@@ -16,7 +16,7 @@ class ProtocolFactorty:
         """
         self.__ctx = context
 
-    def get(self) -> Optional[IProtocol]:
+    def get(self) -> IProtocol:
 
         protocol = self.__ctx.Config.SERVEUR_PROTOCOL
 

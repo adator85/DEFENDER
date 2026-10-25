@@ -23,6 +23,7 @@ class JSonRpcServer:
         self.host = context.Config.RPC_HOST
         self.port = context.Config.RPC_PORT
         self.routes: list[Route] = []
+        self.app_jsonrpc: Starlette
         self.server: Optional[uvicorn.Server] = None
 
         self.methods: dict = {
@@ -34,6 +35,9 @@ class JSonRpcServer:
             'command.get.by.module': RPCCommand(context).command_get_by_module
         }
 
+    def __del__(self):
+        self._ctx.Logs.debug('%s has been destroyed', self.__class__.__name__)
+
     async def start_rpc_server(self):
         
         if not self._ctx.Config.RPC_ACTIVE:
@@ -44,7 +48,7 @@ class JSonRpcServer:
                 self._ctx.Config.SERVICE_CHANLOG
             )
             self._ctx.Logs.debug("D-RPC Server is deactivated from the config file!")
-            return None
+            return
 
         if not self.live:
             self.routes = [Route('/api', self.request_handler, methods=['POST'])]
@@ -57,13 +61,25 @@ class JSonRpcServer:
                 "[DEFENDER JSONRPC SERVER] RPC Server started!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
-            await self.server.serve()
+
+            if self.server:
+                await self.server.serve()
+
             self._ctx.Logs.debug("Server is going to shutdown!")
         else:
             self._ctx.Logs.debug("Server already running")
     
     async def stop_rpc_server(self):
         
+        if not self.live:
+            await self._ctx.Irc.Protocol.send_priv_msg(
+                self._ctx.Config.SERVICE_NICKNAME,
+                "[ DEFENDER JSONRPC SERVER ] RPC Server is not running!",
+                self._ctx.Config.SERVICE_CHANLOG
+            )
+            self._ctx.Logs.debug("JSON-RPC Server is not running!")
+            return
+
         if self.server:
             self.server.should_exit = True
             await self.server.shutdown()
@@ -71,13 +87,13 @@ class JSonRpcServer:
             self._ctx.Logs.debug("JSON-RPC Server off!")
             await self._ctx.Irc.Protocol.send_priv_msg(
                 self._ctx.Config.SERVICE_NICKNAME,
-                "[DEFENDER JSONRPC SERVER] RPC Server Stopped!",
+                "[ DEFENDER JSONRPC SERVER ] RPC Server Stopped!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
         else:
             await self._ctx.Irc.Protocol.send_priv_msg(
                 self._ctx.Config.SERVICE_NICKNAME,
-                "[DEFENDER JSONRPC SERVER] RPC Server is not running!",
+                "[ DEFENDER JSONRPC SERVER ] RPC Server is not running!",
                 self._ctx.Config.SERVICE_CHANLOG
             )
             self._ctx.Logs.debug("JSON-RPC Server is not running!")
@@ -88,7 +104,7 @@ class JSonRpcServer:
         method = request_data.get("method", None)
         params: dict[str, Any] = request_data.get("params", {})
 
-        auth: JSONResponse = self.authenticate(request.headers, request_data)        
+        auth: JSONResponse = self.authenticate(dict(request.headers), request_data)
         if not json.loads(auth.body).get('result', False):
             return auth
 
@@ -98,9 +114,12 @@ class JSonRpcServer:
             "id": request_data.get('id', 123)
         }
 
-        rip = request.client.host
-        rport = request.client.port
-        http_code = http_status_code.HTTP_200_OK
+        _client = request.client
+        rip = ''
+        rport = ''
+        if _client:
+            rip = _client.host
+            rport = _client.port
 
         if method in self.methods:
             r: JSONResponse = self.methods[method](**params)
@@ -110,7 +129,7 @@ class JSonRpcServer:
             return JSONResponse(resp, r.status_code)
 
         response_data['error'] = rpcerr.create_error_response(rpcerr.JSONRPCErrorCode.METHOD_NOT_FOUND)
-        self._ctx.Logs.debug(f'[RPC ERROR] {method} recieved from {rip}:{rport}')
+        self._ctx.Logs.debug('[DEFENDER RPC ERROR] %s recieved from %s:%s', method, rip, rport)
         http_code = http_status_code.HTTP_404_NOT_FOUND
         return JSONResponse(response_data, http_code)
 
@@ -147,7 +166,8 @@ class JSonRpcServer:
             logs.error(e)
             return self.send_auth_error(body)
    
-    def send_auth_error(self, request_data: dict) -> JSONResponse:
+    @staticmethod
+    def send_auth_error(request_data: dict) -> JSONResponse:
      
         response_data = {
             'jsonrpc': '2.0',

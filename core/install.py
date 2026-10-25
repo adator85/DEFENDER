@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import os
 import sys
 import json
@@ -12,28 +13,31 @@ parser = argparse.ArgumentParser(description="Python Installation Code")
 parser.add_argument('--check-version', action='store_true', help='Check if the python version is ok!')
 parser.add_argument('--install', action='store_true', help='Run the installation')
 parser.add_argument('--git-update', action='store_true', help='Update from git (main repository)')
+parser.add_argument('--started-from-sysctl', action='store_true', help='Is Defender Start from systemctl?')
+parser.add_argument('--debug-level', type=int, choices=[10, 20, 30, 40, 50], help='Run Defender')
 args = parser.parse_args()
 
 PYTHON_REQUIRED_VERSION = (3, 10, 0)
 PYTHON_SYSTEM_VERSION = tuple(map(int, python_version_tuple()))
 ROOT_PATH = os.getcwd()
 PYENV = Path(ROOT_PATH).joinpath('.pyenv/bin/python') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/python.exe')
-PIPENV = Path(f'{ROOT_PATH}/.pyenv/bin/pip') if os.name != 'nt' else Path(f'{ROOT_PATH}/.pyenv/Scripts/pip.exe')
+PIPENV = Path(ROOT_PATH).joinpath('.pyenv/bin/pip') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/pip.exe')
 USER_HOME_DIRECTORY = Path.home()
 SYSTEMD_PATH = Path(USER_HOME_DIRECTORY).joinpath('.config', 'systemd', 'user')
 PY_EXEC = 'defender.py'
 SERVICE_FILE_NAME = 'defender.service'
+CURRENT_USER = getpass.getuser()
 
 @dataclass
 class Package:
-	name: str = None
-	version: str = None
+	name: str
+	version: str
 
-def __load_required_package_versions() -> list[Package]:
+def __load_required_package_versions() -> list[Package] | None:
 	"""This will create Package model with package names and required version
         """
 	try:
-		DB_PACKAGES: list[Package] = []		
+		db_packages: list[Package] = []
 		version_filename = Path(ROOT_PATH).joinpath('version.json')  # f'.{os.sep}version.json'
 		with open(version_filename, 'r') as version_data:
 			package_info:dict[str, str] = json.load(version_data)
@@ -41,31 +45,31 @@ def __load_required_package_versions() -> list[Package]:
 		for name, version in package_info.items():
 			if name == 'version':
 				continue
-			DB_PACKAGES.append(
+			db_packages.append(
 				Package(name=name, version=version)
 				)
 
-		return DB_PACKAGES
+		return db_packages
 
 	except FileNotFoundError as fe:
 		print(f"File not found: {fe}")
 	except Exception as err:
 		print(f"General Error: {err}")
 
-def update_packages() -> None:
+def update_packages() -> bool:
 	try:
-		newVersion = False
-		db_packages = __load_required_package_versions()
+		new_version = False
+		db_packages = __load_required_package_versions() or []
 
 		if sys.prefix not in PYENV.__str__():
 			print(f"You are probably running a new installation or you are not using your virtual env {PYENV}")
-			return newVersion
+			return new_version
 
 		print(f"> Checking for dependencies versions ==> WAIT")
 		for package in db_packages:
-			newVersion = False
+			new_version = False
 			_required_version = package.version
-			_installed_version: str = None
+			_installed_version: str = ''
 			output = check_output([PIPENV, 'show', package.name])
 			for line in output.decode().splitlines():
 				if line.startswith('Version:'):
@@ -77,28 +81,41 @@ def update_packages() -> None:
 
 			if required_version > installed_version:
 				print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
-				newVersion = True
+				new_version = True
 
-			if newVersion:
-				check_call([PIPENV, 'install', '--upgrade', package.name])
+			if new_version:
+				try:
+					check_call([PIPENV, 'install', '--upgrade', package.name])
+				except CalledProcessError:
+					print(f"[!] Package {package.name} not installed [!]")
+					return False
 
-		print(f"> Dependencies versions ==> OK")
-		return newVersion
+		print("> Dependencies versions ==> OK")
+		return new_version
 
-	except CalledProcessError:
-		print(f"[!] Package {package.name} not installed [!]")
 	except Exception as err:
 		print(f"UpdatePackage Error: {err}")
 		traceback.print_exc()
+		return False
 
 def run_git_update() -> None:
 	check_call(['git', 'pull', 'origin', 'main'])
 
 def check_python_requirement():
-    if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
-	    raise RuntimeError(f"Your Python Version is not meeting the requirement, System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
+	if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
+		raise RuntimeError(f"Your Python Version is not meeting the requirement, "
+						   f"System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
 
-def create_service_file():
+def is_openrc() -> bool:
+
+	try:
+		with open('/etc/os-release') as f:
+			return 'Alpine Linux' in f.read()
+
+	except FileNotFoundError:
+		return False
+
+def create_systemd_service_file():
 
 	pyenv = PYENV
 	systemd_path = SYSTEMD_PATH
@@ -113,10 +130,11 @@ def create_service_file():
 Description=Defender IRC Service
 
 [Service]
-ExecStart={pyenv} {py_exec}
+ExecStart={pyenv} {py_exec} --started-from-sysctl
 WorkingDirectory={ROOT_PATH}
 SyslogIdentifier=Defender
 Restart=on-failure
+RestartForceExitStatus=42
 
 [Install]
 WantedBy=default.target
@@ -132,19 +150,62 @@ WantedBy=default.target
 		print(f"If any issue, you can see the log file for debug {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
 		print(f"#"*24)
 
+def create_openrc_service_file():
+	openrc_path = Path(ROOT_PATH).joinpath('defender.initd')
+
+	contain = f'''#!/sbin/openrc-run
+name="Defender IRC Service"
+description="Defender IRC Bot"
+command="{PYENV}"
+command_args="{ROOT_PATH}/{PY_EXEC}"
+command_background=true
+pidfile="/run/${{RC_SVCNAME}}.pid"
+command_user="{CURRENT_USER}"
+directory="{ROOT_PATH}"
+
+depend() {{
+    need net
+}}
+'''
+
+	with open(openrc_path, "w") as file:
+		file.write(contain)
+
+	os.chmod(openrc_path, 0o755)
+
+	print('OpenRC init script generated: defender.initd')
+	print()
+	print('#' * 24)
+	print("Installation complete!")
+	print()
+	print("Quick start (non-root):")
+	print(f"  {PYENV} {PY_EXEC}")
+	print()
+	print("System service with OpenRC (requires root):")
+	print("  sudo cp defender.initd /etc/init.d/defender")
+	print("  sudo rc-update add defender default")
+	print("  sudo rc-service defender start")
+	print()
+	print(f"Log file: {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
+	print('#' * 24)
+
 def main():
 	if args.check_version:
 		check_python_requirement()
 		sys.exit(0)
 
 	if args.install:
-		create_service_file()
+		
+		if is_openrc():
+			create_openrc_service_file()
+		else:
+			create_systemd_service_file()
+
 		sys.exit(0)
 	
 	if args.git_update:
 		run_git_update()
 		sys.exit(0)
 
-
 if __name__ == "__main__":
-    main()
+	main()

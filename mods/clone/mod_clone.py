@@ -11,8 +11,9 @@
 #           sexual harassment, bad intention, violence ...)
 # 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Optional
 from core.classes.interfaces.imodule import IModule
+from core.utils import tr
 import mods.clone.utils as utils
 import mods.clone.threads as thds
 import mods.clone.schemas as schemas
@@ -38,14 +39,14 @@ class Clone(IModule):
 
     def __init__(self, context: 'Loader') -> None:
         super().__init__(context)
-        self._mod_config: Optional[schemas.ModConfModel] = None
+        self._mod_config: schemas.ModConfModel = self.ModConfModel()
 
         self.stop: bool = False
-        self.Schemas: Optional[schemas] = None
-        self.Utils: Optional[utils] = None
-        self.Threads: Optional[thds] = None
-        self.Faker: Optional['Faker'] = None
-        self.Clone: Optional[CloneManager] = None
+        self.Schemas = schemas
+        self.Utils = utils
+        self.Threads = thds
+        self.Faker: 'Faker'
+        self.Clone: CloneManager
 
 
     @property
@@ -67,6 +68,13 @@ class Clone(IModule):
         #    username TEXT
         #    )
         # '''
+        # table_channel = '''CREATE TABLE IF NOT EXISTS clone_list (
+        #    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #    datetime TEXT,
+        #    nickname TEXT,
+        #    username TEXT
+        #    )
+        # '''
 
         # await self.ctx.Base.db_execute_query(table_channel)
 
@@ -80,20 +88,15 @@ class Clone(IModule):
         # sync the database with local variable (Mandatory)
         await self.sync_db()
 
-        self.stop = False
-        self.Schemas = schemas
-        self.Utils = utils
-        self.Threads = thds
-        self.Faker: Optional['Faker'] = self.Utils.create_faker_object('en_GB')
+        self.Faker = self.Utils.create_faker_object('en_GB')
         self.Clone = CloneManager(self)
-        metadata = self.ctx.Settings.get_cache('UID_CLONE_DB')
 
+        metadata = self.ctx.Settings.get_cache('UID_CLONE_DB')
         if metadata is not None:
-            self.Clone.UID_CLONE_DB = metadata
-            self.ctx.Logs.debug(f"Cache Size = {self.ctx.Settings.get_cache_size()}")
+            self.Clone.UID_CLONE_DB = metadata or []
 
         # Créer les nouvelles commandes du module
-        self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill and say clones')
+        self.ctx.Commands.build_command(1, self.module_name, 'clone', 'Connect, join, part, kill, snitch and say clones')
 
         await self.ctx.Channel.db_query_channel(action='add', module_name=self.module_name, channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_sjoin(self.ctx.Config.CLONE_CHANNEL)
@@ -113,7 +116,11 @@ class Clone(IModule):
         await self.ctx.Irc.Protocol.send_set_mode('-k', channel_name=self.ctx.Config.CLONE_CHANNEL)
         await self.ctx.Irc.Protocol.send_part_chan(self.ctx.Config.SERVICE_NICKNAME, self.ctx.Config.CLONE_CHANNEL)
 
-        self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+        # if self.ctx.Config.DEFENDER_REHASH == 0:
+        #    self.ctx.DAsyncio.create_task(self.Threads.thread_kill_clones, self)
+
+        if self.ctx.Config.DEFENDER_REHASH == 0:
+            await self.Threads.thread_kill_clones(self)
 
         self.ctx.Commands.drop_command_by_module(self.module_name)
 
@@ -125,9 +132,7 @@ class Clone(IModule):
                 return None
 
             cmd = data.copy() if isinstance(data, list) else list(data).copy()
-            index, command = self.ctx.Irc.Protocol.get_ircd_protocol_poisition(cmd)
-            if index == -1:
-                return None
+            command = self.ctx.Irc.Protocol.get_ircd_protocol_position(cmd)
 
             match command:
 
@@ -138,14 +143,14 @@ class Clone(IModule):
                 case 'QUIT':
                     return None
 
-                case _:
+                case None:
                     return None
 
         except Exception as err:
-            self.ctx.Logs.error(f'General Error: {err}', exc_info=True)
+            self.ctx.Logs.error('General Error: %s', err, exc_info=True)
             return None
 
-    async def hcmds(self, user: str, channel: Any, cmd: list, fullcmd: Optional[list] = None) -> None:
+    async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
 
         try:
 
@@ -166,6 +171,7 @@ class Clone(IModule):
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group_name | nickname] #channel")
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group_name | nickname] #channel")
                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list [group name]")
+                        await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone snitch [ON|OFF]")
                         return None
 
                     option = str(cmd[1]).lower()
@@ -179,6 +185,9 @@ class Clone(IModule):
                                 number_of_clones = int(cmd[2])
                                 group = str(cmd[3]).lower()
                                 connection_interval = float(cmd[4]) if len(cmd) == 5 else 0.2
+
+                                # Do not allow an interval less than 0.2
+                                connection_interval = connection_interval if connection_interval >= 0.2 else 0.2
 
                                 self.ctx.DAsyncio.create_task(self.Threads.coro_connect_clones,
                                                               self, number_of_clones, group, False, connection_interval)
@@ -237,11 +246,18 @@ class Clone(IModule):
 
                                 else:
                                     if self.Clone.nickname_exists(option):
-                                        clone_uid = self.Clone.get_clone(option).uid
-                                        await self.ctx.Irc.Protocol.send_join_chan(uidornickname=clone_uid, channel=clone_channel_to_join, print_log=False)
+                                        c = self.Clone.get_clone(option)
+                                        if not c:
+                                            return None
+
+                                        await self.ctx.Irc.Protocol.send_join_chan(uidornickname=c.uid,
+                                                                                   channel=clone_channel_to_join,
+                                                                                   print_log=False)
 
                             except IndexError:
-                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
+                                await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname,
+                                                                        nick_to=fromuser,
+                                                                        msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
 
                         case 'part':
                             try:
@@ -290,10 +306,10 @@ class Clone(IModule):
                                             nick_to=fromuser, 
                                             msg=f"  {clone_name.nickname:<12}| {clone_name.realname:<25}| {clone_name.group:<15}| {clone_name.connected:<35}")
                                 else:
-                                    if not self.Clone.group_exists(group_name):
+                                    if not self.Clone.group_exists(group_name or ''):
                                         await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="This Group name doesn't exist!")
                                         return None
-                                    clones = self.Clone.get_clones_from_groupname(group_name)
+                                    clones = self.Clone.get_clones_from_groupname(group_name or '')
                                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  Number of connected clones: {len(clones)}")
                                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"  {line}")
                                     for clone in clones:
@@ -328,12 +344,69 @@ class Clone(IModule):
                                         msg=f"/msg {dnickname} clone say [clone_nickname] #channel message"
                                     )
 
+                        case 'snitch':
+                            # Syntax. !clone snitch [on|off]
+                            try:
+                                _status = str(cmd[2])
+
+                                if _status.lower() == 'on':
+                                    if self.mod_config.snitch == 1:
+                                        await self.ctx.Irc.Protocol.send_notice(
+                                            nick_from=dnickname,
+                                            nick_to=fromuser,
+                                            msg=tr("[MOD CLONE] snitch is already activated!")
+                                            )
+                                        return None
+                                    await self.update_configuration('snitch', 1)
+
+                                    await self.ctx.Irc.Protocol.send_notice(
+                                        nick_from=dnickname,
+                                        nick_to=fromuser,
+                                        msg=tr("[MOD CLONE] snitch has been activated!")
+                                        )
+
+                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                        nick_from=dnickname,
+                                        msg=tr("[ MOD CLONE ] Snitch mode activated"),
+                                        channel=self.ctx.Config.SERVICE_CHANLOG
+                                    )
+
+                                if _status.lower() == 'off':
+                                    if self.mod_config.snitch == 0:
+                                        await self.ctx.Irc.Protocol.send_notice(
+                                            nick_from=dnickname,
+                                            nick_to=fromuser,
+                                            msg=tr("[ MOD CLONE ] snitch is already deactivated!")
+                                            )
+                                        return None
+                                    await self.update_configuration('snitch', 0)
+
+                                    await self.ctx.Irc.Protocol.send_notice(
+                                        nick_from=dnickname,
+                                        nick_to=fromuser,
+                                        msg=tr("[ MOD CLONE ] snitch has been deactivated!")
+                                        )
+
+                                    await self.ctx.Irc.Protocol.send_priv_msg(
+                                        nick_from=dnickname,
+                                        msg=tr("[ MOD CLONE ] Snitch mode deactivated"),
+                                        channel=self.ctx.Config.SERVICE_CHANLOG
+                                    )
+
+                            except IndexError:
+                                await self.ctx.Irc.Protocol.send_notice(
+                                    nick_from=dnickname,
+                                    nick_to=fromuser,
+                                    msg=f"/msg {dnickname} clone snitch [on|off]"
+                                    )
+
                         case _:
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone connect NUMBER GROUP_NAME INTERVAL")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone kill [all | group name | nickname]")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone join [all | group name | nickname] #channel")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone part [all | group name | nickname] #channel")
                             await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone list [group name]")
+                            await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} clone snitch [ON|OFF]")
 
         except Exception as err:
             self.ctx.Logs.error(f'General Error: {err}', exc_info=True)

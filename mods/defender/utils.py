@@ -5,6 +5,7 @@ from json import loads
 from re import match
 from typing import TYPE_CHECKING, Optional
 from mods.defender.schemas import FloodUser
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.definition import MUser
@@ -276,6 +277,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]) -> None:
     irc = uplink.ctx.Irc
     gconfig = uplink.ctx.Config
     p = irc.Protocol
+    colors = uplink.ctx.Const.Colors
     flood_users = uplink.Schemas.DB_FLOOD_USERS
 
     user_trigger = str(srvmsg[1]).replace(':','')
@@ -290,8 +292,6 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]) -> None:
     flood_timer = confmodel.flood_timer
     service_id = gconfig.SERVICE_ID
     dnickname = gconfig.SERVICE_NICKNAME
-    color_red = gconfig.COLORS.red
-    color_bold = gconfig.COLORS.bold
 
     get_detected_uid = _user.uid
     get_detected_nickname = _user.nickname
@@ -321,7 +321,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]) -> None:
         await p.send_set_mode('+m', channel_name=channel)
         await p.send_priv_msg(
             nick_from=dnickname,
-            msg=f"{color_red} {color_bold} Flood detected. Apply the +m mode (Ô_o)",
+            msg=f"{colors.red} {colors.bold} Flood detected. Apply the +m mode (Ô_o)",
             channel=channel
         )
         uplink.ctx.Logs.debug(f'[FLOOD] {get_detected_nickname} triggered +m mode on the channel {channel}')
@@ -336,6 +336,7 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
     irc = uplink.ctx.Irc
     gconfig = uplink.ctx.Config
     p = irc.Protocol
+    colors = uplink.ctx.Const.Colors
     confmodel = uplink.mod_config
 
     get_reputation = uplink.ctx.Reputation.get_reputation(jailed_uid)
@@ -355,10 +356,6 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
     jailed_nickname = get_reputation.nickname
     jailed_score = get_reputation.score_connexion
 
-    color_red = gconfig.COLORS.red
-    color_black = gconfig.COLORS.black
-    color_bold = gconfig.COLORS.bold
-    nogc = gconfig.COLORS.nogc
     service_id = gconfig.SERVICE_ID
     service_prefix = gconfig.SERVICE_PREFIX
     reputation_ban_all_chan = confmodel.reputation_ban_all_chan
@@ -367,13 +364,13 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
         # Si le user ne vient pas de webIrc
         await p.send_sajoin(nick_to_sajoin=jailed_nickname, channel_name=salon_jail)
         await p.send_priv_msg(nick_from=gconfig.SERVICE_NICKNAME,
-            msg=f" [ {color_red}REPUTATION{nogc} ]: The nickname {jailed_nickname} has been sent to {salon_jail} because his reputation score is ({jailed_score})",
+            msg=f" [ {colors.red}REPUTATION{colors.nogc} ]: The nickname {jailed_nickname} has been sent to {salon_jail} because his reputation score is ({jailed_score})",
             channel=salon_logs
             )
         await p.send_notice(
                 nick_from=gconfig.SERVICE_NICKNAME, 
                 nick_to=jailed_nickname,
-                msg=f"[{color_red} {jailed_nickname} {color_black}] : Merci de tapez la commande suivante {color_bold}{service_prefix}code {code}{color_bold}"
+                msg=f"[{colors.red} {jailed_nickname} {colors.black}] : Merci de tapez la commande suivante {colors.bold}{service_prefix}code {code}{colors.bold}"
             )
         if reputation_ban_all_chan == 1:
             for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
@@ -391,6 +388,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
     irc = uplink.ctx.Irc
     gconfig = uplink.ctx.Config
     p = irc.Protocol
+    colors = uplink.ctx.Const.Colors
     confmodel = uplink.mod_config
 
     reputation_flag = confmodel.reputation
@@ -399,9 +397,6 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
     ban_all_chan = confmodel.reputation_ban_all_chan
     service_id = gconfig.SERVICE_ID
     dchanlog = gconfig.SERVICE_CHANLOG
-    color_red = gconfig.COLORS.red
-    color_green = gconfig.COLORS.green
-    nogc = gconfig.COLORS.nogc
     salon_jail = gconfig.SALON_JAIL
     uid_to_clean = []
 
@@ -414,7 +409,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
             if uplink.ctx.Reputation.delete(admin.uid):
                 await p.send_priv_msg(
                     nick_from=service_id,
-                    msg=f"[ {color_green}REPUTATION RELEASE{nogc} ] :{admin.nickname} has been released! because is an admin",
+                    msg=f"[ {colors.green}REPUTATION RELEASE{colors.nogc} ] :{admin.nickname} has been released! because is an admin",
                     channel=dchanlog)
                 await p.send2socket(f":{gconfig.SERVEUR_LINK} REPUTATION {admin.remote_ip} {reputation_seuil}")
                 await p.send_notice(
@@ -429,9 +424,12 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
             if uplink.ctx.User.get_user_uptime_in_minutes(user.uid) >= reputation_timer and int(user.score_connexion) <= int(reputation_seuil):
                 await p.send_priv_msg(
                     nick_from=service_id,
-                    msg=f"[{color_red} REPUTATION {nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
+                    #msg=f"[{colors.red} REPUTATION {colors.nogc}] : Action sur {user.nickname} aprés {str(reputation_timer)} minutes d'inactivité",
+                    msg=tr('[%s REPUTATION %s] %s has been killed after %s minute(s)', colors.red, colors.nogc, user.nickname, reputation_timer),
                     channel=dchanlog)
-                await p.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code")
+                # await p.send2socket(f":{service_id} KILL {user.nickname} After {str(reputation_timer)} minutes of inactivity you should reconnect and type the password code")
+                
+                await p.send_kill(user.nickname, 'You must type the password code!')
                 await p.send2socket(f":{gconfig.SERVEUR_LINK} REPUTATION {user.remote_ip} 0")
 
                 uplink.ctx.Logs.info(f"Nickname: {user.nickname} KILLED after {str(reputation_timer)} minutes of inactivity")
