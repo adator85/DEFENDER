@@ -32,12 +32,14 @@ Il permet aux opérateurs de gérer efficacement un canal, tout en offrant aux u
         - Système d'exploitation Linux (Windows non supporté)
         - Un server UnrealIRCD corréctement configuré
         - Python version 3.10 ou supérieure
+        - make et python venv
+            - sudo apt install make python3.XX-venv
 ```bash
         # Bash
         $ git clone https://github.com/adator85/DEFENDER.git defender
         $ cd defender/
         # Renommer le fichier exemple_configuration.json en configuration.json
-        # Configurer le fichier configuration.json
+        # Configurer le fichier configuration.json disponible dans le dossier config/
         $ make install
 ```
 Si votre configuration est bonne, votre service est censé etre connecté a votre réseau IRC
