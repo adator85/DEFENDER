@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import os
 import re
 import json
@@ -9,6 +10,7 @@ import ast
 import requests
 import concurrent.futures
 import core.definition as dfn
+from pathlib import Path
 from dataclasses import fields
 from typing import Any, Callable, Mapping, Optional, TYPE_CHECKING
 from base64 import b64decode, b64encode
@@ -47,7 +49,7 @@ class Base:
         self.running_iothreads: list[dfn.MThread] = self.Settings.RUNNING_ASYNC_THREADS
 
         # Liste des fonctions en attentes
-        self.periodic_func: dict[object] = self.Settings.PERIODIC_FUNC
+        self.periodic_func: dict[int, Any] = self.Settings.PERIODIC_FUNC
 
         # Init install variable
         self.install: bool = False
@@ -66,7 +68,7 @@ class Base:
         located in version.json
         """
 
-        version_filename = f'.{os.sep}version.json'
+        version_filename = Path('version.json')
         with open(version_filename, 'r') as version_data:
             current_version:dict[str, str] = json.load(version_data)
 
@@ -75,9 +77,9 @@ class Base:
         return None
 
     def __get_latest_defender_version(self) -> None:
-        self.logs.debug(f'-- Looking for a new version available on Github')
+        self.logs.debug('-- Looking for a new version available on Github')
         token = ''
-        json_url = f'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
+        json_url = 'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
         headers = {
             'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3.raw'  # Indique à GitHub que nous voulons le contenu brut du fichier
@@ -96,9 +98,9 @@ class Base:
                 return None
 
             except requests.HTTPError as err:
-                self.logs.error(f'Github not available to fetch latest version: {err}')
-            except:
-                self.logs.warning(f'Github not available to fetch latest version')
+                self.logs.error('Github not available to fetch latest version: %s', err)
+            except Exception as err:
+                self.logs.error('Github not available to fetch latest version %s', err)
 
     def check_for_new_version(self, online: bool) -> bool:
         """Check if there is a new version available
@@ -110,33 +112,37 @@ class Base:
             bool: True if there is a new version available
         """
         try:
-            self.logs.debug(f'-- Checking for a new service version')
+            self.logs.debug('[ VERSION ] Checking for a new service version')
 
             # Assigner la version actuelle de Defender
             self.__set_current_defender_version()
             # Récuperer la dernier version disponible dans github
             if online:
-                self.logs.debug(f'-- Retrieve the latest version from Github')
+                self.logs.debug('[ VERSION ] Retrieve the latest version from Github')
                 self.__get_latest_defender_version()
 
-            latest_version = self.Config.LATEST_VERSION
-            current_version = self.Config.CURRENT_VERSION
+            latest_version = self.Config.LATEST_VERSION or '0.0.0'
+            current_version = self.Config.CURRENT_VERSION or '0.0.0'
 
             _current_version = tuple(map(int, current_version.split('.')))
             _latest_version = tuple(map(int, latest_version.split('.')))
 
             if _current_version < _latest_version:
-                self.logs.info(f'New version available: {current_version} >>> {latest_version}')
+                self.logs.info('[ VERSION ] New version available: %s >>> %s',
+                               current_version, latest_version)
                 return True
             else:
                 return False
 
         except ValueError as ve:
-            self.logs.error(f'Impossible to convert in version number : {ve}')
+            self.logs.error('[ VERSION ] Impossible to convert in version number : %s', ve)
+            return False
         except AttributeError as atterr:
-            self.logs.error(f'Attribute Error: {atterr}')
+            self.logs.error('[ VERSION ] Attribute Error: %s', atterr)
+            return False
         except Exception as err:
-            self.logs.error(f'General Error: {err}')
+            self.logs.error('[ VERSION ] General Error: %s', err)
+            return False
 
     async def create_log(self, log_message: str) -> None:
         """Enregiste les logs
@@ -173,7 +179,7 @@ class Base:
 
         return None
 
-    async def db_sync_core_config(self, module_name: str, dataclassObj: object) -> bool:
+    async def db_sync_core_config(self, module_name: str, dataclass_obj: type[dataclasses.dataclass]) -> bool:
         """Sync module local parameters with the database
         if new module then local param will be stored in the database
         if old module then db param will be moved to the local dataclassObj
@@ -182,7 +188,7 @@ class Base:
 
         Args:
             module_name (str): The module name ex. mod_defender
-            dataclassObj (object): The Dataclass object
+            dataclass_obj (object): The Dataclass object
 
         Returns:
             bool: _description_
@@ -192,9 +198,9 @@ class Base:
             core_table = self.Config.TABLE_CONFIG
 
             # Add local parameters to DB
-            for field in fields(dataclassObj):
+            for field in fields(dataclass_obj):
                 param_key = field.name
-                param_value = str(getattr(dataclassObj, field.name))
+                param_value = str(getattr(dataclass_obj, field.name))
 
                 param_to_search = {'module_name': module_name, 'param_key': param_key}
 
@@ -213,7 +219,8 @@ class Base:
                     execution = await self.db_execute_query(insert_query, param_to_insert)
 
                     if execution.rowcount > 0:
-                        self.logs.debug(f'New parameter added to the database: {param_key} --> {param_value}')
+                        self.logs.debug('New parameter added to the database: %s --> %s',
+                                        param_key, param_value)
 
             # Delete from DB unused parameter
             query_select = f"SELECT module_name, param_key, param_value FROM {core_table} WHERE module_name = :module_name"
@@ -223,11 +230,12 @@ class Base:
 
             for result in result_query_select:
                 db_mod_name, db_param_key, db_param_value = result
-                if not hasattr(dataclassObj, db_param_key):
+                if not hasattr(dataclass_obj, db_param_key):
                     mes_donnees = {'param_key': db_param_key, 'module_name': db_mod_name}
                     execute_delete = await self.db_execute_query(f'DELETE FROM {core_table} WHERE module_name = :module_name and param_key = :param_key', mes_donnees)
                     if execute_delete.rowcount > 0:
-                        self.logs.debug(f'A parameter has been deleted from the database: {db_param_key} --> {db_param_value} | Mod: {db_mod_name}')
+                        self.logs.debug('A parameter has been deleted from the database: %s --> %s | Mod: %s',
+                                        db_param_key, db_param_value, db_mod_name)
 
             # Sync local variable with Database
             query = f"SELECT param_key, param_value FROM {core_table} WHERE module_name = :module_name"
@@ -236,26 +244,27 @@ class Base:
             result = response.fetchall()
 
             for param, value in result:
-                if isinstance(getattr(dataclassObj, param), list):
+                if isinstance(getattr(dataclass_obj, param), list):
                     value = ast.literal_eval(value)
 
-                setattr(dataclassObj, param, self.convert_to_int(value))
+                setattr(dataclass_obj, param, self.convert_to_int(value))
 
             return True
 
         except AttributeError as attrerr:
-            self.logs.error(f'Attribute Error: {attrerr}')
+            self.logs.error('Attribute Error: %s', attrerr)
             return False
         except Exception as err:
-            self.logs.error(err)
+            self.logs.error('General Error: %s', err, exc_info=True)
             return False
 
-    async def db_update_core_config(self, module_name:str, dataclass_obj: object, param_key:str, param_value: str) -> bool:
+    async def db_update_core_config(self, module_name:str, dataclass_obj: object,
+                                    param_key:str, param_value: str) -> bool:
 
         core_table = self.Config.TABLE_CONFIG
         # Check if the param exist
         if not hasattr(dataclass_obj, param_key):
-            self.logs.error(f"Le parametre {param_key} n'existe pas dans la variable global")
+            self.logs.error("Le parametre %s n'existe pas dans la variable global", param_key)
             return False
 
         mes_donnees = {'module_name': module_name, 'param_key': param_key, 'param_value': param_value}
@@ -274,11 +283,14 @@ class Base:
             updated_rows = update.rowcount
             if updated_rows > 0:
                 setattr(dataclass_obj, param_key, self.convert_to_int(param_value))
-                self.logs.debug(f'Parameter updated : {param_key}: {param_value} | Module: {module_name}')
+                self.logs.debug('Parameter updated : %s: %s | Module: %s',
+                                param_key, param_value, module_name)
             else:
-                self.logs.error(f'Parameter NOT updated : {param_key}: {param_value} | Module: {module_name}')
+                self.logs.error('Parameter NOT updated : %s: %s | Module: %s',
+                                param_key, param_value, module_name)
         else:
-            self.logs.error(f'Parameter and Module do not exist: Param ({param_key}) - Value ({param_value}) | Module ({module_name})')
+            self.logs.error('Parameter and Module do not exist: Param (%s) - Value (%s) | Module (%s)',
+                            param_key, param_value, module_name)
 
         return True
 
@@ -306,7 +318,8 @@ class Base:
 
         return None
 
-    def create_timer(self, time_to_wait: float, func: object, func_args: tuple = ()) -> None:
+    def create_timer(self, time_to_wait: float, func: Callable[..., object],
+                     func_args: tuple = ()) -> None:
 
         try:
             t = threading.Timer(interval=time_to_wait, function=func, args=func_args)
@@ -315,12 +328,13 @@ class Base:
 
             self.running_timers.append(t)
 
-            self.logs.debug(f"-- Timer ID : {str(t.ident)} | Running Threads : {len(threading.enumerate())}")
+            self.logs.debug("-- Timer ID : %s | Running Threads : %s",
+                            str(t.ident), len(threading.enumerate()))
 
             return None
 
         except AssertionError as ae:
-            self.logs.error(f'Assertion Error -> {ae}')
+            self.logs.error('Assertion Error -> %s', ae)
             return None
 
     def create_thread(self, func: Callable[..., object], *args, run_once: bool = False, daemon: bool = True) -> None:
@@ -328,18 +342,25 @@ class Base:
 
         Args:
             func (object): The method/function you want to execute via this thread
-            func_args (tuple, optional): Arguments of the function/method. Defaults to ().
+            args (tuple, optional): Arguments of the function/method. Defaults to ().
             run_once (bool, optional): If you want to ensure that this method/function run once. Defaults to False.
+            daemon (bool, optional): If you want to ensure that this method/function run only once. Defaults to True.
         """
         try:
-            def custom_hook(args: threading.ExceptHookArgs) -> None:
-                _name = args.thread.name
-                _id = args.thread.ident
-                if isinstance(args.exc_value, TypeError):
-                    self.logs.error(f"You must add 'event' as first argument to your thread function '{_name}-{_id}'")
-                    return None
+            def custom_hook(_args: threading.ExceptHookArgs) -> None:
+                __thread = _args.thread
+                if __thread is not None:
+                    __name = __thread.name
+                    __id = __thread.ident
+                    if isinstance(_args.exc_value, TypeError):
+                        self.logs.error("You must add 'event' as first argument to your thread function '%s-%s'",
+                                        __name, __id)
+                        return None
 
-                self.logs.error(f'Thread failed: {args.exc_value} ({type(args.exc_value)}) {_name}-{_id}')
+                    self.logs.error('Thread failed: %s (%s) %s-%s',
+                                    _args.exc_value,
+                                    type(_args.exc_value),
+                                    __name, __id)
                 return None
 
             threading.excepthook = custom_hook
@@ -362,10 +383,11 @@ class Base:
             _thread.start()
 
             self.running_threads.append(dfn.DThread(_thread, _event))
-            self.logs.debug(f"[THREAD V2 START] ID: {_thread.ident} | NAME: {_thread.name} | #THREADS: {len(threading.enumerate())}")
+            self.logs.debug('[THREAD V2 START] ID: %s | NAME: %s | #THREADS: %s',
+                            _thread.ident, _thread.name, len(threading.enumerate()))
 
         except Exception as err:
-            self.logs.error(err, exc_info=True)
+            self.logs.error('General Error: %s', err, exc_info=True)
 
     def is_thread_alive(self, thread_name: str) -> bool:
         """Check if the thread is still running! using the is_alive method of Threads.
@@ -429,12 +451,12 @@ class Base:
                 if not timer.is_alive():
                     timer.cancel()
                     self.running_timers.remove(timer)
-                    self.logs.debug(f"-- Timer {str(timer)} removed")
+                    self.logs.debug('-- Timer %s removed', str(timer))
                 else:
-                    self.logs.debug(f"--* Timer {str(timer)} Still running ...")
+                    self.logs.debug('--* Timer %s Still running ...', str(timer))
 
         except AssertionError as ae:
-            self.logs.error(f'Assertion Error -> {ae}')
+            self.logs.error('Assertion Error -> %s', ae)
 
     def garbage_collector_thread(self) -> None:
         """Methode qui supprime les threads qui ont finis leurs job
@@ -447,17 +469,19 @@ class Base:
                 _thread = _dthread.thread
                 if not _thread.is_alive():
                     self.running_threads.remove(_dthread)
-                    self.logs.debug(f"[THREAD V2 CLEAN] ID: {_thread.native_id} | NAME: {_thread.name}")
+                    self.logs.debug('[THREAD V2 CLEAN] ID: %s | NAME: %s',
+                                    _thread.native_id, _thread.name)
 
             for _iothread in _iothreads:
                 _iothd = _iothread.thread_obj
                 if not _iothd.is_alive():
                     self.running_iothreads.remove(_iothread)
                     _iothread.executor.shutdown()
-                    self.logs.debug(f"[IO THREAD CLEAN] ID: {_iothd.native_id} | NAME: {_iothd.name}")
+                    self.logs.debug('[IO THREAD CLEAN] ID: %s | NAME: %s',
+                                    _iothd.native_id, _iothd.name)
 
         except Exception as err:
-            self.logs.error(err, exc_info=True)
+            self.logs.error('General Error: %s', err, exc_info=True)
 
     def garbage_collector_sockets(self) -> None:
 
@@ -468,7 +492,7 @@ class Base:
 
             soc.close()
             self.running_sockets.remove(soc)
-            self.logs.debug(f"-- Socket ==> closed {str(soc.fileno())}")
+            self.logs.debug('-- Socket ==> closed %s', str(soc.fileno()))
 
     def garbage_collector_tasks(self) -> None:
         """Methode qui supprime les threads qui ont finis leurs job
@@ -480,9 +504,10 @@ class Base:
             try:
                 if _task.cancelled() or _task.done():
                     self.running_iotasks.remove(_dtask)
-                    self.logs.debug(f"[IO TASK REMOVED] {_task.get_name()} has been removed!")
+                    self.logs.debug('[IO TASK REMOVED] %s has been removed!', _task.get_name())
             except asyncio.exceptions.CancelledError as cerr:
-                self.logs.debug(f"[IO TASK CANCELLED ERROR] {_task.get_name()} ({cerr}) CancelledError reached!")
+                self.logs.debug('[IO TASK CANCELLED ERROR] %s (%s) CancelledError reached!',
+                                _task.get_name(), cerr)
 
     def db_init(self) -> tuple[Engine, Connection]:
 
@@ -571,7 +596,7 @@ class Base:
 
         return None
 
-    async def db_execute_query(self, query:str, params:dict = {}) -> CursorResult:
+    async def db_execute_query(self, query:str, params: dict | None = None) -> CursorResult:
 
         async with self.Loader.Settings.AILOCK:
             insert_query = text(query)
@@ -599,8 +624,9 @@ class Base:
             update_row = f"UPDATE {table_name} SET language = 'EN' WHERE language is null"
             await self.db_execute_query(patch)
             await self.db_execute_query(update_row)
-            self.logs.debug(f"The patch has been applied")
-            self.logs.debug(f"Table name: {table_name}, Column name: {column_name}, Column type: {column_type}")
+            self.logs.debug("The patch has been applied")
+            self.logs.debug("Table name: %s, Column name: %s, Column type: %s",
+                            table_name, column_name, column_type)
             return True
         else:
             return False
@@ -610,9 +636,10 @@ class Base:
             self.cursor.close()
             self.logs.debug("Database engine closed!")
         except AttributeError as ae:
-            self.logs.error(f"Attribute Error : {ae}")
+            self.logs.error("Attribute Error : %s", ae)
 
-    def convert_to_int(self, value: Any) -> Optional[int]:
+    @staticmethod
+    def convert_to_int(value: Any) -> Optional[int]:
         """Convert a value to int
 
         Args:
@@ -657,7 +684,7 @@ class Base:
                 return False
 
         except Exception as err:
-            self.logs.error(f'General Error: {err}')
+            self.logs.error('General Error: %s', err)
             return False
 
     def decode_ip(self, ip_b64encoded: str) -> Optional[str]:
@@ -667,7 +694,8 @@ class Base:
 
             return decoded_ip.exploded
         except ValueError as ve:
-            self.logs.critical(f'This remote ip ({ip_b64encoded}) is not valid : {ve}')
+            self.logs.critical('This remote ip (%s) is not valid : %s',
+                               ip_b64encoded, ve)
             return None
 
     def encode_ip(self, remote_ip_address: str) -> Optional[str]:
@@ -678,10 +706,10 @@ class Base:
 
             return encoded_ip
         except ValueError as ve:
-            self.logs.critical(f'This remote ip is not valid : {ve}')
+            self.logs.error('This remote ip is not valid : %s', ve)
             return None
         except Exception as err:
-            self.logs.critical(f'General Error: {err}')
+            self.logs.error('General Error: %s', err, exc_info=True)
             return None
 
     def execute_periodic_action(self) -> None:
@@ -695,16 +723,18 @@ class Base:
             return None
 
         for key, value in self.periodic_func.items():
-            obj = value['object']
+            obj: Callable[..., object] = value['object']
             method_name = value['method_name']
-            param = value['param']
-            f = getattr(obj, method_name, None)
-            f(*param)
+            param: list = value['param']
+            func: Any = getattr(obj, method_name, None)
+            if func is not None:
+                func(*param)
 
         # Vider le dictionnaire de fonction
         self.periodic_func.clear()
+        return None
 
-    def execute_dynamic_method(self, obj: object, method_name: str, params: list) -> None:
+    def execute_dynamic_method(self, obj: Callable[..., object], method_name: str, params: list) -> None:
         """#### Ajouter les méthodes a éxecuter dans un dictionnaire
         Les methodes seront exécuter par heartbeat.
 
@@ -722,19 +752,19 @@ class Base:
             'param': params
             }
 
-        self.logs.debug(f'Method to execute : {str(self.periodic_func)}')
+        self.logs.debug('Method to execute : %s', str(self.periodic_func))
         return None
 
     def stop_all_sockets(self) -> None:
 
         _sockets = self.running_sockets.copy()
-        self.logs.debug(f"=======> Closing all Sockets!")
+        self.logs.debug("=======> Closing all Sockets!")
         for soc in _sockets:
             soc.close()
             while soc.fileno() != -1:
                 soc.close()
             self.running_sockets.remove(soc)
-            self.logs.debug(f"> Socket ==> closed {str(soc.fileno())}")
+            self.logs.debug('> Socket ==> closed %s', str(soc.fileno()))
 
     def stop_all_threads(self) -> None:
         self.logs.debug("=======> Closing all Threads")
@@ -745,17 +775,18 @@ class Base:
 
             # Set the flag to false
             _event.clear()
-            self.logs.debug(f"[THREAD V2 STOP] ID: {_thread.ident} | NAME: {_thread.name} | LIVE: {'Yes' if _thread.is_alive() else 'No'}")
+            self.logs.debug("[THREAD V2 STOP] ID: %s | NAME: %s | LIVE: %s",
+                            _thread.ident, _thread.name, 'Yes' if _thread.is_alive() else 'No')
             _thread.join(timeout=5)
             self.running_threads.remove(_dthread)
 
     def stop_all_io_threads(self) -> None:
 
         # STOP ALL IO-THREADS
-        self.logs.debug(f"=======> Closing all IO Threads")
+        self.logs.debug("=======> Closing all IO Threads")
         _iothreads = self.running_iothreads.copy()
         for t in _iothreads:
-            self.logs.debug(f'=======> Closing thread name {t.thread_obj.name}')
+            self.logs.debug('=======> Closing thread name %s', t.thread_obj.name)
             if t.thread_event is not None:
                 t.thread_event.clear()
             t.executor.shutdown()
@@ -763,76 +794,131 @@ class Base:
         _running_threads = threading.enumerate()
         _threads_queues = list(concurrent.futures.thread._threads_queues.items())
         if len(_running_threads) > 1 or len(_threads_queues) > 0:
-            self.logs.debug(f"Running threads: {_running_threads}")
-            tq: Mapping[Any, Any] = concurrent.futures.thread._threads_queues.copy()
+            self.logs.debug('Running threads: %s,', _running_threads)
+            tq: Mapping[Any, Any] = dict(concurrent.futures.thread._threads_queues).copy()
             for t, q in tq.items():
-                self.logs.debug(f"IO Threads in queue: {t}")
-                concurrent.futures.thread._threads_queues.pop(t, None)
+                self.logs.debug('IO Threads in queue: %s', t)
+                dict(concurrent.futures.thread._threads_queues).pop(t, None)
 
     async def stop_all_timers(self) -> None:
 
         _timers = self.running_timers.copy()
         # STOP ALL TIMERS
-        self.logs.debug(f"=======> Closing all timers!")
+        self.logs.debug("=======> Closing all timers!")
         for timer in _timers:
             while timer.is_alive():
-                self.logs.debug(f"> waiting for {timer.name} to close")
+                self.logs.debug('> waiting for %s to close', timer.name)
                 timer.cancel()
                 await asyncio.sleep(0.2)
             self.running_timers.remove(timer)
-            self.logs.debug(f"> Cancelling {timer.name} {timer.native_id}")
+            self.logs.debug('> Cancelling %s %s', timer.name, timer.native_id)
 
     async def stop_all_tasks(self) -> None:
+        self.logs.debug("=======> Closing all IO TASKS!")
 
-        # STOP ALL TASKS
-        _tasks = self.running_iotasks.copy()
-        self.logs.debug(f"=======> Closing all IO TASKS!")
-        [self.running_iotasks.remove(task) for task in _tasks if 'force_shutdown' == task.task.get_name()]
+        try:
+            _tasks = list(self.running_iotasks)
+            self.running_iotasks.clear()
+        except Exception as e:
+            self.logs.error("[IO TASKS] copy impossible of running_iotasks: %r", e)
+            return
+
+        # 1. Release events loop
         for _dtask in _tasks:
-            _task = _dtask.task
-            _event = _dtask.event
-            if _event is not None:
-                _event.clear()
-            
             try:
-                await asyncio.wait_for(_task, timeout=2)
-            except asyncio.exceptions.TimeoutError:
-                self.logs.debug(f'[IO TASK CRASH] {_task.get_name()} has been forced to cancel Timeout')
-            except asyncio.exceptions.CancelledError:
-                self.logs.debug(f'[IO TASK CRASH] {_task.get_name()} has been forced to cancel')
+                if _dtask.event is not None:
+                    _dtask.event.clear()
+            except Exception as e:
+                self.logs.debug("[IO TASK] Error on event %s: %r", _dtask.task.get_name(), e)
 
-            if not _task.cancel():
-                self.logs.debug(f"[ASYNCIO - TASK] {_task.get_name()} has been cancelled!")
+        # 2. Cancel all tasks
+        for _dtask in _tasks:
+            try:
+                if not _dtask.task.done():
+                    _dtask.task.cancel()
+            except Exception as e:
+                self.logs.debug("[IO TASK] Impossible to cancel %s: %r", _dtask.task.get_name(), e)
 
-    async def on_serv_shutdown(self) -> None:
+        # 3. Wait for all tasks with 5 secondes timeout
+        pending = [d.task for d in _tasks if not d.task.done()]
+        if pending:
+            try:
+                _, still_pending = await asyncio.wait(pending, timeout=5)
+                for _t in still_pending:
+                    self.logs.debug("[IO TASK] %s did not respond to cancel", _t.get_name())
+            except asyncio.CancelledError:
+                self.logs.error("[IO TASKS] Tasks cancelled by caller")
+            except Exception as e:
+                self.logs.error("[IO TASKS] Error when waiting the tasks: %r", e)
+
+        # 4. Retrieve results and exceptions to avoid warnings
+        for _dtask in _tasks:
+            try:
+                _t = _dtask.task
+                if not _t.done():
+                    self.logs.debug("[IO TASK] %s still active after stop", _t.get_name())
+                elif _t.cancelled():
+                    self.logs.debug("[IO TASK] %s cancelled", _t.get_name())
+                else:
+                    exc = _t.exception()
+                    if exc is not None:
+                        self.logs.debug("[IO TASK CRASH] %s : %r", _t.get_name(), exc)
+            except Exception as e:
+                self.logs.debug("[IO TASK] Error when reading the result: %r", e)
+
+    async def on_serv_shutdown(self):
         """This method is running whenever the server is going to
         shutdown!
         """
-        # STOP ALL IO-THREADS
-        self.stop_all_io_threads()
+        loader = self.Loader
+        _modules = list(self.Loader.ModuleUtils.model_get_loaded_modules())
 
-        # STOP ALL TASKS
-        await self.stop_all_tasks()
+        # Unload Modules.
+        for _mod in _modules:
+            await loader.ModuleUtils.unload_one_module(_mod.module_name)
+
+        # STOP CORRECTLY TASKS
+        _tasks: list[asyncio.Task] = [asyncio.create_task(loader.Base.stop_all_timers()),
+                                      asyncio.create_task(loader.Base.stop_all_tasks())]
+        if loader.RpcServer.live:
+            _tasks.append(asyncio.create_task(loader.RpcServer.stop_rpc_server()))
+        
+        await asyncio.gather(*_tasks)
+
+        del (_tasks, loader, _modules)
+
+        for _t in self.Settings.RUNNING_ASYNC_TASKS:
+            if _t.event:
+                _t.event.clear()
 
         # STOP ALL SOCKETS
         self.stop_all_sockets()
 
-        # STOP ALL TIMERS
-        await self.stop_all_timers()
-
-        # CLOSING DATABASE ENGINE.
-        self.db_close()
+        # STOP ALL IO-THREADS
+        self.stop_all_io_threads()
+        self.stop_all_threads()
 
         self.execute_periodic_action()
 
-        self.logs.debug(f'IO Threads: {len(self.running_iothreads)}')
-        self.logs.debug(f'Old Threads: {len(self.running_threads)}')
-        self.logs.debug(f'IO Tasks: {len(self.running_iotasks)}')
-        self.logs.debug(f'Sockets: {len(self.running_sockets)}')
-        self.logs.debug(f'Timers: {len(self.running_timers)}')
+        self.logs.debug('IO Threads: %s', len(self.running_iothreads))
+        self.logs.debug('Old Threads: %s', len(self.running_threads))
+        self.logs.debug('IO Tasks: %s', len(self.running_iotasks))
+        self.logs.debug('Sockets: %s', len(self.running_sockets))
+        self.logs.debug('Timers: %s', len(self.running_timers))
 
         self.running_iothreads.clear()
         self.running_threads.clear()
         self.running_iotasks.clear()
         self.running_sockets.clear()
         self.running_timers.clear()
+        self.Loader.ModuleUtils.DB_MODULES.clear()
+
+        '''
+        del (self.Loader.ModuleUtils.DB_MODULES,
+             self.running_iothreads,
+             self.running_threads,
+             self.running_iotasks,
+             self.running_sockets)
+        '''
+        # CLOSING DATABASE ENGINE.
+        self.db_close()
