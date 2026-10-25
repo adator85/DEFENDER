@@ -130,7 +130,7 @@ def create_systemd_service_file():
 Description=Defender IRC Service
 
 [Service]
-ExecStart={pyenv} {py_exec} --debug-level 20
+ExecStart={pyenv} {py_exec} --started-from-sysctl
 WorkingDirectory={ROOT_PATH}
 SyslogIdentifier=Defender
 Restart=on-failure
