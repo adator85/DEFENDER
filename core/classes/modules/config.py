@@ -52,6 +52,10 @@ class Configuration:
                                          "please remove it from configuration.json file [!]",
                                          key_to_remove)
 
+            # Force EN Language if not provided by the configuration!
+            if import_config.get('LANG', None) is None:
+                import_config['LANG'] = 'EN'
+
             self.Loader.Logs.debug("[LOADING CONFIGURATION]: Loading configuration with %s parameters!",
                                    len(import_config))
             return MConfig(**import_config)
