@@ -740,23 +740,23 @@ class Inspircd(IProtocol):
 
             score_connexion = 0
 
-            self._ctx.User.insert(
-                self._ctx.Definition.MUser(
-                    uid=uid,
-                    nickname=nickname,
-                    username=username,
-                    realname=realname,
-                    hostname=hostname,
-                    umodes=umodes,
-                    vhost=vhost,
-                    isWebirc=is_webirc,
-                    isWebsocket=is_websocket,
-                    remote_ip=remote_ip,
-                    geoip=geoip,
-                    score_connexion=score_connexion,
-                    connexion_datetime=datetime.now()
-                )
-            )
+            _user_obj = self._ctx.Definition.MUser(
+                                uid=uid,
+                                nickname=nickname,
+                                username=username,
+                                realname=realname,
+                                hostname=hostname,
+                                umodes=umodes,
+                                vhost=vhost,
+                                isWebirc=is_webirc,
+                                isWebsocket=is_websocket,
+                                remote_ip=remote_ip,
+                                geoip=geoip,
+                                score_connexion=score_connexion,
+                                connexion_datetime=datetime.now()
+                            )
+
+            self._ctx.User.insert(_user_obj)
 
             for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
                 module.class_instance.cmd(server_msg)
@@ -769,7 +769,14 @@ class Inspircd(IProtocol):
             sasl_obj = self._ctx.Sasl.get_sasl_obj(uid)
             if sasl_obj:
                 if sasl_obj.auth_success:
-                    self._ctx.Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
+
+                    if not self._ctx.Admin.insert_from_client(_user_obj, sasl_obj.username, sasl_obj.level, sasl_obj.language):
+                        await self.send_priv_msg(nick_from=dnickname,
+                                                    msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s",
+                                                        red, nogc, nickname, sasl_obj.username),
+                                                    channel=dchanlog)
+                        return None
+
                     await self.send_priv_msg(nick_from=dnickname, 
                                         msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", green, nogc, nickname, sasl_obj.username, dnickname),
                                         channel=dchanlog)
@@ -1037,16 +1044,16 @@ class Inspircd(IProtocol):
             # [':irc.local.org', 'SASL', 'async defender-dev.deb.biz.st', '0014ZZH1F', 'S', 'EXTERNAL', 'zzzzzzzkey']
             # [':irc.local.org', 'SASL', 'async defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
             # [':irc.local.org', 'SASL', 'async defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
-            psasl = self._ctx.Sasl
-            sasl_enabled = True # Should be False
-            for smod in self._ctx.Settings.SMOD_MODULES:
-                if smod.name == 'sasl':
-                    sasl_enabled = True
-                    break
 
-            if not sasl_enabled:
+            if not self._ctx.Config.SASL_ACTIVE:
+                self._ctx.Logs.debug('[SASL] SASL is not active on defender!')
                 return None
 
+            if 'sasl' in self._ctx.Settings.SMOD_MODULES:
+                self._ctx.Logs.debug('[SASL] SASL is not active on %s!', self.name)
+                return None
+
+            psasl = self._ctx.Sasl
             scopy = server_msg.copy()
             client_uid = scopy[4] if len(scopy) >= 6 else None
             # sasl_obj = None

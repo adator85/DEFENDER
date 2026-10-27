@@ -1110,25 +1110,24 @@ class Unrealircd6(IProtocol):
             tls_cipher = tlsc_match.group(1) if tlsc_match else None
             score_connexion = self._ctx.Irc.first_score
 
-            self._ctx.User.insert(
-                self._ctx.Definition.MUser(
-                    uid=uid,
-                    nickname=nickname,
-                    username=username,
-                    realname=realname,
-                    hostname=hostname,
-                    umodes=umodes,
-                    vhost=vhost,
-                    fingerprint=fingerprint,
-                    tls_cipher=tls_cipher,
-                    isWebirc=is_webirc,
-                    isWebsocket=is_websocket,
-                    remote_ip=remote_ip,
-                    geoip=geoip,
-                    score_connexion=score_connexion,
-                    connexion_datetime=datetime.now()
-                )
-            )
+            _user_obj = self._ctx.Definition.MUser(
+                                uid=uid,
+                                nickname=nickname,
+                                username=username,
+                                realname=realname,
+                                hostname=hostname,
+                                umodes=umodes,
+                                vhost=vhost,
+                                fingerprint=fingerprint,
+                                tls_cipher=tls_cipher,
+                                isWebirc=is_webirc,
+                                isWebsocket=is_websocket,
+                                remote_ip=remote_ip,
+                                geoip=geoip,
+                                score_connexion=score_connexion,
+                                connexion_datetime=datetime.now())
+
+            self._ctx.User.insert(_user_obj)
 
             # Auto Auth admin via fingerprint
             dnickname = self._ctx.Config.SERVICE_NICKNAME
@@ -1146,7 +1145,13 @@ class Unrealircd6(IProtocol):
             sasl_obj = self._ctx.Sasl.get_sasl_obj(uid)
             if sasl_obj and self._ctx.Config.SASL_ACTIVE:
                 if sasl_obj.auth_success:
-                    self._ctx.Irc.insert_db_admin(sasl_obj.client_uid, sasl_obj.username, sasl_obj.level, sasl_obj.language)
+                    if not self._ctx.Admin.insert_from_client(_user_obj, sasl_obj.username, sasl_obj.level, sasl_obj.language):
+                        await self.send_priv_msg(nick_from=dnickname,
+                                                 msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s",
+                                                        red, nogc, nickname, sasl_obj.username),
+                                                 channel=dchanlog)
+                        return None
+                    
                     await self.send_priv_msg(nick_from=dnickname, 
                                         msg=tr("[ %sSASL AUTH%s ] - %s (%s) is now connected successfuly to %s", green, nogc, nickname, sasl_obj.username, dnickname),
                                         channel=dchanlog)
@@ -1434,19 +1439,15 @@ class Unrealircd6(IProtocol):
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'C', 'sasakey==']
             # [':irc.local.org', 'SASL', 'defender-dev.deb.biz.st', '00157Z26U', 'D', 'A']
             if not self._ctx.Config.SASL_ACTIVE:
+                self._ctx.Logs.debug('[SASL] SASL is disable on defender')
+                return None
+
+            if 'sasl' in self._ctx.Settings.SMOD_MODULES:
+                self._ctx.Logs.debug('[SASL] SASL is not active on %s!', self.name)
                 return None
 
             scopy = server_msg.copy()
             psasl = self._ctx.Sasl
-            sasl_enabled = False
-            for smod in self._ctx.Settings.SMOD_MODULES:
-                if smod.name == 'sasl':
-                    sasl_enabled = True
-                    break
-
-            if not sasl_enabled:
-                return None
-
             client_uid = scopy[3] if len(scopy) >= 6 else None
             sasl_message_type = scopy[4] if len(scopy) >= 6 else None
             psasl.insert_sasl_client(self._ctx.Definition.MSasl(client_uid=client_uid))
@@ -1497,7 +1498,7 @@ class Unrealircd6(IProtocol):
                         return sasl_obj
 
         except Exception as err:
-            self._ctx.Logs.error(f'General Error: {err}', exc_info=True)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_sasl_authentication_process(self, sasl_model: 'MSasl') -> None:
 

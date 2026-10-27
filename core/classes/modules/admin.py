@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Optional
-from core.definition import MAdmin
+from core.definition import MAdmin, MUser
 
 if TYPE_CHECKING:
     from core.loader import Loader
@@ -32,6 +32,34 @@ class Admin:
         self.UID_ADMIN_DB.append(new_admin)
         self._ctx.Logs.debug('[ ADMIN ] New admin (%s) has been created', new_admin.nickname)
         return True
+
+    def insert_from_client(self, client: MUser, account: str, level: int, language: str | None = None) -> bool:
+        """Insert a new admin into the MAdmin object using the client (MUser) object.
+
+        Args:
+            client (MUser): The client object
+            account (str): The account name.
+            level (int): The level of the admin
+            language (str): The language of the admin
+
+        Returns:
+            bool: True if success.
+        """
+        if not client:
+            return False
+
+        language = language or self._ctx.Settings.global_lang
+
+        _admin = MAdmin(**client.to_dict(),
+                        language=language,
+                        account=account,
+                        level=int(level))
+
+        if self.insert(_admin):
+            self._ctx.Settings.current_admin = _admin
+            return True
+
+        return False
 
     def update_nickname(self, uid: str, new_admin_nickname: str) -> bool:
         """Update nickname of an admin
@@ -94,11 +122,11 @@ class Admin:
         admin_obj = self.get_admin(uidornickname)
         if admin_obj:
             self.UID_ADMIN_DB.remove(admin_obj)
-            self._ctx.Logs.debug('[ ADMIN ]UID (%s) has been deleted',
+            self._ctx.Logs.debug('[ ADMIN ] UID (%s) has been deleted',
                                  admin_obj.uid)
             return True
 
-        self._ctx.Logs.debug('[ ADMIN ]The UID %s was not deleted '
+        self._ctx.Logs.debug('[ ADMIN ] The UID %s was not deleted '
                              'from the local variable (admin not connected)',
                              uidornickname)
 
@@ -204,6 +232,40 @@ class Admin:
                                          user_obj.nickname, admin_obj.account)
                     return True
         
+        return False
+
+    async def db_auth_admin_legacy(self, client: MUser, account: str, password: str) -> bool:
+        """Admin authentication legacy.
+
+        Args:
+            client (MUser): The Client object
+            account (str): The account name.
+            password (str): The password
+
+        Returns:
+            bool: True if success.
+        """
+        mes_donnees = {'user': account, 'password': self._ctx.Utils.hash_password(password)}
+        query = f"SELECT id, user, level, language FROM {self._ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+        result = await self._ctx.Base.db_execute_query(query, mes_donnees)
+        user_from_db = result.fetchone()
+
+        if user_from_db:
+            account = str(user_from_db[1])
+            level = int(user_from_db[2])
+            language = user_from_db[3] or self._ctx.Settings.global_lang
+
+            _admin = MAdmin(
+                    **client.to_dict(),
+                    language=language,
+                    account=account,
+                    level=int(level)
+                )
+
+            if self.insert(_admin):
+                self._ctx.Settings.current_admin = _admin
+                return True
+
         return False
 
     async def db_is_admin_exist(self, admin_nickname: str) -> bool:

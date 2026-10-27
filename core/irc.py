@@ -241,35 +241,6 @@ class Irc:
 
         return None
 
-    def insert_db_admin(self, uid: str, account: str, level: int, language: str) -> None:
-        user_obj = self.ctx.User.get_user(uid)
-
-        if user_obj is None:
-            return None
-
-        _admin = self.ctx.Definition.MAdmin(
-                **user_obj.to_dict(),
-                language=language,
-                account=account,
-                level=int(level)
-            )
-
-        self.ctx.Admin.insert(_admin)
-
-        self.ctx.Settings.current_admin = _admin
-
-        return None
-
-    def delete_db_admin(self, uid:str) -> None:
-
-        if self.ctx.Admin.get_admin(uid) is None:
-            return None
-
-        if not self.ctx.Admin.delete(uid):
-            self.ctx.Logs.critical(f'UID: {uid} was not deleted')
-
-        return None
-
     async def create_defender_user(self, sender: str,  new_admin: str, new_level: int, new_password: str) -> bool:
         """Create a new admin user for defender
 
@@ -294,12 +265,12 @@ class Irc:
         if get_user is None:
             response = tr("The nickname (%s) is not currently connected! please create a new admin when the nickname is connected to the network!", new_admin)
             await proto.send_notice(dnick, sender, response)
-            self.ctx.Logs.debug(f"New admin {new_admin} sent by {sender} is not connected")
+            self.ctx.Logs.debug('New admin %s sent by %s is not connected', new_admin, sender)
             return False
 
         if level is None or level > 4 or level == 0:
             await proto.send_notice(dnick, sender, tr("The level (%s) must be a number from 1 to 4", level))
-            self.ctx.Logs.debug(f"Level must a number between 1 to 4 (sent by {sender})")
+            self.ctx.Logs.debug('Level must a number between 1 to 4 (sent by %s)', sender)
             return False
 
         nickname = get_user.nickname
@@ -323,11 +294,13 @@ class Irc:
                     ''', mes_donnees)
 
             await proto.send_notice(dnick, sender, tr("New admin (%s) has been added with level %s", nickname, level))
-            self.ctx.Logs.info(f"A new admin ({nickname}) has been created by {sender}!")
+            self.ctx.Logs.info('A new admin (%s) has been created by %s!',
+                               nickname, sender)
             return True
         else:
             await proto.send_notice(dnick, sender, tr("The nickname (%s) Already exist!", nickname))
-            self.ctx.Logs.info(f"The nickname {nickname} already exist! (sent by {sender})")
+            self.ctx.Logs.info('The nickname %s already exist! (sent by %s)',
+                               nickname, sender)
             return False
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
@@ -457,15 +430,27 @@ class Irc:
 
                 current_command = str(cmd[0]).upper()
                 uid_to_deauth = uid
-                self.delete_db_admin(uid_to_deauth)
+                if self.ctx.Admin.delete(uid_to_deauth):
+                    await self.Protocol.send_priv_msg(
+                            msg=tr("[ %s%s%s ] - %s has been disconnected from %s",
+                                   Colors.red, current_command, Colors.nogc, fromuser, dnickname),
+                            nick_from=dnickname,
+                            channel=dchanlog
+                            )
 
-                await self.Protocol.send_priv_msg(
-                        msg=tr("[ %s%s%s ] - %s has been disconnected from %s", Colors.red, current_command, Colors.nogc, fromuser, dnickname),
-                        nick_from=dnickname,
-                        channel=dchanlog
-                        )
+                    await self.Protocol.send_notice(dnickname, fromuser,
+                                                    tr("You have been successfully disconnected from %s", dnickname))
 
-                await self.Protocol.send_notice(dnickname, fromuser, tr("You have been successfully disconnected from %s", dnickname))
+                else:
+                    await self.Protocol.send_priv_msg(msg=tr("[ %s%s%s ] - Impossible to de-auth %s from %s",
+                                                             Colors.red, current_command, Colors.nogc, fromuser, dnickname),
+                                                             nick_from=dnickname,
+                                                             channel=dchanlog)
+                    await self.Protocol.send_notice(dnickname, fromuser,
+                                                    tr("Impossible to de-auth %s from %s",
+                                                       fromuser, dnickname))
+                    self.ctx.Logs.error('[%s] IMPOSSIBLE TO DEAUTH %s from %s',
+                                        current_command, fromuser, dnickname)
                 return None
 
             case 'firstauth':
@@ -514,7 +499,16 @@ class Irc:
 
                 if cmd_owner == config_owner and cmd_password == config_password:
                     await self.ctx.Base.db_create_first_admin()
-                    self.insert_db_admin(current_uid, cmd_owner, 5, self.ctx.Settings.global_lang)
+
+                    if not self.ctx.Admin.insert_from_client(u, cmd_owner, 5, self.ctx.Settings.global_lang):
+                        self.ctx.Logs.error('[AUTHENTICATION] Error while inserting an Admin from an existing client!')
+                        await self.Protocol.send_priv_msg(
+                                                msg=tr("[ %s %s %s ] - %s has an issue to logging! See defender logs.",
+                                                       Colors.red, current_command.upper(), Colors.nogc, current_nickname),
+                                                nick_from=dnickname,
+                                                channel=dchanlog)
+                        return None
+
                     await self.Protocol.send_priv_msg(
                         msg=tr("[%s %s %s] - %s is now connected to %s", Colors.green, current_command.upper(), Colors.nogc, fromuser, dnickname),
                         nick_from=dnickname,
@@ -556,16 +550,20 @@ class Irc:
                     await self.Protocol.send_notice(dnickname, fromuser, tr("You are already connected to %s", dnickname))
                     return None
 
-                mes_donnees = {'user': user_to_log, 'password': self.ctx.Utils.hash_password(password)}
-                query = f"SELECT id, user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
-                result = await self.ctx.Base.db_execute_query(query, mes_donnees)
-                user_from_db = result.fetchone()
+                # mes_donnees = {'user': user_to_log, 'password': self.ctx.Utils.hash_password(password)}
+                # query = f"SELECT id, user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
+                # result = await self.ctx.Base.db_execute_query(query, mes_donnees)
+                # user_from_db = result.fetchone()
 
-                if user_from_db:
-                    account = str(user_from_db[1])
-                    level = int(user_from_db[2])
-                    language = str(user_from_db[3])
-                    self.insert_db_admin(current_client.uid, account, level, language)
+                if await self.ctx.Admin.db_auth_admin_legacy(current_client, user_to_log, password):
+                    # account = str(user_from_db[1])
+                    # level = int(user_from_db[2])
+                    # language = user_from_db[3] or self.ctx.Settings.global_lang
+                    _admin = self.ctx.Admin.get_admin(current_client.uid)
+                    account = _admin.account or ''
+                    language = _admin.language or self.ctx.Settings.global_lang
+
+                    # self.insert_db_admin(current_client.uid, account, level, language)
                     await self.Protocol.send_priv_msg(nick_from=dnickname,
                                                       msg=tr("[ %s%s SUCCESS%s ] - %s (%s) is now connected to %s",
                                                              Colors.green, str(command).upper(), Colors.nogc,

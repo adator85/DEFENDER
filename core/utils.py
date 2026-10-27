@@ -37,12 +37,20 @@ def tr(message: str, *args) -> str:
     count_placeholder = message.count('%s') # Count number of placeholder in the message
     is_args_available = True if args else False
     g = global_settings
+    available_languges = [key.lower() for key, _ in g.global_translation.items()]
+    available_languges.append(g.global_lang.lower())
+    available_languges = set(available_languges)
     try:
         # Access to admin object
-        client_language = g.current_admin.language if g.current_admin else g.global_lang
+        client_language = g.global_lang
+        if g.current_admin:
+            client_language = g.current_admin.language if g.current_admin.language else g.global_lang
+            if client_language.lower() not in available_languges:
+                client_language = g.global_lang
 
         if count_args != count_placeholder:
-            g.global_logger.error(f"Translation: Original message: {message} | Args: {count_args} - Placeholder: {count_placeholder}")
+            g.global_logger.error("Translation: Original message: %s | Args: %s - Placeholder: %s",
+                                  message, count_args, count_placeholder)
             return message
         
         if g.global_lang is None:
@@ -58,11 +66,11 @@ def tr(message: str, *args) -> str:
         return message % args if is_args_available else message
 
     except KeyError as ke:
-        g.global_logger.error(f"KeyError: {ke}")
+        g.global_logger.error('KeyError: %s', ke)
         return message % args if is_args_available else message
 
     except Exception as err:
-        global_settings.global_logger.error(f"General Error: {err} / {message}")
+        global_settings.global_logger.error('General Error: %s / %s', err, message)
         return message
 
 def convert_to_int(value: Any) -> Optional[int]:
