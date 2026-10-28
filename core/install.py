@@ -4,7 +4,7 @@ import os
 import sys
 import filecmp
 from dataclasses import dataclass
-from subprocess import check_call, CalledProcessError, DEVNULL
+from subprocess import check_call, CalledProcessError, DEVNULL, check_output
 from pathlib import Path
 from platform import python_version_tuple
 
@@ -50,7 +50,13 @@ def update_packages() -> bool:
 
 def run_git_update() -> None:
 	try:
-		check_call(['git', 'pull', 'origin', 'main'])
+		_current_git_branch = check_output(
+			['git', 'branch', '--show-current'],
+			text=True
+		).strip()
+
+		check_call(['git', 'pull', 'origin', _current_git_branch])
+
 		if not is_openrc():
 			create_systemd_service_file()
 
