@@ -34,6 +34,7 @@ Il permet aux opérateurs de gérer efficacement un canal, tout en offrant aux u
         - Python version 3.10 ou supérieure
         - make et python venv
             - sudo apt install make python3.XX-venv
+            - sudo apt install polkitd pkexec
 ```bash
         # Bash
         $ git clone https://github.com/adator85/DEFENDER.git defender
