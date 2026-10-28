@@ -39,7 +39,7 @@ def update_packages() -> bool:
 				  f"or you are not using your virtual env {PYENV}")
 			return False
 
-		print(f"> Checking for dependencies versions ==> WAIT")
+		print("> Checking for dependencies versions ==> WAIT")
 		check_call([PIPENV, 'install', '--upgrade', '-r', 'requirements.txt'], stdout=DEVNULL)
 		print("> Dependencies versions ==> OK")
 
@@ -54,6 +54,8 @@ def run_git_update() -> None:
 			['git', 'branch', '--show-current'],
 			text=True
 		).strip()
+
+		print(f"> Checking Defender updates using current branch {_current_git_branch}")
 
 		check_call(['git', 'pull', 'origin', _current_git_branch])
 
