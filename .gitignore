@@ -2,6 +2,7 @@
 .vscode/
 .venv/
 .idea/
+.tmp/
 db/
 logs/
 __pycache__/

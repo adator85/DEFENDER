@@ -1,5 +1,6 @@
 OS := $(shell uname -s)
 CURRENT_USER := $(shell whoami)
+CURRENT_GIT_BRANCH := $(shell git branch --show-current)
 PYTHON_VERSION := $(shell python3 -V)
 HOME_DIR := $(shell echo $$HOME)
 SHELL := $(shell echo $$0)
@@ -75,7 +76,7 @@ endif
 
 update:
 ifeq ($(OS), Linux)
-	$(info Starting update from the main repository...)
+	$(info Starting update from the $(CURRENT_GIT_BRANCH) repository...)
 	@. .pyenv/bin/activate && python core/install.py --git-update
 	$(info Update done!)
 endif

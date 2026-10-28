@@ -2,12 +2,11 @@ import argparse
 import getpass
 import os
 import sys
-import json
+import filecmp
 from dataclasses import dataclass
-from subprocess import check_call, CalledProcessError, check_output
+from subprocess import check_call, CalledProcessError, DEVNULL, check_output
 from pathlib import Path
 from platform import python_version_tuple
-import traceback
 
 parser = argparse.ArgumentParser(description="Python Installation Code")
 parser.add_argument('--check-version', action='store_true', help='Check if the python version is ok!')
@@ -33,73 +32,38 @@ class Package:
 	name: str
 	version: str
 
-def __load_required_package_versions() -> list[Package] | None:
-	"""This will create Package model with package names and required version
-        """
-	try:
-		db_packages: list[Package] = []
-		version_filename = Path(ROOT_PATH).joinpath('version.json')  # f'.{os.sep}version.json'
-		with open(version_filename, 'r') as version_data:
-			package_info:dict[str, str] = json.load(version_data)
-
-		for name, version in package_info.items():
-			if name == 'version':
-				continue
-			db_packages.append(
-				Package(name=name, version=version)
-				)
-
-		return db_packages
-
-	except FileNotFoundError as fe:
-		print(f"File not found: {fe}")
-	except Exception as err:
-		print(f"General Error: {err}")
-
 def update_packages() -> bool:
 	try:
-		new_version = False
-		db_packages = __load_required_package_versions() or []
-
 		if sys.prefix not in PYENV.__str__():
-			print(f"You are probably running a new installation or you are not using your virtual env {PYENV}")
-			return new_version
+			print("You are probably running a new installation "
+				  f"or you are not using your virtual env {PYENV}")
+			return False
 
-		print(f"> Checking for dependencies versions ==> WAIT")
-		for package in db_packages:
-			new_version = False
-			_required_version = package.version
-			_installed_version: str = ''
-			output = check_output([PIPENV, 'show', package.name])
-			for line in output.decode().splitlines():
-				if line.startswith('Version:'):
-					_installed_version = line.split(':')[1].strip()
-					break
-
-			required_version = tuple(map(int, _required_version.split('.')))
-			installed_version = tuple(map(int, _installed_version.split('.')))
-
-			if required_version > installed_version:
-				print(f'> New version of {package.name} is available {installed_version} ==> {required_version}')
-				new_version = True
-
-			if new_version:
-				try:
-					check_call([PIPENV, 'install', '--upgrade', package.name])
-				except CalledProcessError:
-					print(f"[!] Package {package.name} not installed [!]")
-					return False
-
+		print("> Checking for dependencies versions ==> WAIT")
+		check_call([PIPENV, 'install', '--upgrade', '-r', 'requirements.txt'], stdout=DEVNULL)
 		print("> Dependencies versions ==> OK")
-		return new_version
 
+		return True
 	except Exception as err:
-		print(f"UpdatePackage Error: {err}")
-		traceback.print_exc()
+		print("UpdatePackage Error:", err)
 		return False
 
 def run_git_update() -> None:
-	check_call(['git', 'pull', 'origin', 'main'])
+	try:
+		_current_git_branch = check_output(
+			['git', 'branch', '--show-current'],
+			text=True
+		).strip()
+
+		print(f"> Checking Defender updates using current branch {_current_git_branch}")
+
+		check_call(['git', 'pull', 'origin', _current_git_branch])
+
+		if not is_openrc():
+			create_systemd_service_file()
+
+	except CalledProcessError as cpe:
+		print('CalledProcessError:', cpe, str(cpe.returncode))
 
 def check_python_requirement():
 	if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
@@ -139,16 +103,32 @@ RestartForceExitStatus=42
 [Install]
 WantedBy=default.target
 '''
-	with open(Path(systemd_path).joinpath(service_file_name), "w") as file:
+
+	if not Path(ROOT_PATH).joinpath('.tmp/').exists():
+		Path(ROOT_PATH).joinpath('.tmp/').mkdir()
+
+	_tmp_file = Path(ROOT_PATH).joinpath('.tmp/' + service_file_name)
+	_prod_file = Path(systemd_path).joinpath(service_file_name)
+	with open(_tmp_file, 'w') as f:
+		f.write(contain)
+
+	if _prod_file.exists():
+		if filecmp.cmp(_tmp_file, _prod_file):
+			print('No update required for the', _prod_file)
+			return
+
+	with open(_prod_file, "w") as file:
 		file.write(contain)
 		print('Service file generated with current configuration')
 		print('Running IRC Service ...')
 
-		print(f"#"*24)
+		print("#"*24)
 		print("Installation complete ...")
 		print("If the configuration is correct, then you must see your service connected to your irc server")
 		print(f"If any issue, you can see the log file for debug {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
-		print(f"#"*24)
+		print("#"*24)
+
+	del _tmp_file, _prod_file
 
 def create_openrc_service_file():
 	openrc_path = Path(ROOT_PATH).joinpath('defender.initd')

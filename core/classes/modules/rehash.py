@@ -61,110 +61,6 @@ async def restart_service_v2(uplink: 'Loader', reason: str = 'Restarting without
         subprocess.Popen(['.pyenv/bin/python', 'defender.py'])
         logs.debug("Kill main process.")
 
-async def restart_service(uplink: 'Loader', reason: str = "Restarting with no reason!") -> None:
-    """
-
-    Args:
-        uplink (Irc): The Irc instance
-        reason (str): The reason of the restart.
-    """
-    _dconf = uplink.Config
-    _logs = uplink.Logs
-
-    uplink.Config.DEFENDER_RESTART = 1
-    _running_threads = uplink.Base.running_threads.copy()
-    for dthread in _running_threads:
-        dthread.event.clear()
-        uplink.Base.running_threads.remove(dthread)
-
-    # unload modules.
-    _db_modules = uplink.ModuleUtils.model_get_loaded_modules().copy()
-    for module in _db_modules:
-        await uplink.ModuleUtils.unload_one_module(module.module_name)
-
-    uplink.Base.garbage_collector_thread()
-
-    uplink.Irc.signal = False
-    await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
-    uplink.Logs.info('Restarting Defender ...')
-
-    del uplink
-    return None
-
-    '''
-    _running_threads = uplink.Base.running_threads.copy()
-    for dthread in _running_threads:
-        if dthread.thread.name == 'heartbeat':
-            dthread.event.clear()
-            while dthread.thread.is_alive():
-                continue
-            uplink.Base.running_threads.remove(dthread)
-
-    # unload modules.
-    _db_modules = uplink.ModuleUtils.model_get_loaded_modules().copy()
-    for module in _db_modules:
-        await uplink.ModuleUtils.unload_one_module(module.module_name)
-
-    uplink.Base.garbage_collector_thread()
-
-    # Cleaning modules
-    for mod in REHASH_MODULES:
-        if mod in sys.modules:
-            del sys.modules[mod]
-            importlib.import_module(mod)
-        else:
-            _logs.error("Module: %s not found!", mod)
-            
-
-    # uplink.ModuleUtils.model_clear()          # Clear loaded modules.
-    # uplink.User.UID_DB.clear()                # Clear User Object
-    # uplink.Channel.UID_CHANNEL_DB.clear()     # Clear Channel Object
-    uplink.Commands.DB_COMMANDS.clear()
-    uplink.Irc.Protocol.Handler.DB_IRCDCOMMS.clear()
-
-    del (uplink.User, uplink.Admin, uplink.Channel,
-        uplink.Reputation, uplink.ModuleUtils, uplink.Sasl,
-        uplink.Utils, uplink.Config, _running_threads,
-        uplink.Base)
-    
-    # Reload configuration
-    uplink.Config = uplink.ConfModule.Configuration(uplink).configuration_model
-    uplink.Utils = sys.modules['core.utils']
-    uplink.Base = uplink.BaseModule.Base(uplink)
-    uplink.User = sys.modules['core.classes.modules.user'].User(uplink)
-    uplink.Admin = sys.modules['core.classes.modules.admin'].Admin(uplink)
-    uplink.Channel = sys.modules['core.classes.modules.channel'].Channel(uplink)
-    uplink.Reputation = sys.modules['core.classes.modules.reputation'].Reputation(uplink)
-    uplink.ModuleUtils = sys.modules['core.module'].Module(uplink)
-    uplink.Sasl = sys.modules['core.classes.modules.sasl'].Sasl(uplink)
-
-    print(f"############ NUMBER OF IO THREADS: {len(uplink.Base.running_iothreads)}")
-    print(f"############ NUMBER OF IO TASKS: {len(uplink.Base.running_iotasks)}")
-    print(f"############ NUMBER OF THREADS: {len(uplink.Base.running_threads)}")
-
-    uplink.Logs.debug(f'[{uplink.Config.SERVICE_NICKNAME} RESTART]: Reloading configuration!')
-    await uplink.Irc.Protocol.send_squit(server_id=uplink.Config.SERVEUR_ID, server_link=uplink.Config.SERVEUR_LINK, reason=reason)
-    uplink.Logs.info('Restarting Defender ...')
-
-    uplink.Irc.signal = False
-    if uplink.Irc.writer:
-        uplink.Irc.writer.close()
-        try:
-            await uplink.Irc.writer.wait_closed()
-        except Exception:
-            pass
-
-    gc.collect()
-
-    if uplink.Irc.writer.is_closing():
-        print("*"*56, uplink.Irc.writer, "CLOSED")
-        del uplink.Irc.writer, uplink.Irc.reader
-
-    uplink.Config.DEFENDER_RESTART = 1
-
-    return None
-    '''
-
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:
 
     _colors = uplink.Const.Colors
@@ -243,6 +139,7 @@ async def rehash_service(uplink: 'Loader', nickname: str) -> None:
     uplink.Config.CURRENT_VERSION = config_model_bakcup.CURRENT_VERSION
     uplink.Config.LATEST_VERSION = config_model_bakcup.LATEST_VERSION
     uplink.Config.DEFENDER_CONNEXION_DATETIME = config_model_bakcup.DEFENDER_CONNEXION_DATETIME
+    uplink.Config.DEFENDER_STARTED_FROM_SYSTEMCTL = config_model_bakcup.DEFENDER_STARTED_FROM_SYSTEMCTL
 
     conf_bkp_dict: dict = config_model_bakcup.to_dict()
     config_dict: dict = uplink.Config.to_dict()
