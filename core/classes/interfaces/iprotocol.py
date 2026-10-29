@@ -17,7 +17,8 @@ class IProtocol(ABC):
         self._ctx = context
         self.Handler = CommandHandler(context)
         self.init_protocol()
-        self._ctx.Logs.info(f"[PROTOCOL] Protocol [{self.__class__.__name__}] loaded!")
+        self._ctx.Logs.info('[PROTOCOL] Protocol [%s] has been loaded!',
+                            self.__class__.__name__)
 
     @abstractmethod
     def init_protocol(self):
