@@ -849,17 +849,11 @@ class Irc:
                     self.ctx.Logs.debug("Defender has ended with an SSL Error! - %s", serr, exc_info=True)
 
             case 'restart':
-                # final_reason = ' '.join(cmd[1:])
-                # await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{dnickname.capitalize()} is going to restart!")
+                final_reason = ' '.join(cmd[1:])
+                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                msg=f"{dnickname.capitalize()} is going to restart!")
+                await rehash.restart_service(self.ctx)
 
-                # # Set restart status to 1 saying that the service will restart
-                # self.ctx.Config.DEFENDER_RESTART = 1
-
-                # # set init to 1 saying that the service will be re initiated
-                # self.ctx.Config.DEFENDER_INIT = 1
-
-                # await rehash.restart_service(self.ctx, final_reason)
-                await rehash.restart_service_v2(self.ctx)
                 return None
 
             case 'rehash':
