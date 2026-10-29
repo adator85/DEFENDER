@@ -3,6 +3,8 @@
 .venv/
 .idea/
 .tmp/
+build/
+dist/
 db/
 logs/
 __pycache__/

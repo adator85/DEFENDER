@@ -1028,15 +1028,13 @@ class Unrealircd6(IProtocol):
 
                 await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} SMOD :L:Defender:1.0.0 :L:Command:1.0.0")
 
-                write_gc_to_file()
-
                 return None
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except KeyError as ke:
-            self._ctx.Logs.error(f"{__name__} - Key Error: {ke}")
+            self._ctx.Logs.error('Key Error: %s', ke)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}", exc_info=True)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_reputation(self, server_msg: list[str]) -> None:
         """Handle REPUTATION coming from a server
