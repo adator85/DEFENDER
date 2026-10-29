@@ -1,6 +1,6 @@
 import yaml
 from sys import exit
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from core.definition import MConfig
 from pathlib import Path
 
@@ -12,7 +12,7 @@ class Configuration:
     def __init__(self, loader: 'Loader'):
         
         self.Loader = loader
-        self.configuration_model = self.__load_service_configuration()
+        self.configuration_model = self.__load_service_configuration_v2()
         loader.ServiceLogging.set_file_handler_level(self._config_model.DEBUG_LEVEL)
         loader.ServiceLogging.set_stdout_handler_level(self._config_model.DEBUG_LEVEL)
         loader.ServiceLogging.update_handler_format(self._config_model.DEBUG_HARD)
@@ -25,7 +25,7 @@ class Configuration:
     def configuration_model(self, conf_model: MConfig):
         self._config_model = conf_model
 
-    def __load_config_file(self) -> Optional[dict[str, Any]]:
+    def __load_config_file(self) -> dict[str, Any] | None:
         try:
             conf_filename = Path('config/configuration.yaml')
             with open(conf_filename, 'r') as conf:
@@ -37,30 +37,38 @@ class Configuration:
             self.Loader.Logs.error('Configuration file not found please create config/configuration.yaml')
             exit("Configuration file not found please create config/configuration.yaml")
 
-    def __load_service_configuration(self) -> MConfig | None:
+    def __load_service_configuration_v2(self) -> MConfig | None:
         try:
-            import_config = self.__load_config_file()
-            if import_config is None:
-                self.Loader.Logs.error("Error While importing configuration file!", exc_info=True)
-                raise Exception("Error While importing yaml configuration")
+            _imported_yaml_file = self.__load_config_file()
+            if _imported_yaml_file is None:
+                self.Loader.Logs.error('Error While importing configuration file!', exc_info=True)
+                raise Exception('Error While importing yaml configuration')
 
-            list_key_to_remove: list[str] = [key_to_del for key_to_del in import_config if key_to_del not in MConfig().get_attributes()]
-            for key_to_remove in list_key_to_remove:
-                import_config.pop(key_to_remove, None)
-                self.Loader.Logs.warning("[!] The key %s is not expected, "
-                                         "it has been removed from the system ! "
-                                         "please remove it from configuration.json file [!]",
-                                         key_to_remove)
+            _imported_yaml_attributes = set(_imported_yaml_file.keys())
+            _config_attributes = set(MConfig().get_attributes())
+
+            _keys_to_remove = _imported_yaml_attributes - _config_attributes
+            for _key in _keys_to_remove:
+                _imported_yaml_file.pop(_key, None)
+                self.Loader.Logs.warning('[!] The key %s is not expected, '
+                                         'it has been removed from the system ! '
+                                         'please remove it from configuration.json file [!]',
+                                         _key)
 
             # Force EN Language if not provided by the configuration!
-            if import_config.get('LANG', None) is None:
-                import_config['LANG'] = 'EN'
+            if _imported_yaml_file.get('LANG', None) is None:
+                _imported_yaml_file['LANG'] = MConfig().LANG or 'EN'
 
             self.Loader.Logs.debug("[LOADING CONFIGURATION]: Loading configuration with %s parameters!",
-                                   len(import_config))
-            return MConfig(**import_config)
+                                   len(_imported_yaml_file))
+
+            del (_imported_yaml_attributes,
+                 _config_attributes,
+                 _keys_to_remove)
+
+            return MConfig(**_imported_yaml_file)
 
         except TypeError as te:
             self.Loader.Logs.error('TypeError: %s', te)
         except Exception as err:
-            self.Loader.Logs.error("General Error: %s", err, exc_info=True)
+            self.Loader.Logs.error('General Error: %s', err, exc_info=True)

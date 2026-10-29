@@ -37,7 +37,7 @@ REHASH_MODULES = [
     # 'core.classes.interfaces.imodule',
 ]
 
-async def restart_service_v2(uplink: 'Loader', reason: str = 'Restarting without reason!'):
+async def restart_service(uplink: 'Loader', reason: str = 'Restarting without reason!'):
     # Create a new subprocess.
     # Clean & Quit defender.
     # Start a new & clean instance of defender
