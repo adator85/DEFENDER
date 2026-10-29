@@ -73,7 +73,7 @@ class DAsyncio:
         _dtask = dfn.DTask(_task, None)
         self.running_iotasks.append(_dtask)
 
-        self.logs.debug(f"[IO SAFE TASK CREATE] Name: {_task.get_name()}")
+        self.logs.debug('[IO SAFE TASK CREATE] Name: %s', _task.get_name())
         return _dtask
 
     async def create_io_thread(self, func: Callable[..., object], *args,
@@ -99,7 +99,7 @@ class DAsyncio:
             for iothread in self.running_iothreads:
                 _thread = iothread.thread_obj
                 if _name.lower() == iothread.name.lower():
-                    self.logs.debug(f"[IO THREAD RUNNING] ID: {_thread.native_id} | NAME: {_thread.name}")
+                    self.logs.debug('[IO THREAD RUNNING] ID: %s | NAME: %s', _thread.native_id, _thread.name)
                     return None
 
         executor = DaemonThreadPoolExecutor(daemon=True)
@@ -127,7 +127,8 @@ class DAsyncio:
             future=future)
 
         self.running_iothreads.append(id_obj)
-        self.logs.debug(f"[IO THREAD START] ID: {_thread.native_id} | NAME: {_thread.name} | WORKERS: {executor._max_workers}")
+        self.logs.debug('[IO THREAD START] ID: %s | NAME: %s | WORKERS: %s',
+                        _thread.native_id, _thread.name, executor._max_workers)
         result = await future
 
         self.running_iothreads.remove(id_obj)
@@ -157,7 +158,7 @@ class DAsyncio:
 
         task = asyncio.create_task(func, name=name)
         task.add_done_callback(self.__asynctask_done, context=io_ctx)
-        self.logs.debug(f"[IO TASK CREATE] Name: {task.get_name()}")
+        self.logs.debug('[IO TASK CREATE] Name: %s', task.get_name())
         return task
 
     def __asynctask_done(self,
@@ -174,10 +175,14 @@ class DAsyncio:
         task_or_future = "Task"
         try:
             if task.exception():
-                self.logs.error(f"[IO TASK CRASHED] {task_or_future} {task_name} failed with exception: {task.exception()}")
+                self.logs.error('[IO TASK CRASHED] %s %s failed with exception: %s',
+                                task_or_future, task_name, task.exception())
             else:
-                self.logs.debug(f"[IO TASK COMPLETED] {task_or_future} {task_name} completed successfully.")
+                self.logs.debug('[IO TASK COMPLETED] %s %s completed successfully.',
+                                task_or_future, task_name)
         except asyncio.CancelledError as ce:
-            self.logs.debug(f"[IO TASK CRASHED] {task_or_future} {task_name} terminated with cancelled error. {ce}")
+            self.logs.debug('[IO TASK CRASHED] %s %s terminated with cancelled error. %s',
+                            task_or_future, task_name, ce)
         except asyncio.InvalidStateError as ie:
-            self.logs.debug(f"[IO TASK CRASHED] {task_or_future} {task_name} terminated with invalid state error. {ie}")
+            self.logs.debug('[IO TASK CRASHED] %s %s terminated with invalid state error. %s',
+                            task_or_future, task_name, ie)

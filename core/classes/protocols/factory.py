@@ -22,11 +22,12 @@ class ProtocolFactorty:
 
         match protocol:
             case 'unreal6':
-                self.__ctx.Logs.debug(f"[PROTOCOL] {protocol} has been loaded")
+                self.__ctx.Logs.debug('[PROTOCOL] Loading %s', protocol)
                 return Unrealircd6(self.__ctx)
             case 'inspircd':
-                self.__ctx.Logs.debug(f"[PROTOCOL] {protocol} has been loaded")
+                self.__ctx.Logs.debug('[PROTOCOL] Loading %s', protocol)
                 return Inspircd(self.__ctx)
             case _:
-                self.__ctx.Logs.critical(f"[PROTOCOL ERROR] This protocol name ({protocol} is not valid!)")
+                self.__ctx.Logs.critical('[PROTOCOL ERROR] This protocol name (%s is not valid!)',
+                                         protocol)
                 raise Exception("Unknown protocol!")

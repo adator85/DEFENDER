@@ -20,12 +20,13 @@ class Translation:
         self.Settings = loader.Settings
 
     def get_translation(self) -> dict[str, list[list[str]]]:
-        try:
-            translation: dict[str, list[list[str]]] = dict()
-            sfs: dict[str, list[list[str]]] = {}
+        translation: dict[str, list[list[str]]] = dict()
+        sfs: dict[str, list[list[str]]] = dict()
 
-            module_translation_directory = Path("mods")
-            core_translation_directory = Path("core")
+        module_translation_directory = Path("mods")
+        core_translation_directory = Path("core")
+        loaded_files: list[str] = []
+        try:
             sfs_core = self.get_subfolders_name(core_translation_directory.__str__())
             sfs_module = self.get_subfolders_name(module_translation_directory.__str__())
 
@@ -34,12 +35,12 @@ class Translation:
                 for k, v in d.items():
                     sfs.setdefault(k, []).extend(v)
 
-            loaded_files: list[str] = []
+
 
             for module, filenames in sfs.items():
                 translation[module] = []
                 for filename in filenames:
-                    with open(f"{filename}", "r", encoding="utf-8") as fyaml:
+                    with open(filename, "r", encoding="utf-8") as fyaml:
                         data: dict[str, list[dict[str, str]]] = yaml.safe_load(fyaml)
 
                     if not isinstance(data, dict):
@@ -49,30 +50,34 @@ class Translation:
                         for vlist in list_trad:
                             translation[module].append([vlist["orig"], vlist["trad"]])
 
-                    loaded_files.append(f"{filename}")
+                    loaded_files.append(filename)
 
             return translation
 
         except yaml.scanner.ScannerError as se:
-            self.Logs.error(f"[!] {se} [!]")
-            return {}
+            self.Logs.error("[!] %s [!]", se)
+            return dict()
         except yaml.YAMLError as ye:
             if hasattr(ye, 'problem_mark'):
                 mark = ye.problem_mark
-                self.Logs.error(f"Error YAML: {ye.with_traceback(None)}")
-                self.Logs.error("Error position: (%s:%s)" % (mark.line+1, mark.column+1))
-            return {}
+                self.Logs.error('Error YAML: %s', ye.with_traceback(None))
+                self.Logs.error('Error position: (%s:%s)' % (mark.line+1, mark.column+1))
+            return dict()
         except yaml.error.MarkedYAMLError as me:
-            self.Logs.error(f"[!] {me} [!]")
-            return {}
+            self.Logs.error('[!] %s [!]', me)
+            return dict()
         except Exception as err:
-            self.Logs.error(f'General Error: {err}', exc_info=True)
-            return {}
+            self.Logs.error('General Error: %s', err, exc_info=True)
+            return dict()
 
         finally:
-            self.Logs.debug("Translation files loaded")
-            for f in loaded_files:
-                self.Logs.debug(f"   - {f}")
+
+            if loaded_files:
+                self.Logs.debug('Translation files loaded')
+                for f in loaded_files:
+                    self.Logs.debug('   - %s', f)
+            else:
+                self.Logs.debug('No translation available!')
 
     def get_subfolders_name(self, directory: str) -> dict[str, list[str]]:
         try:
@@ -92,5 +97,5 @@ class Translation:
             return translation_information
 
         except Exception as err:
-            self.Logs.error(f'General Error: {err}')
+            self.Logs.error('General Error: %s', err)
             return dict()
