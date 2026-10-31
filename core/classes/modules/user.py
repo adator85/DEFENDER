@@ -69,7 +69,6 @@ class User:
         Returns:
             bool: True if user mode has been updaed
         """
-        response = True
         user_obj = self.get_user(uidornickname=uidornickname)
 
         if user_obj is None:
@@ -78,11 +77,10 @@ class User:
         action = modes[0]
         new_modes = modes[1:]
 
-        existing_umodes = user_obj.umodes or ''
-        umodes = user_obj.umodes or ''
+        existing_umodes = user_obj.umodes
+        umodes = user_obj.umodes
 
         if action == '+':
-
             for nm in new_modes:
                 if nm not in existing_umodes:
                     umodes += nm
@@ -100,7 +98,7 @@ class User:
 
         user_obj.umodes = f"+{final_umodes}"
 
-        return response
+        return True
 
     def delete(self, uid: str) -> bool:
         """Delete the User starting from the UID

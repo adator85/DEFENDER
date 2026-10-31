@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
 from core.classes.interfaces.iprotocol import IProtocol
-from core.utils import is_coroutinefunction, tr, write_gc_to_file
+from core.utils import tr
 
 if TYPE_CHECKING:
     from core.definition import MSasl, MUser, MChannel
@@ -772,7 +772,7 @@ class Unrealircd6(IProtocol):
             if u is None: # If user is not created
                 return None
 
-            # TODO : User object should be able to update user modes
+            # Update user modes
             if self._ctx.User.update_mode(u.uid, user_mode):
                 return None
 

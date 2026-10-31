@@ -3,7 +3,7 @@ import re
 import ssl
 import threading
 import core.constants as const
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Self
 from core import utils
 from core.classes.modules import rehash
 from core.classes.interfaces.iprotocol import IProtocol
@@ -13,9 +13,10 @@ if TYPE_CHECKING:
     from core.loader import Loader
 
 class Irc:
-    _instance = None
+    _instance: Self | None = None
+    _initialized: bool = False
 
-    def __new__(cls, *agrs):
+    def __new__(cls, *args, **kwargs):
 
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -24,6 +25,11 @@ class Irc:
 
     def __init__(self, loader: 'Loader'):
 
+        if self._initialized:
+            loader.Logs.warning('Trying to call a second time Irc')
+            return
+
+        self._initialized = True
         self.signal: bool = True
 
         # Load Context class (Loader)
@@ -193,13 +199,14 @@ class Irc:
         """## Joining saved channels"""
         exec_query = await self.ctx.Base.db_execute_query(f'SELECT distinct channel_name FROM {self.ctx.Config.TABLE_CHANNEL}')
         result_query = exec_query.fetchall()
-        if self.Protocol is None:
-            return None
 
-        if result_query:
-            for chan_name in result_query:
-                chan = chan_name[0]
-                await self.Protocol.send_sjoin(channel=chan)
+        if self.Protocol:
+            if result_query:
+                for chan_name in result_query:
+                    chan = chan_name[0]
+                    await self.Protocol.send_sjoin(channel=chan)
+        else:
+            self.ctx.Logs.error('Error Protocol: The protocol is not set!')
 
         return None
 
@@ -211,15 +218,16 @@ class Irc:
         admin_obj = self.ctx.Admin.get_admin(nickname)
         dnickname = self.ctx.Config.SERVICE_NICKNAME
         current_level = 0
-        _modules = self.ctx.ModuleUtils.model_get_module(module or '')
 
-        # if _modules is None:
-        #     await proto.send_notice(
-        #         nick_from=dnickname,
-        #         nick_to=nickname,
-        #         msg=f" This module does not exist!"
-        #     )
-        #     return None
+        if module:
+            _module = self.ctx.ModuleUtils.model_get_module(module or '')
+            if _module is None:
+                await proto.send_notice(
+                    nick_from=dnickname,
+                    nick_to=nickname,
+                    msg=f" This module {module} does not exist!"
+                )
+                return None
 
         if admin_obj is not None:
             current_level = admin_obj.level
@@ -240,68 +248,6 @@ class Irc:
                         )
 
         return None
-
-    async def create_defender_user(self, sender: str,  new_admin: str, new_level: int, new_password: str) -> bool:
-        """Create a new admin user for defender
-
-        Args:
-            sender (str): The current admin sending the request
-            new_admin (str): The new admin to create
-            new_level (int): The level of the admin
-            new_password (str): The clear password
-
-        Returns:
-            bool: True if created.
-        """
-
-        # > addaccess [nickname] [level] [password]
-        dnick = self.ctx.Config.SERVICE_NICKNAME
-        proto = self.Protocol
-
-        get_user = self.ctx.User.get_user(new_admin)
-        level = self.ctx.Base.convert_to_int(new_level)
-        password = new_password
-
-        if get_user is None:
-            response = tr("The nickname (%s) is not currently connected! please create a new admin when the nickname is connected to the network!", new_admin)
-            await proto.send_notice(dnick, sender, response)
-            self.ctx.Logs.debug('New admin %s sent by %s is not connected', new_admin, sender)
-            return False
-
-        if level is None or level > 4 or level == 0:
-            await proto.send_notice(dnick, sender, tr("The level (%s) must be a number from 1 to 4", level))
-            self.ctx.Logs.debug('Level must a number between 1 to 4 (sent by %s)', sender)
-            return False
-
-        nickname = get_user.nickname
-        hostname = get_user.hostname
-        vhost = get_user.vhost
-        spassword = self.ctx.Utils.hash_password(password)
-
-        # Check if the user already exist
-        if not await self.ctx.Admin.db_is_admin_exist(nickname):
-            mes_donnees = {'datetime': self.ctx.Utils.get_sdatetime(),
-                           'user': nickname,
-                           'password': spassword,
-                           'hostname': hostname,
-                           'vhost': vhost,
-                           'level': level,
-                           'language': self.ctx.Config.LANG}
-
-            await self.ctx.Base.db_execute_query(f'''INSERT INTO {self.ctx.Config.TABLE_ADMIN} 
-                    (createdOn, user, password, hostname, vhost, level, language) VALUES
-                    (:datetime, :user, :password, :hostname, :vhost, :level, :language)
-                    ''', mes_donnees)
-
-            await proto.send_notice(dnick, sender, tr("New admin (%s) has been added with level %s", nickname, level))
-            self.ctx.Logs.info('A new admin (%s) has been created by %s!',
-                               nickname, sender)
-            return True
-        else:
-            await proto.send_notice(dnick, sender, tr("The nickname (%s) Already exist!", nickname))
-            self.ctx.Logs.info('The nickname %s already exist! (sent by %s)',
-                               nickname, sender)
-            return False
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
         
@@ -324,7 +270,6 @@ class Irc:
 
         return None
 
-    # @profile
     async def cmd(self, data: list[str]) -> None:
         """Parse server response
 
@@ -340,7 +285,7 @@ class Irc:
                 _logs.warning('Size (%s) - %s',str(len(original_response)), original_response)
                 return None
 
-            _logs.debug(f">> {_utils.hide_sensitive_data(original_response)}")
+            _logs.debug('>> %s', _utils.hide_sensitive_data(original_response))
             parsed_protocol = _proto.get_ircd_protocol_position(cmd=original_response)
             modules = self.ctx.ModuleUtils.model_get_loaded_modules().copy()
 
@@ -353,8 +298,8 @@ class Irc:
                                 if _utils.is_coroutinefunction(module.class_instance.cmd):
                                     await module.class_instance.cmd(original_response)
                                 else:
-                                    self.ctx.Logs.critical("The Method of the module %s is not a coroutine",
-                                                        module.class_instance.module_name)
+                                    self.ctx.Logs.critical('The Method of the module %s is not a coroutine',
+                                                           module.class_instance.module_name)
                     break
 
             del (_logs, _utils, _proto,
@@ -362,9 +307,9 @@ class Irc:
                  original_response)
 
         except IndexError as ie:
-            _logs.error(f"IndexError: {ie}")
+            _logs.error('Index Error: ', ie)
         except Exception as err:
-            _logs.error(f"General Error: {err}", exc_info=True)
+            _logs.error('General Error: ', err, exc_info=True)
 
     async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         """Create
@@ -379,15 +324,16 @@ class Irc:
             None: Nothing to return
         """
         u = self.ctx.User.get_user(user)
+        p = self.ctx.Irc.Protocol
         """The User Object"""
         if u is None:
             return None
 
+        _logs = self.ctx.Logs
         fromuser = u.nickname
-        uid = u.uid
         # set Current admin if any.
         self.ctx.Settings.current_admin = self.ctx.Admin.get_admin(user)
-        Colors = const.Colors
+        colors = const.Colors
 
         # Defender information
         dnickname = self.ctx.Config.SERVICE_NICKNAME
@@ -412,7 +358,8 @@ class Irc:
                 try:
                     current_command = str(cmd[0])
                     await self.Protocol.send_priv_msg(
-                        msg=tr('[ %s%s%s ] - Access denied to %s', Colors.red, current_command.upper(), Colors.nogc, fromuser),
+                        msg=tr('[ %s%s%s ] - Access denied to %s',
+                               colors.red, current_command.upper(), colors.nogc, fromuser),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
@@ -424,61 +371,62 @@ class Irc:
                         )
 
                 except IndexError as ie:
-                    self.ctx.Logs.error(f'{ie}')
+                    _logs.error('Index Error: ', ie)
 
             case 'deauth':
-
-                current_command = str(cmd[0]).upper()
-                uid_to_deauth = uid
-                if self.ctx.Admin.delete(uid_to_deauth):
-                    await self.Protocol.send_priv_msg(
-                            msg=tr("[ %s%s%s ] - %s has been disconnected from %s",
-                                   Colors.red, current_command, Colors.nogc, fromuser, dnickname),
-                            nick_from=dnickname,
-                            channel=dchanlog
-                            )
-
-                    await self.Protocol.send_notice(dnickname, fromuser,
-                                                    tr("You have been successfully disconnected from %s", dnickname))
-
+                # Syntax. !deauth
+                _deauth = self.ctx.Admin.deauth(client=u)
+                if _deauth.error:
+                    await p.send_priv_msg(
+                        msg=tr("[ %s%s%s ] - Impossible to de-auth %s from %s",
+                               colors.red, command.upper(), colors.nogc, u.nickname, dnickname),
+                        nick_from=dnickname,
+                        channel=dchanlog)
+                    await p.send_notice(dnickname, u.nickname,
+                                        tr("[ %s ] Impossible to deauth %s from %s",
+                                           command.upper(), u.nickname, dnickname))
                 else:
-                    await self.Protocol.send_priv_msg(msg=tr("[ %s%s%s ] - Impossible to de-auth %s from %s",
-                                                             Colors.red, current_command, Colors.nogc, fromuser, dnickname),
-                                                             nick_from=dnickname,
-                                                             channel=dchanlog)
-                    await self.Protocol.send_notice(dnickname, fromuser,
-                                                    tr("Impossible to de-auth %s from %s",
-                                                       fromuser, dnickname))
-                    self.ctx.Logs.error('[%s] IMPOSSIBLE TO DEAUTH %s from %s',
-                                        current_command, fromuser, dnickname)
+                    await p.send_priv_msg(
+                        msg=tr("[ %s%s%s ] - %s has been disconnected from %s",
+                               colors.red, command.upper(), colors.nogc, u.nickname, dnickname),
+                        nick_from=dnickname,
+                        channel=dchanlog
+                    )
+
+                    await p.send_notice(dnickname, u.nickname,
+                                        tr("[ %s ] You have been successfully disconnected from %s",
+                                           command.upper(), u.nickname))
                 return None
 
             case 'firstauth':
                 # Syntax. /msg defender firstauth OWNER_NICKNAME OWNER_PASSWORD
                 # Check command
                 current_nickname = fromuser
-                current_uid = uid
                 current_command = str(cmd[0])
 
-                if current_nickname is None:
-                    self.ctx.Logs.critical(f"This nickname [{fromuser}] don't exist")
+                if not current_nickname:
+                    _logs.critical("This nickname [%s] don't exist", fromuser)
                     return None
 
                 if len(cmd) < 3:
-                    await self.Protocol.send_notice(dnickname,fromuser, tr("Syntax. /msg %s %s [OWNER_NICKNAME] [OWNER_PASSWORD]", self.ctx.Config.SERVICE_NICKNAME, current_command))
+                    await self.Protocol.send_notice(dnickname, fromuser,
+                                                    tr("Syntax. /msg %s %s [OWNER_NICKNAME] [OWNER_PASSWORD]",
+                                                       dnickname, current_command))
                     return None
 
                 query = f"SELECT count(id) as c FROM {self.ctx.Config.TABLE_ADMIN}"
                 result = await self.ctx.Base.db_execute_query(query)
                 result_db = result.fetchone()
 
-                if result_db[0] > 0:
-                    await self.Protocol.send_notice(
-                        nick_from=dnickname,
-                        nick_to=fromuser,
-                        msg=tr("You can't use this command anymore ! Please use [%sauth] instead", self.ctx.Config.SERVICE_PREFIX)
-                        )
-                    return None
+                if result_db:
+                    if result_db[0] > 0:
+                        await self.Protocol.send_notice(
+                            nick_from=dnickname,
+                            nick_to=fromuser,
+                            msg=tr("You can't use this command anymore ! Please use [%sauth] instead",
+                                   self.ctx.Config.SERVICE_PREFIX)
+                            )
+                        return None
 
                 # Credentials sent from the user
                 cmd_owner = str(cmd[1])
@@ -489,11 +437,13 @@ class Irc:
                 config_password = self.ctx.Config.PASSWORD
 
                 if cmd_owner != config_owner:
-                    self.ctx.Logs.critical(f"The nickname sent [{cmd_owner}] is different than the configuration owner [{config_owner}] !")
+                    _logs.critical('The nickname sent [%s] is different than the configuration owner [%s] !',
+                                   cmd_owner, config_owner)
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=tr("The nickname sent [%s] is different than the one set in the configuration file !", cmd_owner)
+                        msg=tr("The nickname sent [%s] is different "
+                               "than the one set in the configuration file !", cmd_owner)
                         )
                     return None
 
@@ -501,29 +451,35 @@ class Irc:
                     await self.ctx.Base.db_create_first_admin()
 
                     if not self.ctx.Admin.insert_from_client(u, cmd_owner, 5, self.ctx.Settings.global_lang):
-                        self.ctx.Logs.error('[AUTHENTICATION] Error while inserting an Admin from an existing client!')
+                        _logs.error('[AUTHENTICATION] Error while inserting an Admin from an existing client!')
                         await self.Protocol.send_priv_msg(
                                                 msg=tr("[ %s %s %s ] - %s has an issue to logging! See defender logs.",
-                                                       Colors.red, current_command.upper(), Colors.nogc, current_nickname),
+                                                       colors.red, current_command.upper(), colors.nogc, current_nickname),
                                                 nick_from=dnickname,
                                                 channel=dchanlog)
                         return None
 
                     await self.Protocol.send_priv_msg(
-                        msg=tr("[%s %s %s] - %s is now connected to %s", Colors.green, current_command.upper(), Colors.nogc, fromuser, dnickname),
+                        msg=tr("[%s %s %s] - %s is now connected to %s",
+                               colors.green, current_command.upper(), colors.nogc, fromuser, dnickname),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
-                    await self.Protocol.send_notice(dnickname, fromuser, tr("Successfuly connected to %s", dnickname))
+                    await self.Protocol.send_notice(dnickname, fromuser,
+                                                    tr("Successfuly connected to %s",
+                                                       dnickname))
                 else:
                     await self.Protocol.send_priv_msg(
-                        msg=tr("[ %s %s %s ] - %s provided a wrong password!", Colors.red, current_command.upper(), Colors.nogc, current_nickname),
+                        msg=tr("[ %s %s %s ] - %s provided a wrong password!",
+                               colors.red, current_command.upper(), colors.nogc, current_nickname),
                         nick_from=dnickname,
                         channel=dchanlog
                         )
 
                     await self.Protocol.send_notice(dnickname, fromuser, tr("Wrong password!"))
+
+                return None
 
             case 'auth':
                 # Syntax. !auth nickname password
@@ -536,49 +492,44 @@ class Irc:
                 current_client = u
                 admin_obj = self.ctx.Admin.get_admin(fromuser)
 
-                if current_client is None:
+                if not current_client:
                     # This case should never happen
                     await self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {Colors.red}{str(command).upper()} FAIL{Colors.nogc} ] - Nickname {fromuser} is trying to connect to defender wrongly",
+                                                msg=f"[ {colors.red}{str(command).upper()} FAIL{colors.nogc} ] - Nickname {fromuser} is trying to connect to defender wrongly",
                                                 channel=dchanlog)
                     return None
                 
                 if admin_obj:
                     await self.Protocol.send_priv_msg(nick_from=dnickname, 
-                                                msg=f"[ {Colors.green}{str(command).upper()}{Colors.nogc} ] - {fromuser} is already connected to {dnickname}",
+                                                msg=f"[ {colors.green}{str(command).upper()}{colors.nogc} ] - {fromuser} is already connected to {dnickname}",
                                                 channel=dchanlog)
                     await self.Protocol.send_notice(dnickname, fromuser, tr("You are already connected to %s", dnickname))
                     return None
 
-                # mes_donnees = {'user': user_to_log, 'password': self.ctx.Utils.hash_password(password)}
-                # query = f"SELECT id, user, level, language FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user AND password = :password"
-                # result = await self.ctx.Base.db_execute_query(query, mes_donnees)
-                # user_from_db = result.fetchone()
-
                 if await self.ctx.Admin.db_auth_admin_legacy(current_client, user_to_log, password):
-                    # account = str(user_from_db[1])
-                    # level = int(user_from_db[2])
-                    # language = user_from_db[3] or self.ctx.Settings.global_lang
                     _admin = self.ctx.Admin.get_admin(current_client.uid)
-                    account = _admin.account or ''
-                    language = _admin.language or self.ctx.Settings.global_lang
+                    if _admin:
+                        account = _admin.account or ''
 
-                    # self.insert_db_admin(current_client.uid, account, level, language)
-                    await self.Protocol.send_priv_msg(nick_from=dnickname,
-                                                      msg=tr("[ %s%s SUCCESS%s ] - %s (%s) is now connected to %s",
-                                                             Colors.green, str(command).upper(), Colors.nogc,
-                                                             current_client.nickname, account, dnickname),
-                                                      channel=dchanlog)
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Successfuly connected to %s", dnickname))
-                    self.ctx.Logs.info("User %s (%s) is now connected to %s", current_client.nickname, account, dnickname)
+                        await self.Protocol.send_priv_msg(nick_from=dnickname,
+                                                          msg=tr("[ %s%s SUCCESS%s ] - %s (%s) is now connected to %s",
+                                                                 colors.green, str(command).upper(), colors.nogc,
+                                                                 current_client.nickname, account, dnickname),
+                                                          channel=dchanlog)
+                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                        msg=tr("Successfuly connected to %s",
+                                                               dnickname))
+                        _logs.info("User %s (%s) is now connected to %s",
+                                   current_client.nickname, account, dnickname)
                     return None
                 else:
                     await self.Protocol.send_priv_msg(nick_from=dnickname, 
                                                 msg=tr('[ %s%s FAIL%s ] - %s provided a wrong password!',
-                                                       Colors.red, str(command).upper(), Colors.nogc, current_client.nickname),
+                                                       colors.red, str(command).upper(), colors.nogc, current_client.nickname),
                                                 channel=dchanlog)
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Wrong password!"))
-                    self.ctx.Logs.info("Wrong password used by %s (%s) ! Authentication failed!", current_client.nickname, current_client.remote_ip)
+                    _logs.info('Wrong password used by %s (%s) ! Authentication failed!',
+                                       current_client.nickname, current_client.remote_ip)
                     return None
 
             case 'addaccess':
@@ -594,25 +545,31 @@ class Irc:
                     password = str(cmd[3])
 
                     if level:
-                        await self.create_defender_user(fromuser, new_admin, level, password)
+                        await self.ctx.Admin.db_create_new_admin(fromuser, new_admin, level, password)
                     else:
                         await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
                                                         msg="Level you provided is not numeric! (Level: from 1 to 4)")
                     return None
 
                 except IndexError as ie:
-                    self.ctx.Logs.error('Index Error: %s', ie)
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
+                    _logs.error('Index Error: %s', ie)
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                    msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
                 except TypeError as te:
-                    self.ctx.Logs.error('_hcmd addaccess: out of index : %s', te)
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
+                    _logs.error('Type Error : %s', te)
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                    msg=f"/msg {dnickname} addaccess [nickname] [level] [password]")
 
             case 'editaccess':
                 # .editaccess [USER] [NEW_PASSWORD] [LEVEL]
                 try:
+                    user_new_level = 0
+
                     if len(cmd) < 3:
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Right command : /msg {dnickname} editaccess [nickname] [NEWPASSWORD] [NEWLEVEL]")
-                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"level: from 1 to 4")
+                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                        msg=f"Right command : /msg {dnickname} editaccess [nickname] [NEWPASSWORD] [NEWLEVEL]")
+                        await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                        msg=f"level: from 1 to 4")
                         return None
 
                     if len(cmd) == 4:
@@ -633,7 +590,6 @@ class Irc:
                         return None
 
                     current_user = fromuser
-                    current_uid = uid
                     current_user_level = get_admin.level
 
                     if current_user == user_to_edit:
@@ -644,14 +600,14 @@ class Irc:
                     query = f"SELECT user, level FROM {self.ctx.Config.TABLE_ADMIN} WHERE user = :user"
                     result = await self.ctx.Base.db_execute_query(query, mes_donnees)
 
-                    isUserExist = result.fetchone()
-                    if not isUserExist is None:
+                    is_user_exist = result.fetchone()
+                    if not is_user_exist is None:
 
-                        if current_user_level < int(isUserExist[1]):
+                        if current_user_level < int(is_user_exist[1]):
                             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg="You are not allowed to edit this access")
                             return None
 
-                        if current_user_level == int(isUserExist[1]) and current_user != user_to_edit:
+                        if current_user_level == int(is_user_exist[1]) and current_user != user_to_edit:
                             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" You can't edit access of a user with same level")
                             return None
 
@@ -666,10 +622,11 @@ class Irc:
                             await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" Impossible de modifier l'utilisateur {str(user_new_level)}")
 
                 except TypeError as te:
-                    self.ctx.Logs.error(f"Type error : {te}")
+                    _logs.error('Type error : ', te)
                 except ValueError as ve:
-                    self.ctx.Logs.error(f"Value Error : {ve}")
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f" {self.ctx.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
+                    _logs.error('Value Error : ', ve)
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                    msg=f" {self.ctx.Config.SERVICE_PREFIX}editaccess [USER] [NEWPASSWORD] [NEWLEVEL]")
 
             case 'delaccess':
                 # .delaccess [USER] [CONFIRMUSER]
@@ -691,8 +648,6 @@ class Irc:
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"This user {fromuser} has no admin access")
                     return None
 
-                current_user = fromuser
-                current_uid = uid
                 current_user_level = get_admin.level
 
                 # Rechercher le user dans la base de données.
@@ -701,11 +656,11 @@ class Irc:
                 result = await self.ctx.Base.db_execute_query(query, mes_donnees)
                 info_user = result.fetchone()
 
-                if not info_user is None:
+                if info_user:
                     level_user_to_del = info_user[1]
                     if current_user_level <= level_user_to_del:
                         await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"You are not allowed to delete this access")
-                        self.ctx.Logs.warning(f':{dnickname} NOTICE {fromuser} : You are not allowed to delete this access')
+                        _logs.warning(f':{dnickname} NOTICE {fromuser} : You are not allowed to delete this access')
                         return None
 
                     data_to_delete = {'user': user_to_del}
@@ -716,7 +671,10 @@ class Irc:
                         self.ctx.Admin.delete(user_to_del)
                     else:
                         await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"Impossible de supprimer l'utilisateur.")
-                        self.ctx.Logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
+                        _logs.warning(f":{dnickname} NOTICE {fromuser} : Impossible de supprimer l'utilisateur.")
+                    return None
+
+                return None
 
             case 'cert':
                 # Syntax !cert
@@ -735,26 +693,26 @@ class Irc:
                                     query = f'UPDATE {self.ctx.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user = :user'
                                     r = await self.ctx.Base.db_execute_query(query, {'fingerprint': admin_obj.fingerprint, 'user': admin_obj.account})
                                     if r.rowcount > 0:
-                                        await self.Protocol.send_notice(dnickname, fromuser, f'[ {Colors.green}CERT{Colors.nogc} ] Your new fingerprint has been attached to your account. {admin_obj.fingerprint}')
+                                        await self.Protocol.send_notice(dnickname, fromuser, f'[ {colors.green}CERT{colors.nogc} ] Your new fingerprint has been attached to your account. {admin_obj.fingerprint}')
                                     else:
-                                        await self.Protocol.send_notice(dnickname, fromuser, f'[ {Colors.red}CERT{Colors.nogc} ] Impossible to add your fingerprint.{admin_obj.fingerprint}')
+                                        await self.Protocol.send_notice(dnickname, fromuser, f'[ {colors.red}CERT{colors.nogc} ] Impossible to add your fingerprint.{admin_obj.fingerprint}')
                                 else:
-                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {Colors.red}CERT{Colors.nogc} ] There is no fingerprint to add.')
+                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {colors.red}CERT{colors.nogc} ] There is no fingerprint to add.')
                         case 'del':
                             if admin_obj:
                                 query = f"UPDATE {self.ctx.Config.TABLE_ADMIN} SET fingerprint = :fingerprint WHERE user =:user"
                                 r = await self.ctx.Base.db_execute_query(query, {'fingerprint': None, 'user': admin_obj.account})
                                 if r.rowcount > 0:
-                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {Colors.green}CERT{Colors.nogc} ] Your fingerprint has been removed from your account. {admin_obj.fingerprint}')
+                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {colors.green}CERT{colors.nogc} ] Your fingerprint has been removed from your account. {admin_obj.fingerprint}')
                                 else:
-                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {Colors.red}CERT{Colors.nogc} ] Impossible to remove your fingerprint.{admin_obj.fingerprint}')
+                                    await self.Protocol.send_notice(dnickname, fromuser, f'[ {colors.red}CERT{colors.nogc} ] Impossible to remove your fingerprint.{admin_obj.fingerprint}')
                         case _:
                             await self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert add")
                             await self.Protocol.send_notice(dnickname, fromuser, f"Right command : /msg {dnickname} cert del")
                             return None
 
-                except Exception as e:
-                    self.ctx.Logs.error(e)
+                except Exception as err:
+                    _logs.error('General Error: %s', err, exc_info=True)
 
             case 'help':
                 # Syntax. !help [module_name]
@@ -773,9 +731,9 @@ class Irc:
                     await self.ctx.ModuleUtils.load_one_module(mod_name, fromuser)
                     return None
                 except KeyError as ke:
-                    self.ctx.Logs.error(f"Key Error: {ke} - list recieved: {cmd}")
+                    _logs.error('Key Error: %s %s - list recieved: %s', ke, cmd)
                 except Exception as err:
-                    self.ctx.Logs.error(f"General Error: {err} - list recieved: {cmd}", exc_info=True)
+                    _logs.error('General Error: %s - list recieved: %s', err, cmd, exc_info=True)
 
             case 'unload':
                 # unload mod_defender
@@ -789,7 +747,7 @@ class Irc:
                     await self.ctx.ModuleUtils.unload_one_module(module_name, False)
                     return None
                 except Exception as err:
-                    self.ctx.Logs.error(f"General Error: {err}")
+                    _logs.error('General Error: %s', err)
 
             case 'reload':
                 # reload mod_defender
@@ -805,12 +763,12 @@ class Irc:
                     await self.ctx.ModuleUtils.reload_one_module(module_name, fromuser)
                     utils.write_gc_to_file()
                     return None
-                except Exception as e:
-                    self.ctx.Logs.error("Something went wrong with a module you want to reload: %s",
-                                        e, exc_info=True)
+                except Exception as err:
+                    _logs.error('Something went wrong with a module you want to reload: %s',
+                                        err, exc_info=True)
                     await self.Protocol.send_priv_msg(
                         nick_from=dnickname,
-                        msg=f"Something went wrong with the module: {e}",
+                        msg=f"Something went wrong with the module: {err}",
                         channel=dchanlog
                     )
                     await self.ctx.ModuleUtils.db_delete_module(module_name)
@@ -830,7 +788,7 @@ class Irc:
                     await self.Protocol.send_squit(server_id=self.ctx.Config.SERVEUR_ID,
                                                    server_link=self.ctx.Config.SERVEUR_LINK,
                                                    reason=final_reason)
-                    self.ctx.Logs.info('Arrêt du server %s', dnickname)
+                    _logs.info('Arrêt du server %s', dnickname)
                     self.ctx.Config.DEFENDER_RESTART = 0
 
                     if self.writer:
@@ -840,19 +798,20 @@ class Irc:
                             self.writer.transport.abort()
 
                 except IndexError as ie:
-                    self.ctx.Logs.error('Index Error: %s', ie)
+                    _logs.error('Index Error: %s', ie)
                 except ConnectionResetError:
                     if self.writer:
                         if self.writer.is_closing():
-                            self.ctx.Logs.debug("Defender stopped properly!")
+                            _logs.debug('Defender stopped properly!')
                 except ssl.SSLError as serr:
-                    self.ctx.Logs.debug("Defender has ended with an SSL Error! - %s", serr, exc_info=True)
+                    _logs.debug('Defender has ended with an SSL Error! - %s',
+                                serr, exc_info=True)
 
             case 'restart':
                 final_reason = ' '.join(cmd[1:])
                 await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
                                                 msg=f"{dnickname.capitalize()} is going to restart!")
-                await rehash.restart_service(self.ctx)
+                await rehash.restart_service(self.ctx, final_reason)
 
                 return None
 
@@ -861,9 +820,12 @@ class Irc:
                 return None
 
             case 'show_modules':
-                self.ctx.Logs.debug('List of modules: ' + ', '.join([module.module_name for module in self.ctx.ModuleUtils.model_get_loaded_modules()]))
+                _logs.debug('List of modules: %s',
+                            ', '.join([module.module_name for module in self.ctx.ModuleUtils.model_get_loaded_modules()]))
                 all_modules  = self.ctx.ModuleUtils.discover()
                 loaded = False
+                loaded_user: str = ''
+                loaded_datetime: str = ''
                 results = await self.ctx.Base.db_execute_query(f'SELECT datetime, user, module_name FROM {self.ctx.Config.TABLE_MODULE}')
                 results = results.fetchall()
 
@@ -879,7 +841,7 @@ class Irc:
                             nick_from=dnickname,
                             nick_to=fromuser,
                             msg=tr('%s - %sLoaded%s by %s on %s',
-                                   module, Colors.green, Colors.nogc,
+                                   module, colors.green, colors.nogc,
                                    loaded_user, loaded_datetime)
                         )
                         loaded = False
@@ -887,7 +849,7 @@ class Irc:
                         await self.Protocol.send_notice(
                             nick_from=dnickname,
                             nick_to=fromuser,
-                            msg=tr('%s - %sNot Loaded%s', module, Colors.red, Colors.nogc)
+                            msg=tr('%s - %sNot Loaded%s', module, colors.red, colors.nogc)
                         )
                 return None
 
