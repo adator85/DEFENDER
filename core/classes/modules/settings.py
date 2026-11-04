@@ -35,7 +35,6 @@ class Settings:
     PROTOCTL_PREFIX_SIGNES_MODES : dict[str, str] = {}
     PROTOCTL_USER_MODES: list[str]              = []
     PROTOCTL_CHANNEL_MODES: list[str]           = []
-    PROTOCTL_PREFIX: list[str]                  = []
 
     TASKS_CTX                                   = contextvars.ContextVar("task-name", default="None")
 
@@ -49,6 +48,7 @@ class Settings:
     """Translation Varibale"""
 
     __LANG: str                                 = "EN"
+    """Default Defender language."""
 
     __INSTANCE_OF_USER_UTILS: Optional['User']  = None
     """Instance of the User Utils class"""

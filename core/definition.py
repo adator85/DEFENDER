@@ -28,6 +28,12 @@ class MainModel:
         return [f.name for f in fields(self)]
 
 @dataclass
+class MResponse(MainModel):
+    """Model Response"""
+    error: bool
+    message: str
+
+@dataclass
 class MUser(MainModel):
     """Model User"""
     uid: str
@@ -90,19 +96,15 @@ class MReputation(MainModel):
     secret_code: str | None = None
 
 @dataclass
+class ChannelMembers(MainModel):
+    level: str
+    uid: str
+
+@dataclass
 class MChannel(MainModel):
-    """Model Channel"""
-
     name: str
-    """### Channel name 
-    It include the #"""
-    uids: list[str] = field(default_factory=list[str])
-    """### List of UID available in the channel
-    including their modes ~ @ % + *
-
-    Returns:
-        list: The list of UID's including theirs modes
-    """
+    mode: str
+    members: list[ChannelMembers] = field(default_factory=list[ChannelMembers])
 
 @dataclass
 class MConfig(MainModel):
@@ -162,8 +164,8 @@ class MConfig(MainModel):
     SERVICE_CMODES: str = "ntsO"
     """The mode of the log channel (ex. ntsO)"""
 
-    SERVICE_UMODES: str = "o"
-    """The mode of the service when joining chanlog (ex. o, the service will be operator in the chanlog)"""
+    SERVICE_UMODES: str = "+o"
+    """The mode of the service when joining chanlog (ex. +o, the service will be operator in the chanlog)"""
 
     SERVICE_PREFIX: str = "!"
     """The default prefix to communicate with the service"""

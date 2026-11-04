@@ -7,6 +7,9 @@ class ServiceLogging:
         def __init__(self, loggin_name: str = "defender"):
             """Create the Logging object
             """
+            self.SRVMSG_LEVEL = 11
+            self.DEFMSG_LEVEL = 12
+            
             self.OS_SEP = sep
             self.LOGGING_NAME = loggin_name
             self.remove_logger(loggin_name) # Remove logger if exists
@@ -61,6 +64,8 @@ class ServiceLogging:
                 makedirs(logs_directory)
 
             # Init logs object
+            logging.addLevelName(self.SRVMSG_LEVEL, 'SRVMSG')
+            logging.addLevelName(self.DEFMSG_LEVEL, 'DEFMSG')
             logs = logging.getLogger(logging_name)
             logs.setLevel(debug_level)
 

@@ -264,7 +264,10 @@ class Command(IModule):
                 except IndexError:
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} SET [nickname] [+/-mode] [#channel]")
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"/msg {dnickname} {command.upper()} LIST")
-                    await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"[AUTOMODES AVAILABLE] are {' / '.join(self.ctx.Settings.PROTOCTL_PREFIX)}")
+                    await self.ctx.Irc.Protocol.send_notice(
+                        nick_from=dnickname,
+                        nick_to=fromuser,
+                        msg=f"[AUTOMODES AVAILABLE] are {' / '.join([mode for mode, _ in self.ctx.Settings.PROTOCTL_PREFIX_MODES_SIGNES.items()])}")
                 except Exception as err:
                     self.ctx.Logs.error('General Error: %s', err)
 
@@ -431,7 +434,7 @@ class Command(IModule):
                     await self.ctx.Irc.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
                                                             msg=f" Right command : /msg {dnickname} {command.upper()} [#SALON]")
                 except Exception as err:
-                    self.ctx.Logs.error('General Error: %s', err)
+                    self.ctx.Logs.error('General Error: %s', err, exc_info=True)
 
             case 'part':
                 try:

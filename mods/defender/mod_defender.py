@@ -903,7 +903,7 @@ class Defender(IModule):
                     _u = self.ctx.User.get_user(nickoruid)
 
                     if _u is not None:
-                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for uid_in_chan in chan.uids if self.ctx.User.clean_uid(uid_in_chan) == _u.uid]
+                        channels: list = [chan.name for chan in self.ctx.Channel.UID_CHANNEL_DB for member in chan.members if self.ctx.User.clean_uid(member.uid) == _u.uid]
 
                         await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' UID              : {_u.uid}')
                         await _proto.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f' NICKNAME         : {_u.nickname}')

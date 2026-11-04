@@ -1,8 +1,8 @@
 from re import findall
 from typing import Optional, Literal, TYPE_CHECKING
+from core.definition import MChannel, ChannelMembers
 
 if TYPE_CHECKING:
-    from core.definition import MChannel
     from core.loader import Loader
 
 class Channel:
@@ -14,11 +14,11 @@ class Channel:
             loader (Loader): The Loader Instance
         """
         self._ctx = loader
-        self.UID_CHANNEL_DB: list['MChannel'] = []
+        self.UID_CHANNEL_DB: list[MChannel] = []
         """List that contains all the Channels objects (ChannelModel)
         """
 
-    def insert(self, new_channel: 'MChannel') -> bool:
+    def insert(self, new_channel: MChannel) -> bool:
         """This method will insert a new channel and if the channel exist it will update the user list (uids)
 
         Args:
@@ -27,41 +27,53 @@ class Channel:
         Returns:
             bool: True if new channel, False if channel exist (However UID could be updated)
         """
-        result = False
-        exist = False
 
         if not self.is_valid_channel(new_channel.name):
-            self._ctx.Logs.error(f"The channel {new_channel.name} is not valid, channel must start with #")
+            self._ctx.Logs.error('The channel %s is not valid, channel must start with #',
+                                 new_channel.name)
             return False
 
-        for record in self.UID_CHANNEL_DB:
-            if record.name.lower() == new_channel.name.lower():
-                # If the channel exist, update the user list and do not go further
-                exist = True
-                # self._ctx.Logs.debug(f'{record.name} already exist')
+        _channel = self.get_channel(new_channel.name)
+        s_to_m = self._ctx.Settings.PROTOCTL_PREFIX_SIGNES_MODES
 
-                for user in new_channel.uids:
-                    record.uids.append(user)
+        # Clean UID of new channels.
+        for member in new_channel.members:
+            member.uid = self._ctx.Utils.clean_uid(member.uid)
+            if member.uid != self._ctx.Config.SERVICE_ID:
+                converted_level = ''
+                for level in member.level:
+                    converted_level += s_to_m.get(level, '*')
+                
+                member.level = converted_level
+                
+        if _channel:
+            # Channel alredy exist Update all levels
+            # available: [{'A': 0}, {'B': 2}]
+            # new: [{'B': 1}, {'C': 0}]
 
-                # Supprimer les doublons
-                del_duplicates = list(set(record.uids))
-                record.uids = del_duplicates
-                # self._ctx.Logs.debug(f'Updating a new UID to the channel {record}')
-                return result
+            # Update the channel mode
+            if _channel.mode == '':
+                _channel.mode += new_channel.mode
 
-        if not exist:
-            # If the channel don't exist, then create it
+            # Update the members
+            for new_member in new_channel.members:
+                is_new = True
+                for available_member in _channel.members:
+                    if new_member.uid == available_member.uid:
+                        # Update available member.
+                        available_member = new_member
+                        is_new = False
+
+                if is_new:
+                    _channel.members.append(new_member)
+
+            self.clean_channel()
+            return True
+        else:
             new_channel.name = new_channel.name.lower()
             self.UID_CHANNEL_DB.append(new_channel)
-            result = True
-            # self._ctx.Logs.debug(f'New Channel Created: ({new_channel})')
-
-        if not result:
-            self._ctx.Logs.critical('The Channel Object was not inserted %s', new_channel)
-
-        self.clean_channel()
-
-        return result
+            self.clean_channel()
+            return True
 
     def delete(self, channel_name: str) -> bool:
         """Delete channel from the UID_CHANNEL_DB
@@ -93,25 +105,23 @@ class Channel:
             bool: True if the client has been deleted from the channel
         """
         try:
-            result = False
-            chan_obj = self.get_channel(channel_name)
+            _channel = self.get_channel(channel_name)
 
-            if chan_obj is None:
-                return result
+            if _channel:
+                _members = _channel.members.copy()
+                for _member in _members:
+                    if self._ctx.Utils.clean_uid(_member.uid) == self._ctx.Utils.clean_uid(uid):
+                        _channel.members.remove(_member)
+                        self.clean_channel()
+                        return True
 
-            for userid in chan_obj.uids:
-                if self._ctx.Utils.clean_uid(userid) == self._ctx.Utils.clean_uid(uid):
-                    chan_obj.uids.remove(userid)
-                    result = True
+            return False
 
-            self.clean_channel()
-
-            return result
         except ValueError as ve:
             self._ctx.Logs.error('ValueError: %s', ve)
             return False
 
-    def delete_user_from_all_channel(self, uid:str) -> bool:
+    def delete_user_from_all_channel(self, uid: str) -> bool:
         """Delete a client from all channels
 
         Args:
@@ -121,46 +131,107 @@ class Channel:
             bool: True if the client has been deleted from all channels
         """
         try:
-            result = False
-
-            for record in self.UID_CHANNEL_DB:
-                for user_id in record.uids:
-                    if self._ctx.Utils.clean_uid(user_id) == self._ctx.Utils.clean_uid(uid):
-                        record.uids.remove(user_id)
-                        result = True
+            for _channel in self.UID_CHANNEL_DB:
+                for _member in _channel.members:
+                    if self._ctx.Utils.clean_uid(_member.uid) == self._ctx.Utils.clean_uid(uid):
+                        _channel.members.remove(_member)
 
             self.clean_channel()
 
-            return result
+            return True
+
         except ValueError as ve:
             self._ctx.Logs.error('ValueError: %s', ve)
             return False
 
-    def add_user_to_a_channel(self, channel_name: str, uid: str) -> bool:
+    def append_user_mode_from_channel(self, channel: str, uid: str, mode: str) -> bool:
+        
+        _logs = self._ctx.Logs
+        _channel = self.get_channel(channel)
+        _signe = ''
+
+        if len(mode) != 2:
+            return False
+        
+        _signe = mode[0]
+        _mode = mode[1]
+
+        for member in _channel.members:
+            if member.uid == self._ctx.Utils.clean_uid(uid):
+                if _signe == '+':
+                    member.level += _mode
+                    member.level = member.level.replace(_signe, '')
+                    member.level = ''.join(set(list(member.level)))
+                    _logs.debug('[APPEND USER MODE] %s has been granted with %s mode', uid, _mode)
+                elif _signe == '-':
+                    member.level = member.level.replace(_mode, '')
+                    _logs.debug('[APPEND USER MODE] %s has been remove with %s mode', uid, _mode)
+                else:
+                    _logs.debug('[APPEND USER MODE] ERROR Updating mode %s', mode)
+                    return False
+
+                return True
+
+        _logs.error('[APPEND USER MODE] Nothing happened for %s | %s | %s', channel, uid, mode)
+        return False
+
+    def append_channel_mode(self, channel: str, modes: str) -> bool:
+        
+        _logs = self._ctx.Logs
+        _channel = self.get_channel(channel)
+
+        if modes[0] not in {'+', '-'}:
+            return False
+
+        signe = modes[0]
+
+        if _channel is not None:
+            # Modes: +lnt
+            for mode in modes[1:]:
+                if signe == '+':
+                    _channel.mode += mode
+                    _channel.mode = _channel.mode.replace(signe, '')
+                    _channel.mode = ''.join(set(list(_channel.mode)))
+                    _channel.mode = signe + _channel.mode
+                elif signe == '-':
+                    _channel.mode = _channel.mode.replace(mode, '')
+                else:
+                    _logs.error('[APPEND CHANNEL MODE] Wrong sign in modes %s', signe)
+                    return False
+
+            _logs.debug('[APPEND CHANNEL MODE] Mode of %s has been updated to %s',
+                        _channel.name, _channel.mode)
+
+            return True
+
+        _logs.error('[APPEND CHANNEL MODE] Nothing happened for, channel: %s | Modes: %s', channel, modes)
+        return False
+
+    def add_user_to_a_channel(self, channel_name: str, uid: str, level: str) -> bool:
         """Add a client to a channel
 
         Args:
             channel_name (str): The channel name
             uid (str): The client UID
+            level (str): The level of the client
 
         Returns:
             bool: True is the clien has been added
         """
         try:
-            chan_obj = self.get_channel(channel_name)
+            _channel = self.get_channel(channel_name)
 
-            if chan_obj is None:
+            if _channel is None:
                 # Create a new channel if the channel don't exist
                 self._ctx.Logs.debug("New channel will be created (%s - %s)", channel_name, uid)
-                return self.insert(MChannel(channel_name, uids=[uid]))
+                return self.insert(MChannel(channel_name, '', [ChannelMembers(uid=uid, level=level)]))
 
-            chan_obj.uids.append(uid)
-            del_duplicates = list(set(chan_obj.uids))
-            chan_obj.uids = del_duplicates
-
+            _channel.members.append(ChannelMembers(uid, level))
+            _channel.members = list(set(_channel.members))
             return True
+
         except Exception as err:
-            self._ctx.Logs.error('GeneralError: %s', err)
+            self._ctx.Logs.error('General Error: %s', err)
             return False
 
     def is_user_present_in_channel(self, channel_name: str, uid: str) -> bool:
@@ -173,14 +244,13 @@ class Channel:
         Returns:
             bool: True if the user is present in the channel
         """
-        chan = self.get_channel(channel_name=channel_name)
-        if chan is None:
-            return False
+        _channel = self.get_channel(channel_name=channel_name)
 
-        clean_uid = self._ctx.Utils.clean_uid(uid=uid)
-        for chan_uid in chan.uids:
-            if self._ctx.Utils.clean_uid(chan_uid) == clean_uid:
-                return True
+        if _channel:
+            clean_uid = self._ctx.Utils.clean_uid(uid=uid)
+            for _member in _channel.members:
+                if self._ctx.Utils.clean_uid(_member.uid) == clean_uid:
+                    return True
 
         return False
 
@@ -188,15 +258,17 @@ class Channel:
         """If channel doesn't contain any client this method will remove the channel
         """
         try:
-            for record in self.UID_CHANNEL_DB:
-                if not record.uids:
-                    self.UID_CHANNEL_DB.remove(record)
+            _channels = self.UID_CHANNEL_DB.copy()
+            for _channel in _channels:
+                if not _channel.members:
+                    self.UID_CHANNEL_DB.remove(_channel)
 
+            del _channels
             return None
         except Exception as err:
-            self._ctx.Logs.error('GeneralError: %s', err)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
-    def get_channel(self, channel_name: str) -> Optional['MChannel']:
+    def get_channel(self, channel_name: str) -> Optional[MChannel]:
         """Get the channel object
 
         Args:
@@ -206,9 +278,9 @@ class Channel:
             MChannel: The channel object model if exist else None
         """
 
-        for record in self.UID_CHANNEL_DB:
-            if record.name.lower() == channel_name.lower():
-                return record
+        for _channel in self.UID_CHANNEL_DB:
+            if _channel.name.lower() == channel_name.lower():
+                return _channel
 
         return None
 
@@ -234,10 +306,10 @@ class Channel:
             else:
                 return True
         except TypeError as te:
-            self._ctx.Logs.error('TypeError: [%s] - %s', channel_to_check, te)
+            self._ctx.Logs.error('Type Error: [%s] - %s', channel_to_check, te)
             return False
         except Exception as err:
-            self._ctx.Logs.error('GeneralError: %s', err)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
             return False
 
     async def db_query_channel(self, action: Literal['add','del'], module_name: str, channel_name: str) -> bool:

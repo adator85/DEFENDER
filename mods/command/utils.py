@@ -8,7 +8,7 @@ async def set_automode(uplink: 'Command', cmd: list[str], client: str) -> None:
 
     command: str = str(cmd[0]).lower()
     option: str = str(cmd[1]).lower()
-    allowed_modes: list[str] = uplink.ctx.Settings.PROTOCTL_PREFIX # ['q','a','o','h','v']
+    allowed_modes: list[str] = [m for m, _ in uplink.ctx.Settings.PROTOCTL_PREFIX_MODES_SIGNES.items()] # ['q','a','o','h','v']
     dnickname = uplink.ctx.Config.SERVICE_NICKNAME
     service_id = uplink.ctx.Config.SERVICE_ID
     fromuser = client

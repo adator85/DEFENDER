@@ -102,7 +102,7 @@ class Autolimit(IModule):
                 return
 
         await asyncio.sleep(_interval)
-        await self.ctx.Irc.Protocol.send_set_mode('+l', channel_name=_channel, params=len(mchan.uids) + _amount)
+        await self.ctx.Irc.Protocol.send_set_mode('+l', channel_name=_channel, params=len(mchan.members) + _amount)
 
     async def increment_autolimit(self, event: asyncio.Event) -> None:
 
@@ -145,9 +145,9 @@ class Autolimit(IModule):
                         _static_serv_chans = [{"name": c.name, "uids_count": 0} for c in self.ctx.Channel.UID_CHANNEL_DB if c.name.lower() == _serv_chan.name]
 
                     for _static_serv_chan in _static_serv_chans:
-                        if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.uids) != _static_serv_chan.get('uids_count'):
+                        if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.members) != _static_serv_chan.get('uids_count'):
                             self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan))
-                            _static_serv_chan['uids_count'] = len(_serv_chan.uids)
+                            _static_serv_chan['uids_count'] = len(_serv_chan.members)
             else:
                 __id = 2
                 if __flag != __id:
@@ -178,9 +178,9 @@ class Autolimit(IModule):
                     _serv_chan = self.ctx.Channel.get_channel(_al_chan.channel)
                     if _serv_chan:
                         for _static_serv_chan in _static_serv_chans:
-                            if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.uids) != _static_serv_chan.get('uids_count'):
+                            if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.members) != _static_serv_chan.get('uids_count'):
                                 self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan, _al_chan))
-                                _static_serv_chan['uids_count'] = len(_serv_chan.uids)
+                                _static_serv_chan['uids_count'] = len(_serv_chan.members)
 
             await asyncio.sleep(0.3)
 
