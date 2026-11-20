@@ -30,9 +30,6 @@ class Base:
         self.Utils = loader.Utils
         self.logs = loader.Logs
 
-        # Check if new Defender version is available
-        self.check_for_new_version(True)
-
         # Liste des timers en cours
         self.running_timers: list[threading.Timer] = self.Settings.RUNNING_TIMERS
 
@@ -63,26 +60,33 @@ class Base:
     async def init(self) -> None:
         await self.__create_db()
 
-    def __set_current_defender_version(self) -> None:
+    def set_current_defender_version(self) -> bool:
         """This will put the current version of Defender
         located in version.json
         """
-
         version_filename = Path('version.json')
-        with open(version_filename, 'r') as version_data:
-            current_version:dict[str, str] = json.load(version_data)
 
-        self.Config.CURRENT_VERSION = current_version['version']
+        try:
+            with open(version_filename, 'r') as version_data:
+                current_version:dict[str, str] = json.load(version_data)
+                self.Config.CURRENT_VERSION = current_version['version']
+                return True
 
-        return None
+        except FileNotFoundError as fe:
+            self.Loader.Logs.error('File Not Found: %s', fe)
+            return False
+        except Exception as err:
+            self.Loader.Logs.error('Error file: %s', err, exc_info=True)
+            return False
 
-    def __get_latest_defender_version(self) -> None:
-        self.logs.debug('-- Looking for a new version available on Github')
+        return False
+
+    def get_latest_version(self) -> bool:
         token = ''
         json_url = 'https://raw.githubusercontent.com/adator85/DEFENDER/main/version.json'
         headers = {
             'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3.raw'  # Indique à GitHub que nous voulons le contenu brut du fichier
+            'Accept': 'application/vnd.github.v3.raw'  # Ask for raw file.
         }
 
         with requests.Session() as sess:
@@ -95,18 +99,20 @@ class Base:
                 response.raise_for_status()  # Vérifie si la requête a réussi
                 json_response:dict = response.json()
                 self.Config.LATEST_VERSION = json_response.get('version', '')
-                return None
+                self.logs.debug('[ VERSION GITHUB ] Latest Github Version is %s', self.Config.LATEST_VERSION)
+                return True
 
             except requests.HTTPError as err:
                 self.logs.error('Github not available to fetch latest version: %s', err)
+                return False
             except Exception as err:
                 self.logs.error('Github not available to fetch latest version %s', err)
+                return False
 
-    def check_for_new_version(self, online: bool) -> bool:
+        return False
+
+    def check_for_new_version(self) -> bool:
         """Check if there is a new version available
-
-        Args:
-            online (bool): True if you want to get the version from github (main branch)
 
         Returns:
             bool: True if there is a new version available
@@ -115,11 +121,7 @@ class Base:
             self.logs.debug('[ VERSION ] Checking for a new service version')
 
             # Assigner la version actuelle de Defender
-            self.__set_current_defender_version()
-            # Récuperer la dernier version disponible dans github
-            if online:
-                self.logs.debug('[ VERSION ] Retrieve the latest version from Github')
-                self.__get_latest_defender_version()
+            self.set_current_defender_version()
 
             latest_version = self.Config.LATEST_VERSION or '0.0.0'
             current_version = self.Config.CURRENT_VERSION or '0.0.0'
@@ -128,8 +130,8 @@ class Base:
             _latest_version = tuple(map(int, latest_version.split('.')))
 
             if _current_version < _latest_version:
-                self.logs.info('[ VERSION ] New version available: %s >>> %s',
-                               current_version, latest_version)
+                self.logs.info('[ VERSION ] New version of %s is available: %s >>> %s',
+                               self.Loader.Config.SERVICE_NICKNAME, current_version, latest_version)
                 return True
             else:
                 return False
