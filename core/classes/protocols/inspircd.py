@@ -79,25 +79,26 @@ class Inspircd(IProtocol):
                     self._ctx.Logs.log(self._ctx.ServiceLogging.DEFMSG_LEVEL, message)
 
         except UnicodeDecodeError as ude:
-            self._ctx.Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
+            self._ctx.Logs.error('Decode Error try iso-8859-1 - %s - %s', ude, message)
             self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[1],'replace'))
         except UnicodeEncodeError as uee:
-            self._ctx.Logs.error(f'Encode Error try iso-8859-1 - {uee} - {message}')
+            self._ctx.Logs.error('Encode Error try iso-8859-1 - %s - %s ', uee, message)
             self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[1],'replace'))
         except AssertionError as ae:
-            self._ctx.Logs.warning(f'Assertion Error {ae} - message: {message}')
+            self._ctx.Logs.warning('Assertion Error %s - message: %s', ae, message)
         except SSLEOFError as soe:
-            self._ctx.Logs.error(f"SSLEOFError: {soe} - {message}")
+            self._ctx.Logs.error('SSLEOFError: %s - %s', soe, message)
         except SSLError as se:
-            self._ctx.Logs.error(f"SSLError: {se} - {message}")
+            self._ctx.Logs.error('SSLError: %s - %s', se, message)
         except OSError as oe:
-            self._ctx.Logs.error(f"OSError: {oe} - {message}")
+            self._ctx.Logs.error('OSError: %s - %s', oe, message)
             if oe.errno == 10053:
                 sys.exit(oe.__str__())
         except AttributeError as ae:
-            self._ctx.Logs.critical(f"Attribute Error: {ae}")
+            self._ctx.Logs.critical('Attribute Error: %s', ae)
 
-    async def send_priv_msg(self, nick_from: str, msg: str, channel: str = None, nick_to: str = None):
+    async def send_priv_msg(self, nick_from: str, msg: str,
+                            channel: str | None = None, nick_to: str | None = None):
         """Sending PRIVMSG to a channel or to a nickname by batches
         could be either channel or nickname not both together
         Args:
@@ -120,10 +121,11 @@ class Inspircd(IProtocol):
                     batch = str(msg)[i:i+batch_size]
                     await self.send2socket(f":{user_from.uid} PRIVMSG {channel} :{batch}")
 
-            if not nick_to is None:
+            if nick_to is not None or user_to is not None:
                 for i in range(0, len(str(msg)), batch_size):
                     batch = str(msg)[i:i+batch_size]
-                    await self.send2socket(f":{nick_from} PRIVMSG {user_to.uid} :{batch}")
+                    if user_to is not None:
+                        await self.send2socket(f":{nick_from} PRIVMSG {user_to.uid} :{batch}")
 
         except Exception as err:
             self._ctx.Logs.error('General Error: %s', err, exc_info=True)
@@ -142,7 +144,7 @@ class Inspircd(IProtocol):
             user_to     = self._ctx.User.get_user(nick_to)
 
             if user_from is None or user_to is None:
-                self._ctx.Logs.error(f"The sender [{nick_from}] or the Reciever [{nick_to}] do not exist")
+                self._ctx.Logs.error('The sender [%s] or the Reciever [%s] do not exist', nick_from, nick_to)
                 return None
 
             for i in range(0, len(str(msg)), batch_size):
@@ -150,7 +152,7 @@ class Inspircd(IProtocol):
                 await self.send2socket(f":{user_from.uid} NOTICE {user_to.uid} :{batch}")
 
         except Exception as err:
-            self._ctx.Logs.error(f"General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def send_link(self):
         """Créer le link et envoyer les informations nécessaires pour la 
@@ -171,7 +173,7 @@ class Inspircd(IProtocol):
         server_id = self._ctx.Config.SERVEUR_ID
         server_hostname = self._ctx.Settings.MAIN_SERVER_HOSTNAME = self._ctx.Config.SERVEUR_HOSTNAME
 
-        version = self._ctx.Config.CURRENT_VERSION
+        version = self._ctx.Config.CURRENT_VERSION or ''
         unixtime = self._ctx.Utils.get_unixtime()
 
         service_ip = self._ctx.Config.SERVICE_IP
@@ -190,7 +192,7 @@ class Inspircd(IProtocol):
         await self.send2socket(f":{server_id} ENDBURST")
         await self.send_sjoin(service_chanlog)
 
-        self._ctx.Logs.debug('>> %s Link information sent to the server', __name__)
+        self._ctx.Logs.debug('>> Link information sent to the %s IRCd', self.name)
 
     async def gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
@@ -204,7 +206,8 @@ class Inspircd(IProtocol):
         await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} NICK {newnickname}")
         return None
 
-    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None, channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
+    async def send_set_mode(self, modes: str, *, nickname: Optional[str] = None,
+                            channel_name: Optional[str] = None, params: Optional[str] = None) -> None:
         """Set a mode to channel or to a nickname or for a user in a channel
 
         Args:
@@ -219,7 +222,7 @@ class Inspircd(IProtocol):
         _logs = self._ctx.Logs
 
         if modes[0] not in ['+', '-']:
-            _logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
+            _logs.error('[MODE ERROR] The mode you have provided is missing the sign: %s', modes)
             return None
 
         if nickname and channel_name:
@@ -229,11 +232,11 @@ class Inspircd(IProtocol):
                 return None
             
             if not self._ctx.Channel.is_valid_channel(channel_name):
-                self._ctx.Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+                self._ctx.Logs.error('[MODE ERROR] The channel is not valid: %s', channel_name)
                 return None
 
             if not all(mode in self._ctx.Settings.PROTOCTL_PREFIX_MODES_SIGNES for mode in list(modes.replace('+','').replace('-',''))):
-                self._ctx.Logs.debug(f'[USERMODE UNVAILABLE] This mode {modes} is not available!')
+                self._ctx.Logs.debug('[USERMODE UNVAILABLE] This mode %s is not available!', modes)
                 return None
 
             await self.send2socket(f":{service_id} MODE {channel_name} {modes} {nickname}")
@@ -247,7 +250,7 @@ class Inspircd(IProtocol):
         if nickname and channel_name is None:
             # :98KAAAAAB MODE nickname +o
             if not all(mode in self._ctx.Settings.PROTOCTL_USER_MODES for mode in list(modes.replace('+','').replace('-',''))):
-                self._ctx.Logs.debug(f'[USERMODE UNVAILABLE] This mode {modes} is not available!')
+                self._ctx.Logs.debug('[USERMODE UNVAILABLE] This mode %s is not available!', modes)
                 return None
 
             await self.send2socket(f":{service_id} MODE {nickname} {modes}")
@@ -256,11 +259,11 @@ class Inspircd(IProtocol):
         if nickname is None and channel_name:
             # :98KAAAAAB MODE #channel +o
             if not all(mode in self._ctx.Settings.PROTOCTL_CHANNEL_MODES for mode in list(modes.replace('+','').replace('-',''))):
-                self._ctx.Logs.debug(f'[USERMODE UNVAILABLE] This mode {modes} is not available!')
+                self._ctx.Logs.debug('[USERMODE UNVAILABLE] This mode %s is not available!', modes)
                 return None
                 
             if not self._ctx.Channel.is_valid_channel(channel_name):
-                self._ctx.Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
+                self._ctx.Logs.error('[MODE ERROR] The channel is not valid: %s', channel_name)
                 return None
 
             await self.send2socket(f":{service_id} MODE {channel_name} {modes} {params}")
@@ -286,7 +289,8 @@ class Inspircd(IProtocol):
 
         return None
 
-    async def send_kline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
+    async def send_kline(self, nickname: str, hostname: str, set_by: str,
+                         expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + k user host set_by expire_timestamp set_at_timestamp :reason
 
         await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} TKL + k {nickname} {hostname} {set_by} {expire_timestamp} {set_at_timestamp} :{reason}")
@@ -305,7 +309,7 @@ class Inspircd(IProtocol):
         service_id = self._ctx.Config.SERVICE_ID
 
         if not self._ctx.Channel.is_valid_channel(channel):
-            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
+            self._ctx.Logs.error('The channel [%s] is not valid', channel)
             return None
 
         await self.send2socket(f":{server_id} FJOIN {channel} {self._ctx.Utils.get_unixtime()} :o, {service_id}")
@@ -334,11 +338,11 @@ class Inspircd(IProtocol):
             await self.send2socket(f":{user_obj.uid} QUIT :{reason}", print_log=print_log)
             self._ctx.User.delete(user_obj.uid)
 
-        if not reputation_obj is None:
-            self._ctx.Reputation.delete(reputation_obj.uid)
+        if reputation_obj is not None:
+            self._ctx.Reputation.delete(reputation_obj.uid or '')
 
         if not self._ctx.Channel.delete_user_from_all_channel(uid):
-            self._ctx.Logs.error(f"The UID [{uid}] has not been deleted from all channels")
+            self._ctx.Logs.error('The UID [%s] has not been deleted from all channels', uid)
 
         return None
 
@@ -358,6 +362,7 @@ class Inspircd(IProtocol):
             vhost (str): vhost of the client you want to create
             remote_ip (str): remote_ip of the client you want to create
             realname (str): realname of the client you want to create
+            geoip (str): geoip of the client you want to create
             print_log (bool, optional): print logs if true. Defaults to True.
         """
         # {self.Config.SERVEUR_ID} UID 
@@ -396,9 +401,10 @@ class Inspircd(IProtocol):
             return None
 
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
-    async def send_join_chan(self, uidornickname: str, channel: str, password: str = None, print_log: bool = True) -> None:
+    async def send_join_chan(self, uidornickname: str, channel: str,
+                             password: str | None = None, print_log: bool = True) -> None:
         """Joining a channel
 
         Args:
@@ -415,7 +421,7 @@ class Inspircd(IProtocol):
             return None
 
         if not self._ctx.Channel.is_valid_channel(channel):
-            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
+            self._ctx.Logs.error('The channel [%s] is not valid', channel)
             return None
 
         await self.send2socket(f":{user_obj.uid} FJOIN {channel} {self._ctx.Utils.get_unixtime()} :,{user_obj.uid} {password_channel}", print_log=print_log)
@@ -423,6 +429,7 @@ class Inspircd(IProtocol):
         # Add async defender to the channel uids list
         self._ctx.Channel.insert(
             MChannel(name=channel,
+                     mode='',
                      members=[ChannelMembers('', user_obj.uid)])
         )
         return None
@@ -439,11 +446,11 @@ class Inspircd(IProtocol):
         user_obj = self._ctx.User.get_user(uidornickname)
 
         if user_obj is None:
-            self._ctx.Logs.error(f"The user [{uidornickname}] is not valid")
+            self._ctx.Logs.error('The user [%s] is not valid', uidornickname)
             return None
 
         if not self._ctx.Channel.is_valid_channel(channel):
-            self._ctx.Logs.error(f"The channel [{channel}] is not valid")
+            self._ctx.Logs.error('The channel [%s] is not valid', channel)
             return None
 
         await self.send2socket(f":{user_obj.uid} PART {channel}", print_log=print_log)
@@ -526,9 +533,9 @@ class Inspircd(IProtocol):
             return None
 
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_quit(self, server_msg: list[str]) -> None:
         """Handle quit coming from a server
@@ -547,9 +554,9 @@ class Inspircd(IProtocol):
             return None
 
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_squit(self, server_msg: list[str]) -> None:
         """Handle squit coming from a server
@@ -643,9 +650,9 @@ class Inspircd(IProtocol):
             return None
 
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_sjoin(self, server_msg: list[str]) -> None:
         """Handle sjoin coming from a server
@@ -680,9 +687,9 @@ class Inspircd(IProtocol):
             return None
 
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_endburst(self, server_msg: list[str]) -> None:
         """Handle EOS coming from a server
@@ -776,9 +783,9 @@ class Inspircd(IProtocol):
             return None
 
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_uid(self, server_msg: list[str]) -> None:
         """Handle uid message coming from the server
@@ -819,7 +826,7 @@ class Inspircd(IProtocol):
             if geoip_match:
                 geoip = geoip_match.group(1)
             else:
-                geoip = None
+                geoip = ''
 
             score_connexion = 0
 
@@ -855,7 +862,7 @@ class Inspircd(IProtocol):
             if sasl_obj:
                 if sasl_obj.auth_success:
 
-                    if not self._ctx.Admin.insert_from_client(_user_obj, sasl_obj.username, sasl_obj.level, sasl_obj.language):
+                    if not self._ctx.Admin.insert_from_client(_user_obj, sasl_obj.username or '', sasl_obj.level, sasl_obj.language):
                         await self.send_priv_msg(nick_from=dnickname,
                                                     msg=tr("[ %sSASL AUTH%s ] - %s provided a wrong password for this username %s",
                                                         red, nogc, nickname, sasl_obj.username),
@@ -877,10 +884,11 @@ class Inspircd(IProtocol):
                 return None
             
             return None
+
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Index Error: {ie}")
+            self._ctx.Logs.error('Index Error: %s', ie)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}", exc_info=True)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_privmsg(self, server_msg: list[str]) -> None:
         """Handle PRIVMSG message coming from the server
@@ -896,7 +904,7 @@ class Inspircd(IProtocol):
                 cmd.pop(0)
 
             get_uid_or_nickname = str(cmd[0].replace(':',''))
-            user_trigger = self._ctx.User.get_nickname(get_uid_or_nickname)
+            user_trigger = self._ctx.User.get_nickname(get_uid_or_nickname) or ''
             # dnickname = self._ctx.Config.SERVICE_NICKNAME
             pattern = fr'(:\{self._ctx.Config.SERVICE_PREFIX})(.*)$'
             hcmds = search(pattern, ' '.join(cmd)) # va matcher avec tout les caractéres aprés le .
@@ -951,7 +959,7 @@ class Inspircd(IProtocol):
                         return None
 
                     if not self._ctx.Commands.is_command_exist(arg[0]):
-                        self._ctx.Logs.debug(f"This command {arg[0]} sent by {user_trigger} is not available")
+                        self._ctx.Logs.debug('This command %s sent by %s is not available', arg[0], user_trigger)
                         return None
 
                     # if not arg[0].lower() in self._ctx.Irc.module_commands_list:
@@ -1005,9 +1013,9 @@ class Inspircd(IProtocol):
             param = str(server_msg[2])
             self._ctx.Config.HSID = self._ctx.Settings.MAIN_SERVER_ID = str(server_msg[0]).replace(':', '')
             if param == 'rawversion':
-                self._ctx.Logs.debug(f">> Server Version: {server_msg[3].replace(':', '')}")
+                self._ctx.Logs.debug('>> Server Version: %s', server_msg[3].replace(':', ''))
             elif param == 'rawbranch':
-                self._ctx.Logs.debug(f">> Branch Version: {server_msg[3].replace(':', '')}")
+                self._ctx.Logs.debug('>> Branch Version: %s', server_msg[3].replace(':', ''))
 
         except Exception as err:
             self._ctx.Logs.error('General Error: %s', err, exc_info=True)
@@ -1064,7 +1072,7 @@ class Inspircd(IProtocol):
 
             return None
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_ping(self, server_msg: list[str]) -> None:
         """Sending a PING answer to requestor
@@ -1089,7 +1097,7 @@ class Inspircd(IProtocol):
                 ping_response = current_unixtime - recieved_unixtime
 
                 # self._ctx.Irc.send2socket(f':{dnickname} NOTICE {nickname} :\x01PING {ping_response} secs\x01')
-                self.send_notice(
+                await self.send_notice(
                     nick_from=dnickname,
                     nick_to=nickname,
                     msg=f"\x01PING {ping_response} secs\x01"
@@ -1097,7 +1105,7 @@ class Inspircd(IProtocol):
 
             return None
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_version_msg(self, server_msg: list[str]) -> None:
         """Handle version coming from the server
@@ -1151,7 +1159,7 @@ class Inspircd(IProtocol):
 
             psasl = self._ctx.Sasl
             scopy = server_msg.copy()
-            client_uid = scopy[4] if len(scopy) >= 6 else None
+            client_uid = scopy[4] if len(scopy) >= 6 else ''
             # sasl_obj = None
             sasl_message_type = scopy[6] if len(scopy) >= 6 else None
             psasl.insert_sasl_client(self._ctx.Definition.MSasl(client_uid=client_uid))
@@ -1201,7 +1209,7 @@ class Inspircd(IProtocol):
                         return sasl_obj
 
         except Exception as err:
-            self._ctx.Logs.error(f'General Error: {err}', exc_info=True)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_sasl_authentication_process(self, sasl_model: 'MSasl'):
         s = sasl_model
@@ -1214,7 +1222,7 @@ class Inspircd(IProtocol):
                     mes_donnees = {'fingerprint': fingerprint}
                     query = f"SELECT user, level, language FROM {db_admin_table} WHERE fingerprint = :fingerprint"
                 else:
-                    mes_donnees = {'user': username, 'password': self._ctx.Utils.hash_password(password)}
+                    mes_donnees = {'user': username, 'password': self._ctx.Utils.hash_password(password or '')}
                     query = f"SELECT user, level, language FROM {db_admin_table} WHERE user = :user AND password = :password"
 
                 result = await self._ctx.Base.db_execute_query(query, mes_donnees)
@@ -1254,7 +1262,7 @@ class Inspircd(IProtocol):
                     await self.send2socket(f":{server_id} SASL {s.username} :SASL authentication failed")
 
     async def on_error(self, server_msg: list[str]) -> None:
-        self._ctx.Logs.debug(f"{server_msg}")
+        self._ctx.Logs.debug('[IRCd ERROR]: %s', server_msg)
 
     async def on_metedata(self, server_msg: list[str]) -> None:
         """_summary_
@@ -1336,7 +1344,7 @@ class Inspircd(IProtocol):
         if scopy[0].startswith('@'):
             scopy.pop(0)
 
-        user_obj = self._ctx.User.get_user(self._ctx.User.clean_uid(scopy[0]))
+        user_obj = self._ctx.User.get_user(self._ctx.User.clean_uid(scopy[0]) or '')
         newnickname = scopy[2]
         timestamp = scopy[3]
         return user_obj, newnickname, timestamp
