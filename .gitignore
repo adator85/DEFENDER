@@ -17,5 +17,6 @@ test*.py
 users.txt
 modules.txt
 objects.txt
+channels.txt
 tracker.py
 defender.spec
