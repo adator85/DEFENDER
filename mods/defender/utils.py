@@ -50,8 +50,8 @@ async def handle_on_mode(uplink: 'Defender', srvmsg: list[str]):
 
     if gconfig.SALON_JAIL == channel:
         if mode == '+b' and group_to_unban in group_to_check:
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {gconfig.SALON_JAIL} -b ~security-group:unknown-users")
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {gconfig.SALON_JAIL} -eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+            await p.send_set_mode('-b', channel_name=gconfig.SALON_JAIL, params='~security-group:unknown-users')
+            await p.send_set_mode('-eee', channel_name=gconfig.SALON_JAIL, params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users')
 
 async def handle_on_privmsg(uplink: 'Defender', srvmsg: list[str]):
     # ['@mtag....',':python', 'PRIVMSG', '#defender', ':zefzefzregreg', 'regg', 'aerg']
@@ -90,8 +90,8 @@ async def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
         get_reputation = uplink.ctx.Reputation.get_reputation(parsed_UID)
 
         if parsed_chan != gconfig.SALON_JAIL:
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {parsed_chan} +b ~security-group:unknown-users")
-            await p.send2socket(f":{gconfig.SERVICE_ID} MODE {parsed_chan} +eee ~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users")
+            await p.send_set_mode('+b', channel_name=parsed_chan, params='~security-group:unknown-users')
+            await p.send_set_mode('+eee', channel_name=parsed_chan, params='~security-group:webirc-users ~security-group:known-users ~security-group:websocket-users')
 
         if get_reputation is not None:
             isWebirc = get_reputation.isWebirc
@@ -102,10 +102,10 @@ async def handle_on_sjoin(uplink: 'Defender', srvmsg: list[str]):
 
             if confmodel.reputation_ban_all_chan == 1 and not isWebirc:
                 if parsed_chan != gconfig.SALON_JAIL:
-                    await p.send2socket(f":{gconfig.SERVICE_ID} MODE {parsed_chan} +b {get_reputation.nickname}!*@*")
-                    await p.send2socket(f":{gconfig.SERVICE_ID} KICK {parsed_chan} {get_reputation.nickname}")
+                    await p.send_ban(channel=parsed_chan, nickname=get_reputation.nickname, hostname='*@*')
+                    await p.send_kick(channel=parsed_chan, nickname=get_reputation.nickname)
 
-            uplink.ctx.Logs.debug(f'SJOIN parsed_uid : {parsed_UID}')
+            uplink.ctx.Logs.debug('SJOIN parsed_uid : %s', parsed_UID)
 
 def handle_on_slog(uplink: 'Defender', srvmsg: list[str]):
     """Handling SLOG messages
@@ -150,7 +150,7 @@ async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]) -> None:
     u, new_nickname, timestamp = p.parse_nick(srvmsg)
 
     if u is None:
-        uplink.ctx.Logs.error(f"[USER OBJ ERROR {timestamp}] - {srvmsg}")
+        uplink.ctx.Logs.error('[USER OBJ ERROR %s] - %s', timestamp, srvmsg)
         return None
 
     uid = u.uid
@@ -161,7 +161,7 @@ async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]) -> None:
     service_id = uplink.ctx.Config.SERVICE_ID
 
     if get_reputation is None:
-        uplink.ctx.Logs.debug(f'This UID: {uid} is not listed in the reputation dataclass')
+        uplink.ctx.Logs.debug('This UID: %s is not listed in the reputation dataclass', uid)
         return None
 
     # Update the new nickname
@@ -173,8 +173,8 @@ async def handle_on_nick(uplink: 'Defender', srvmsg: list[str]) -> None:
     if confmodel.reputation_ban_all_chan == 1:
         for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
             if chan.name != jail_salon:
-                await p.send2socket(f":{service_id} MODE {chan.name} -b {oldnick}!*@*")
-                await p.send2socket(f":{service_id} MODE {chan.name} +b {newnickname}!*@*")
+                await p.send_unban(chan.name, oldnick)
+                await p.send_ban(chan.name, newnickname)
 
     return None
 
@@ -190,7 +190,7 @@ async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]) -> None:
     confmodel = uplink.mod_config
     
     if userobj is None:
-        uplink.ctx.Logs.debug(f"This UID do not exist anymore: {srvmsg}")
+        uplink.ctx.Logs.debug('This UID do not exist anymore: %s', srvmsg)
         return None
 
     ban_all_chan = uplink.ctx.Base.convert_to_int(confmodel.reputation_ban_all_chan)
@@ -202,11 +202,11 @@ async def handle_on_quit(uplink: 'Defender', srvmsg: list[str]) -> None:
         final_nickname = get_user_reputation.nickname
         for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
             if chan.name != jail_salon and ban_all_chan == 1:
-                await p.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
-                uplink.ctx.Logs.debug(f"Mode -b {final_nickname} on channel {chan.name}")
+                await p.send_unban(channel=chan.name, nickname=final_nickname, hostname='*@*')
+                uplink.ctx.Logs.debug('Mode -b %s on channel %s', final_nickname, chan.name)
 
         uplink.ctx.Reputation.delete(userobj.uid)
-        uplink.ctx.Logs.debug(f"Client {get_user_reputation.nickname} has been removed from Reputation local DB")
+        uplink.ctx.Logs.debug('Client %s has been removed from Reputation local DB', get_user_reputation.nickname)
 
     return None
 
@@ -230,7 +230,7 @@ async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]) -> None:
 
     # Get User information
     if _User is None:
-        uplink.ctx.Logs.warning(f'Error when parsing UID', exc_info=True)
+        uplink.ctx.Logs.warning('Error when parsing UID', exc_info=True)
         return None
 
     # If user is not service or IrcOp then scan them
@@ -258,7 +258,8 @@ async def handle_on_uid(uplink: 'Defender', srvmsg: list[str]) -> None:
                 if uplink.ctx.Reputation.is_exist(_User.uid):
                     if reputation_flag == 1 and _User.score_connexion <= reputation_seuil:
                         await action_add_reputation_sanctions(uplink, _User.uid)
-                        uplink.ctx.Logs.info(f'[REPUTATION] Reputation system ON (Nickname: {_User.nickname}, uid: {_User.uid})')
+                        uplink.ctx.Logs.info('[REPUTATION] Reputation system ON (Nickname: %s, uid: %s)',
+                                             _User.nickname, _User.uid)
 
     return None
 
@@ -324,7 +325,7 @@ async def action_on_flood(uplink: 'Defender', srvmsg: list[str]) -> None:
             msg=f"{colors.red} {colors.bold} Flood detected. Apply the +m mode (Ô_o)",
             channel=channel
         )
-        uplink.ctx.Logs.debug(f'[FLOOD] {get_detected_nickname} triggered +m mode on the channel {channel}')
+        uplink.ctx.Logs.debug('[FLOOD] %s triggered +m mode on the channel %s', get_detected_nickname, channel)
         fu.nbr_msg = 0
         fu.first_msg_time = unixtime
         uplink.ctx.DAsyncio.create_safe_task(uplink.Threads.coro_release_mode_mute(uplink, 'mode-m', channel))
@@ -341,11 +342,12 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
 
     get_reputation = uplink.ctx.Reputation.get_reputation(jailed_uid)
     if get_reputation is None:
-        uplink.ctx.Logs.warning(f'UID {jailed_uid} has not been found')
+        uplink.ctx.Logs.warning('UID %s has not been found', jailed_uid)
         return None
 
     if get_reputation.isWebirc or get_reputation.isWebsocket:
-        uplink.ctx.Logs.debug(f'This nickname is exampted from the reputation system (Webirc or Websocket). {get_reputation.nickname} ({get_reputation.uid})')
+        uplink.ctx.Logs.debug('This nickname is exampted from the reputation system (Webirc or Websocket). %s (%s)',
+                              get_reputation.nickname, get_reputation.uid)
         uplink.ctx.Reputation.delete(get_reputation.uid)
         return None
 
@@ -375,12 +377,12 @@ async def action_add_reputation_sanctions(uplink: 'Defender', jailed_uid: str ):
         if reputation_ban_all_chan == 1:
             for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
                 if chan.name != salon_jail:
-                    await p.send_set_mode('+b', channel_name=chan.name, params=f'{jailed_nickname}!*@*')
-                    await p.send2socket(f":{service_id} KICK {chan.name} {jailed_nickname}")
+                    await p.send_ban(channel=chan.name, nickname=jailed_nickname, hostname='*@*')
+                    await p.send_kick(channel=chan.name, nickname=jailed_nickname)
 
-        uplink.ctx.Logs.info(f"[REPUTATION] {jailed_nickname} jailed (UID: {jailed_uid}, score: {jailed_score})")
+        uplink.ctx.Logs.info('[REPUTATION] %s jailed (UID: %s, score: %s)', jailed_nickname, jailed_uid, jailed_score)
     else:
-        uplink.ctx.Logs.info(f"[REPUTATION] {jailed_nickname} skipped (trusted or WebIRC)")
+        uplink.ctx.Logs.info('[REPUTATION] %s skipped (trusted or WebIRC)', jailed_nickname)
         uplink.ctx.Reputation.delete(jailed_uid)
 
 async def action_apply_reputation_santions(uplink: 'Defender') -> None:
@@ -417,7 +419,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
                     nick_to=admin.nickname,
                     msg=f"You have been released for the reputation system!")
 
-                uplink.ctx.Logs.info(f"{admin.nickname} ({admin.account}) has been released! because is an admin")
+                uplink.ctx.Logs.info('%s (%s) has been released! because is an admin', admin.nickname, admin.account)
                 break
 
         if not user.isWebirc: # If user is not coming from WebIrc
@@ -432,7 +434,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
                 await p.send_kill(user.nickname, 'You must type the password code!')
                 await p.send2socket(f":{gconfig.SERVEUR_LINK} REPUTATION {user.remote_ip} 0")
 
-                uplink.ctx.Logs.info(f"Nickname: {user.nickname} KILLED after {str(reputation_timer)} minutes of inactivity")
+                uplink.ctx.Logs.info('Nickname: %s KILLED after %s minutes of inactivity', user.nickname, str(reputation_timer))
                 uid_to_clean.append(user.uid)
 
     for uid in uid_to_clean:
@@ -440,7 +442,7 @@ async def action_apply_reputation_santions(uplink: 'Defender') -> None:
         for chan in uplink.ctx.Channel.UID_CHANNEL_DB:
             if chan.name != salon_jail and ban_all_chan == 1:
                 get_user_reputation = uplink.ctx.Reputation.get_reputation(uid)
-                await p.send_set_mode('-b', channel_name=chan.name, params=f"{get_user_reputation.nickname}!*@*")
+                await p.send_unban(channel=chan.name, nickname=get_user_reputation.nickname)
 
         # Lorsqu'un utilisateur quitte, il doit être supprimé de {UID_DB}.
         uplink.ctx.Channel.delete_user_from_all_channel(uid)
@@ -477,7 +479,7 @@ def action_scan_client_with_cloudfilt(uplink: 'Defender', user_model: 'MUser') -
         decoded_response: dict = loads(response.text)
         status_code = response.status_code
         if status_code != 200:
-            uplink.ctx.Logs.warning(f'Error connecting to cloudfilt API | Code: {str(status_code)}')
+            uplink.ctx.Logs.warning('Error connecting to cloudfilt API | Code: %s', str(status_code))
             return
 
         result = {
@@ -518,7 +520,7 @@ def action_scan_client_with_freeipapi(uplink: 'Defender', user_model: 'MUser') -
             uplink.ctx.Logs.warning('Too Many Requests - The rate limit for the API has been exceeded.')
             return None
         elif status_code != 200:
-            uplink.ctx.Logs.warning(f'status code = {str(status_code)}')
+            uplink.ctx.Logs.warning('status code = %s', str(status_code))
             return None
 
         result = {
@@ -556,14 +558,14 @@ def action_scan_client_with_abuseipdb(uplink: 'Defender', user_model: 'MUser') -
         try:
             response = sess.request(method='GET', url=url, headers=headers, params=querystring, timeout=uplink.timeout)
         except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout) as err:
-            uplink.ctx.Logs.error(f"Time-out Error: {err}")
+            uplink.ctx.Logs.error('Time-out Error: %s', err)
             return None
         except Exception as e:
-            uplink.ctx.Logs.error(f"Time-out Error: {e}")
+            uplink.ctx.Logs.error('General Error: %s', e, exc_info=True)
             return None
 
         if response.status_code != 200:
-            uplink.ctx.Logs.warning(f'status code = {str(response.status_code)}')
+            uplink.ctx.Logs.warning('status code = %s', str(response.status_code))
             return None
 
         # Formatted output
@@ -608,12 +610,12 @@ def action_scan_client_with_local_socket(uplink: 'Defender', user_model: 'MUser'
                 return result
 
             except (socket.timeout, ConnectionRefusedError):
-                uplink.ctx.Logs.debug(f"[LOCAL SCAN] Port {remote_ip}:{str(port)} is close.")
+                uplink.ctx.Logs.debug('[LOCAL SCAN] Port %s:%s is close.', remote_ip, str(port))
                 result['closed_ports'].append(port)
             except AttributeError as ae:
-                uplink.ctx.Logs.warning(f"AttributeError ({remote_ip}): {ae}")
+                uplink.ctx.Logs.warning('AttributeError (%s): %s', remote_ip, ae)
             except socket.gaierror as err:
-                uplink.ctx.Logs.warning(f"Address Info Error ({remote_ip}): {err}")
+                uplink.ctx.Logs.warning('Address Info Error (%s): %s', remote_ip, err)
 
     return result
 
@@ -636,9 +638,9 @@ def action_scan_client_with_psutil(uplink: 'Defender', user_model: 'MUser') -> O
     try:
         connections = psutil.net_connections(kind='inet')
         matching_ports = [conn.raddr.port for conn in connections if conn.raddr and conn.raddr.ip == remote_ip]
-        uplink.ctx.Logs.debug(f"Connexion of ({remote_ip}) using ports : {str(matching_ports)}")
+        uplink.ctx.Logs.debug('Connexion of (%s) using ports : %s', remote_ip, str(matching_ports))
 
         return matching_ports
 
     except psutil.AccessDenied as ad:
-        uplink.ctx.Logs.critical(f'psutil_scan: Permission error: {ad}')
+        uplink.ctx.Logs.critical('psutil_scan: Permission error: %s', ad)
