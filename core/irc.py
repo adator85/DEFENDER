@@ -40,9 +40,6 @@ class Irc:
         self.writer: Optional[asyncio.StreamWriter] = None
         self.Protocol: 'IProtocol'
 
-        # Date et heure de la premiere connexion de Defender
-        self.defender_connexion_datetime = self.ctx.Config.DEFENDER_CONNEXION_DATETIME
-
         # Lancer toutes les 30 secondes des actions de nettoyages
         self.beat = self.ctx.Config.DEFENDER_HEARTBEAT_FREQUENCY
 
@@ -82,7 +79,7 @@ class Irc:
         self.ctx.Commands.build_command(3, 'core', 'cert', 'Append your new fingerprint to your account!')
         self.ctx.Commands.build_command(4, 'core', 'quit', 'Disconnect the bot or user from the server.')
         self.ctx.Commands.build_command(4, 'core', 'rehash', 'Reload the configuration file without restarting')
-        self.ctx.Commands.build_command(4, 'core', 'restart', 'Restart the bot or service.') # Memory leaks
+        self.ctx.Commands.build_command(4, 'core', 'restart', 'Restart the bot or service.')
         self.ctx.Commands.build_command(4, 'core', 'raw', 'Send a raw command directly to the IRC server')
         self.ctx.Commands.build_command(4, 'core', 'print_vars', 'Print users in a file.')
         self.ctx.Commands.build_command(4, 'core', 'show_timers', 'Display active timers')
@@ -122,11 +119,19 @@ class Irc:
                 self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP,
                                                                          self.ctx.Config.SERVEUR_PORT,
                                                                          ssl=self.ctx.Utils.get_ssl_context())
+                
+                ssl_obj = self.writer.get_extra_info('ssl_object')
+                if ssl_obj:
+                    self.ctx.Config.SSL_VERSION = ssl_obj.version()
             else:
                 self.reader, self.writer = await asyncio.open_connection(self.ctx.Config.SERVEUR_IP,
                                                                          self.ctx.Config.SERVEUR_PORT)
 
-            self.init_service_user()
+            # Check if New version available
+            self.ctx.Base.set_current_defender_version()
+            self.ctx.Base.get_latest_version()
+            self.ctx.User.init_defender_user()
+
             self.Protocol = self.ctx.PFactory.get()
             self.Protocol.register_command()
             await self.Protocol.send_link()
@@ -153,7 +158,7 @@ class Irc:
 
         while self.signal:
             if self.reader:
-                data = await self.reader.readuntil(b'\r\n')
+                data = await self.reader.readuntil(self.Protocol.end_of_line)
                 await self.send_response(data.splitlines())
 
     async def send_response(self, responses:list[bytes]) -> None:
@@ -174,26 +179,6 @@ class Irc:
     # --------------------------------------------
     #            END OF IRC CONNECTION           #
     # --------------------------------------------
-
-    def init_service_user(self) -> None:
-
-        self.ctx.User.insert(self.ctx.Definition.MUser(
-            uid=self.ctx.Config.SERVICE_ID,
-            nickname=self.ctx.Config.SERVICE_NICKNAME,
-            username=self.ctx.Config.SERVICE_USERNAME,
-            realname=self.ctx.Config.SERVICE_REALNAME,
-            hostname=self.ctx.Config.SERVICE_HOST,
-            umodes=self.ctx.Config.SERVICE_SMODES,
-            vhost='',
-            fingerprint='',
-            tls_cipher='',
-            isWebirc=False,
-            isWebsocket=False,
-            remote_ip='127.0.0.1',
-            score_connexion=1000,
-            geoip='XX'
-        ))
-        return None
 
     async def join_saved_channels(self) -> None:
         """## Joining saved channels"""
@@ -256,13 +241,15 @@ class Irc:
         _dnickname = self.ctx.Config.SERVICE_NICKNAME
         _proto = self.Protocol
 
-        _response = await self.ctx.DAsyncio.create_safe_task(
+        await self.ctx.DAsyncio.create_safe_task(
             self.ctx.DAsyncio.create_io_thread(
-                self.ctx.Base.check_for_new_version, True
+                self.ctx.Base.get_latest_version, run_once=True
             )
         ).task
 
-        if _response:
+        _newversion = self.ctx.Base.check_for_new_version()
+
+        if _newversion:
             await _proto.send_notice(nick_from=_dnickname, nick_to=fromuser, msg=f" New Version available : {_app_current_version} >>> {_app_latest_version}")
             await _proto.send_notice(nick_from=_dnickname, nick_to=fromuser, msg=" Please run (git pull origin main) in the current folder")
         else:
@@ -285,7 +272,7 @@ class Irc:
                 _logs.warning('Size (%s) - %s',str(len(original_response)), original_response)
                 return None
 
-            _logs.debug('>> %s', _utils.hide_sensitive_data(original_response))
+            _logs.log(self.ctx.ServiceLogging.SRVMSG_LEVEL, '>> %s', _utils.hide_sensitive_data(original_response)),
             parsed_protocol = _proto.get_ircd_protocol_position(cmd=original_response)
             modules = self.ctx.ModuleUtils.model_get_loaded_modules().copy()
 
@@ -307,9 +294,9 @@ class Irc:
                  original_response)
 
         except IndexError as ie:
-            _logs.error('Index Error: ', ie)
+            _logs.error('Index Error: %s', ie, exc_info=True)
         except Exception as err:
-            _logs.error('General Error: ', err, exc_info=True)
+            _logs.error('General Error: %s', err, exc_info=True)
 
     async def hcmds(self, user: str, channel: Optional[str], cmd: list, fullcmd: Optional[list]) -> None:
         """Create
@@ -324,12 +311,16 @@ class Irc:
             None: Nothing to return
         """
         u = self.ctx.User.get_user(user)
-        p = self.ctx.Irc.Protocol
         """The User Object"""
+        p = self.Protocol
+        """The Protocol Object"""
+        _logs = self.ctx.Logs
+        """The Logging object"""
+
         if u is None:
             return None
 
-        _logs = self.ctx.Logs
+
         fromuser = u.nickname
         # set Current admin if any.
         self.ctx.Settings.current_admin = self.ctx.Admin.get_admin(user)
@@ -892,16 +883,17 @@ class Irc:
             case 'show_channels':
                 for chan in self.ctx.Channel.UID_CHANNEL_DB:
                     list_nicknames: list = []
-                    for uid in chan.uids:
+                    for member in chan.members:
                         pattern = fr'[:|@|%|\+|~|\*]*'
-                        parsed_uid = re.sub(pattern, '', uid)
-                        list_nicknames.append(self.ctx.User.get_nickname(parsed_uid))
+                        parsed_uid = re.sub(pattern, '', member.uid)
+                        list_nicknames.append(f'{self.ctx.User.get_nickname(parsed_uid)} | {member.level}')
 
                     await self.Protocol.send_notice(
                         nick_from=dnickname,
                         nick_to=fromuser,
-                        msg=f"Channel: {chan.name} - Users: {list_nicknames}"
+                        msg=f"Channel: {chan.name} - Users: {list_nicknames} - CModes: {chan.mode}"
                     )
+
                 return None
 
             case 'show_users':
@@ -943,7 +935,7 @@ class Irc:
                         channel=dchanlog,
                         msg=f'{obj.module_header.name} | {obj.module_header.version} | {obj.module_header.author}'
                     )
-                utils.write_gc_to_file()
+
                 if _cache_size == 0:
                     await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("The cache is empty!"))
                     return None
@@ -963,10 +955,13 @@ class Irc:
                 _cache_size = self.ctx.Settings.get_cache_size()
                 if _cache_size > 0:
                     self.ctx.Settings.clear_cache()
-                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=f"{_cache_size} value(s) has been cleared from the cache.")
-                    return None
-                
-                await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser, msg=tr("Nothing to clean. The cache is empty!"))
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                    msg=f"{_cache_size} value(s) has been cleared from the cache.")
+                else:
+                    await self.Protocol.send_notice(nick_from=dnickname, nick_to=fromuser,
+                                                msg=tr("Nothing to clean. The cache is empty!"))
+
+                del _cache_size
                 return None
 
             case 'uptime':
@@ -1011,6 +1006,16 @@ class Irc:
                         self.ctx.Logs.debug(f" {i} - chars written {w}")
                         i += 1
                     await self.Protocol.send_priv_msg(dnickname, "Data written in modules.txt file", dchanlog)
+
+                with open('channels.txt', 'w') as fw:
+                    i = 1
+                    for u in self.ctx.Channel.UID_CHANNEL_DB:
+                        w = fw.write(u.to_dict().__str__() + "\n")
+                        self.ctx.Logs.debug(f" {i} - chars written {w}")
+                        i += 1
+                    await self.Protocol.send_priv_msg(dnickname, "Data written in channels.txt file", dchanlog)
+
+                utils.write_gc_to_file()
 
                 return None
 
