@@ -12,6 +12,7 @@ class IProtocol(ABC):
 
     def __init__(self, context: 'Loader'):
         self.name: Optional[str] = None
+        self.end_of_line: bytes = b'\r\n'
         self.protocol_version: int = -1
         self.known_protocol: set[str] = set()
         self._ctx = context
@@ -264,6 +265,39 @@ class IProtocol(ABC):
         Args:
             channel_name (str): _description_
             channel_mode (str): _description_
+        """
+
+    @abstractmethod
+    async def send_unban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        """_summary_
+
+        Args:
+            channel (str): _description_
+            nickname (str): _description_
+            hostname (str, optional): _description_. Defaults to '*@*'.
+        """
+        raise NotImplementedError(f'{__name__} not implemented!')
+
+    @abstractmethod
+    async def send_ban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        """_summary_
+
+        Args:
+            channel (str): _description_
+            nickname (str): _description_
+            hostname (str, optional): _description_. Defaults to '*@*'.
+
+        Returns:
+            _type_: _description_
+        """
+
+    @abstractmethod
+    async def send_kick(self, channel: str, nickname: str):
+        """Kick a nickname from a channel
+
+        Args:
+            channel (str): The channel name (will be validated)
+            nickname (str): The nickname (will be validated)
         """
 
     @abstractmethod
