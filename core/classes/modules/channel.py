@@ -152,6 +152,9 @@ class Channel:
 
         if len(mode) != 2:
             return False
+
+        if _channel is None:
+            return False
         
         _signe = mode[0]
         _mode = mode[1]
