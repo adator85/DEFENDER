@@ -173,6 +173,9 @@ class MConfig(MainModel):
     SERVICE_ID: str = field(init=False)
     """The service unique ID"""
 
+    SERVICE_IP: str = "127.0.0.1"
+    """The IP address the service will have during his connection. Default: 127.0.0.1"""
+
     LANG: str = "EN"
     """The default language of Defender. default: EN"""
 
