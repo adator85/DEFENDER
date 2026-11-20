@@ -40,7 +40,12 @@ def update_packages() -> bool:
 			return False
 
 		print("> Checking for dependencies versions ==> WAIT")
+		print("> Upgrading local pip!")
+		check_call([PIPENV, 'install', '--upgrade', 'pip'], stdout=DEVNULL)
+
+		print("> Upgrading local packages!")
 		check_call([PIPENV, 'install', '--upgrade', '-r', 'requirements.txt'], stdout=DEVNULL)
+
 		print("> Dependencies versions ==> OK")
 
 		return True
