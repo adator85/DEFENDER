@@ -1,25 +1,26 @@
 import sys
 from base64 import b64decode
-from re import A, match, findall, search
+from re import match, findall, search
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from ssl import SSLEOFError, SSLError
+from core.definition import ChannelMembers, MChannel
 from core.classes.interfaces.iprotocol import IProtocol
 from core.utils import tr
 
 if TYPE_CHECKING:
-    from core.definition import MSasl, MUser, MChannel
+    from core.definition import MSasl, MUser
 
 class Inspircd(IProtocol):
 
-    async def init_protocol(self):
+    def init_protocol(self):
         self.name = 'InspIRCd-4'
+        self.end_of_line = b'\n'
         self.protocol_version = 1206
-
         self.known_protocol: set[str] = {'UID', 'ERROR', 'PRIVMSG',
                                          'SINFO', 'FJOIN', 'PING', 'PONG',
                                          'SASL', 'PART', 'CAPAB', 'ENDBURST',
-                                         'METADATA', 'NICK',
+                                         'METADATA', 'NICK', 'FMODE',
                                          'MODE', 'QUIT', 'SQUIT',
                                          'VERSION'}
 
@@ -38,11 +39,11 @@ class Inspircd(IProtocol):
                 return token.upper()
 
         if log:
-            self._ctx.Logs.debug(f"[IRCD LOGS] You need to handle this response: {cmd}")
+            self._ctx.Logs.debug('[IRCD LOGS] You need to handle this response: %s', cmd)
 
         return None
 
-    async def register_command(self):
+    def register_command(self):
         m = self._ctx.Definition.MIrcdCommand
         self.Handler.register(m('PING', self.on_server_ping))
         self.Handler.register(m('NICK', self.on_nick))
@@ -51,6 +52,7 @@ class Inspircd(IProtocol):
         self.Handler.register(m('UID', self.on_uid))
         self.Handler.register(m('QUIT', self.on_quit))
         self.Handler.register(m('FJOIN', self.on_sjoin))
+        self.Handler.register(m('FMODE', self.on_fmode))
         self.Handler.register(m('PART', self.on_part))
         self.Handler.register(m('PRIVMSG', self.on_privmsg))
         self.Handler.register(m('ERROR', self.on_error))
@@ -65,12 +67,16 @@ class Inspircd(IProtocol):
             message (str): The message to send to the socket.
             print_log (bool): if True print the log.
         """
+
+        if self._ctx.Irc.writer is None:
+            return None
+
         try:
-            with self._ctx.Settings.AILOCK:
+            async with self._ctx.Settings.AILOCK:
                 self._ctx.Irc.writer.write(f"{message}\r\n".encode(self._ctx.Config.SERVEUR_CHARSET[0]))
                 await self._ctx.Irc.writer.drain()
                 if print_log:
-                    self._ctx.Logs.debug(f'<< {message}')
+                    self._ctx.Logs.log(self._ctx.ServiceLogging.DEFMSG_LEVEL, message)
 
         except UnicodeDecodeError as ude:
             self._ctx.Logs.error(f'Decode Error try iso-8859-1 - {ude} - {message}')
@@ -106,7 +112,7 @@ class Inspircd(IProtocol):
             user_to      = self._ctx.User.get_user(nick_to) if nick_to is not None else None
 
             if user_from is None:
-                self._ctx.Logs.error(f"The sender nickname [{nick_from}] do not exist {msg}")
+                self._ctx.Logs.error('The sender nickname [%s] do not exist %s', nick_from, msg)
                 return None
 
             if not channel is None:
@@ -118,8 +124,9 @@ class Inspircd(IProtocol):
                 for i in range(0, len(str(msg)), batch_size):
                     batch = str(msg)[i:i+batch_size]
                     await self.send2socket(f":{nick_from} PRIVMSG {user_to.uid} :{batch}")
+
         except Exception as err:
-            self._ctx.Logs.error(f"General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def send_notice(self, nick_from: str, nick_to: str, msg: str) -> None:
         """Sending NOTICE by batches
@@ -157,6 +164,7 @@ class Inspircd(IProtocol):
         service_smodes = self._ctx.Config.SERVICE_SMODES
         service_hostname = self._ctx.Config.SERVICE_HOST
         service_name = self._ctx.Config.SERVICE_NAME
+        service_chanlog = self._ctx.Config.SERVICE_CHANLOG
 
         server_password = self._ctx.Config.SERVEUR_PASSWORD
         server_link = self._ctx.Config.SERVEUR_LINK
@@ -166,21 +174,23 @@ class Inspircd(IProtocol):
         version = self._ctx.Config.CURRENT_VERSION
         unixtime = self._ctx.Utils.get_unixtime()
 
+        service_ip = self._ctx.Config.SERVICE_IP
+
         await self.send2socket(f"CAPAB START {self.protocol_version}")
         await self.send2socket(f"CAPAB MODULES :services")
         await self.send2socket(f"CAPAB MODSUPPORT :")
         await self.send2socket(f"CAPAB CAPABILITIES :NICKMAX=30 CHANMAX=64 MAXMODES=20 IDENTMAX=10 MAXQUIT=255 MAXTOPIC=307 MAXKICK=255 MAXREAL=128 MAXAWAY=200 MAXHOST=64 MAXLINE=512 CASEMAPPING=ascii GLOBOPS=0")
         await self.send2socket(f"CAPAB END")
-        await self.send2socket(f"SERVER {server_link} {server_password} {server_id} :{service_info}")
+        await self.send2socket(f"SERVER {server_link} {server_password} {server_id} :{service_info}", print_log=False)
         await self.send2socket(f"BURST {unixtime}")
         await self.send2socket(f":{server_id} SINFO version :{service_name}-{version.split('.')[0]}. {server_hostname} :")
         await self.send2socket(f":{server_id} SINFO fullversion :{service_name}-{version}. {service_hostname} :")
         await self.send2socket(f":{server_id} SINFO rawversion :{service_name}-{version}")
-        await self.send_uid(service_nickname, service_username, service_hostname, service_id, service_smodes, service_hostname, "127.0.0.1", service_realname)
+        await self.send_uid(service_nickname, service_username, service_hostname, service_id, service_smodes, service_hostname, service_ip, service_realname, "XX")
         await self.send2socket(f":{server_id} ENDBURST")
-        # self.send_sjoin(chan)
+        await self.send_sjoin(service_chanlog)
 
-        self._ctx.Logs.debug(f'>> {__name__} Link information sent to the server')
+        self._ctx.Logs.debug('>> %s Link information sent to the server', __name__)
 
     async def gline(self, nickname: str, hostname: str, set_by: str, expire_timestamp: int, set_at_timestamp: int, reason: str) -> None:
         # TKL + G user host set_by expire_timestamp set_at_timestamp :reason
@@ -205,13 +215,19 @@ class Inspircd(IProtocol):
         """
         service_id = self._ctx.Config.SERVICE_ID
         params = '' if params is None else params
+        _client = self._ctx.User.get_user(nickname or '')
+        _logs = self._ctx.Logs
 
         if modes[0] not in ['+', '-']:
-            self._ctx.Logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
+            _logs.error(f"[MODE ERROR] The mode you have provided is missing the sign: {modes}")
             return None
 
         if nickname and channel_name:
             # :98KAAAAAB MODE #services +o async defenderdev
+            if _client is None:
+                _logs.error('[MODE ERROR] The Nickname is not valid: %s', nickname)
+                return None
+            
             if not self._ctx.Channel.is_valid_channel(channel_name):
                 self._ctx.Logs.error(f"[MODE ERROR] The channel is not valid: {channel_name}")
                 return None
@@ -221,6 +237,11 @@ class Inspircd(IProtocol):
                 return None
 
             await self.send2socket(f":{service_id} MODE {channel_name} {modes} {nickname}")
+            self._ctx.Channel.append_user_mode_from_channel(
+                channel_name,
+                _client.uid,
+                modes
+            )
             return None
         
         if nickname and channel_name is None:
@@ -243,6 +264,10 @@ class Inspircd(IProtocol):
                 return None
 
             await self.send2socket(f":{service_id} MODE {channel_name} {modes} {params}")
+            self._ctx.Channel.append_channel_mode(
+                channel_name,
+                modes
+            )
             return None
 
         return None
@@ -284,10 +309,14 @@ class Inspircd(IProtocol):
             return None
 
         await self.send2socket(f":{server_id} FJOIN {channel} {self._ctx.Utils.get_unixtime()} :o, {service_id}")
-        self.send_set_mode(service_modes, nickname=service_nickname, channel_name=channel)
+        await self.send_set_mode(service_modes, nickname=service_nickname, channel_name=channel)
 
         # Add async defender to the channel uids list
-        self._ctx.Channel.insert(self._ctx.Definition.MChannel(name=channel, uids=[service_id]))
+        self._ctx.Channel.insert(
+            MChannel(name=channel,
+                     mode='',
+                     members=[ChannelMembers(service_modes.replace('+', ''), service_id)])
+        )
         return None
 
     async def send_quit(self, uid: str, reason: str, print_log: bool = True) -> None:
@@ -313,9 +342,11 @@ class Inspircd(IProtocol):
 
         return None
 
-    async def send_uid(self, nickname: str, username: str, hostname: str,
-                 uid:str, umodes: str, vhost: str, remote_ip: str,
-                 realname: str, print_log: bool = True) -> None:
+    async def send_uid(self, nickname:str, username: str,
+                       hostname: str, uid:str, umodes: str,
+                       vhost: str, remote_ip: str,
+                       realname: str, geoip: str,
+                       print_log: bool = True) -> None:
         """Send UID to the server
         [:<sid>] UID <uid> <ts> <nick> <real-host> <displayed-host> <real-user> <ip> <signon> <modes> [<mode-parameters>]+ :<real>
         Args:
@@ -344,9 +375,15 @@ class Inspircd(IProtocol):
             # Create the user
             self._ctx.User.insert(
                 self._ctx.Definition.MUser(
+                            # uid=uid, nickname=nickname, username=username, 
+                            # realname=realname,hostname=hostname, umodes=final_umodes,
+                            # vhost=vhost, remote_ip=remote_ip
+
                             uid=uid, nickname=nickname, username=username, 
                             realname=realname,hostname=hostname, umodes=final_umodes,
-                            vhost=vhost, remote_ip=remote_ip
+                            vhost=vhost, remote_ip=remote_ip, geoip=geoip,
+                            fingerprint=None, tls_cipher=None, isWebirc=False, isWebsocket=False,
+                            score_connexion=28
                         )
                     )
 
@@ -384,7 +421,10 @@ class Inspircd(IProtocol):
         await self.send2socket(f":{user_obj.uid} FJOIN {channel} {self._ctx.Utils.get_unixtime()} :,{user_obj.uid} {password_channel}", print_log=print_log)
 
         # Add async defender to the channel uids list
-        self._ctx.Channel.insert(self._ctx.Definition.MChannel(name=channel, uids=[user_obj.uid]))
+        self._ctx.Channel.insert(
+            MChannel(name=channel,
+                     members=[ChannelMembers('', user_obj.uid)])
+        )
         return None
 
     async def send_part_chan(self, uidornickname: str, channel: str, print_log: bool = True) -> None:
@@ -418,10 +458,46 @@ class Inspircd(IProtocol):
 
         return None
 
+    async def send_unban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        ...
+
+    async def send_ban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        ...
+
+    async def send_kick(self, channel: str, nickname: str):
+        """Kick a nickname from a channel
+
+        Args:
+            channel (str): The channel name (will be validated)
+            nickname (str): The nickname (will be validated)
+        """
+        ...
+
     async def send_raw(self, raw_command: str) -> None:
 
         await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} {raw_command}")
         return None
+
+    async def send_kill(self, nickname: str, reason: str = 'Nickname has been killed') -> None:
+        """Send a kill command to the server
+
+        Args:
+            nickname (str): The nickname of the client.
+            reason (str): The reason of the kill.
+        """
+        ...
+
+    async def send_samode(self, channel_name: str, mode_to_apply: str, params: str = '') -> None:
+        """
+        
+        eg. SAMODE #channel +o nickname
+
+        Args:
+            mode_to_apply (str): _description_
+            channel_name (str): _description_
+            params (str): _description_
+        """
+        ...
 
     # ------------------------------------------------------------------------
     #                           RECIEVED IRC MESSAGES
@@ -580,21 +656,25 @@ class Inspircd(IProtocol):
         try:
             # [':97K', 'FJOIN', '#services', '1757156589', '+nt', ':,97KAAAAA2:22', 'o,97KAAAAAA:2']
 
-            channel = str(server_msg[2]).lower()
-            list_users:list = []
+            _scopy = server_msg.copy()
+            
+            channel = str(_scopy[2]).lower()
+            list_users: list[ChannelMembers] = []
+            mode = _scopy[4]
 
             # Find uid's
-            for uid in server_msg:
+            for uid in _scopy:
                 matches = findall(r',([0-9A-Z]+):', uid)
-                list_users.extend(matches)
+                for _uid in matches:
+                    list_users.append(ChannelMembers('', _uid))
 
-            list_users = list(set(list_users))
 
             if list_users:
                 self._ctx.Channel.insert(
                     self._ctx.Definition.MChannel(
                         name=channel,
-                        uids=list_users
+                        mode=mode,
+                        members=list_users
                     )
                 )
             return None
@@ -618,10 +698,11 @@ class Inspircd(IProtocol):
                 if self._ctx.Config.DEFENDER_INIT == 1:
                     current_version = self._ctx.Config.CURRENT_VERSION
                     latest_version = self._ctx.Config.LATEST_VERSION
-                    if self._ctx.Base.check_for_new_version(False):
+
+                    if self._ctx.Base.check_for_new_version():
                         version = f'{current_version} >>> {latest_version}'
                     else:
-                        version = f'{current_version}'
+                        version = current_version
 
                     print(f"################### DEFENDER ###################")
                     print(f"#               SERVICE CONNECTE                ")
@@ -634,28 +715,28 @@ class Inspircd(IProtocol):
                     print(f"# VERSION  :    {version}                       ")
                     print(f"################################################")
 
-                    self._ctx.Logs.info(f"################### DEFENDER ###################")
-                    self._ctx.Logs.info(f"#               SERVICE CONNECTE                ")
-                    self._ctx.Logs.info(f"# SERVEUR  :    {self._ctx.Config.SERVEUR_IP}        ")
-                    self._ctx.Logs.info(f"# PORT     :    {self._ctx.Config.SERVEUR_PORT}      ")
-                    self._ctx.Logs.info(f"# SSL      :    {self._ctx.Config.SERVEUR_SSL}       ")
-                    self._ctx.Logs.info(f"# SSL VER  :    {self._ctx.Config.SSL_VERSION}       ")
-                    self._ctx.Logs.info(f"# NICKNAME :    {self._ctx.Config.SERVICE_NICKNAME}  ")
-                    self._ctx.Logs.info(f"# CHANNEL  :    {self._ctx.Config.SERVICE_CHANLOG}   ")
-                    self._ctx.Logs.info(f"# VERSION  :    {version}                       ")
-                    self._ctx.Logs.info(f"################################################")
+                    self._ctx.Logs.info('################### DEFENDER ###################')
+                    self._ctx.Logs.info('#               SERVICE CONNECTE                ')
+                    self._ctx.Logs.info('# SERVEUR  :    %s                              ', self._ctx.Config.SERVEUR_IP)
+                    self._ctx.Logs.info('# PORT     :    %s                              ', self._ctx.Config.SERVEUR_PORT)
+                    self._ctx.Logs.info('# SSL      :    %s                              ', self._ctx.Config.SERVEUR_SSL)
+                    self._ctx.Logs.info('# SSL VER  :    %s                              ', self._ctx.Config.SSL_VERSION)
+                    self._ctx.Logs.info('# NICKNAME :    %s                              ', self._ctx.Config.SERVICE_NICKNAME)
+                    self._ctx.Logs.info('# CHANNEL  :    %s                              ', self._ctx.Config.SERVICE_CHANLOG)
+                    self._ctx.Logs.info('# VERSION  :    %s                              ', version)
+                    self._ctx.Logs.info('################################################')
 
-                    self.send_sjoin(self._ctx.Config.SERVICE_CHANLOG)
+                    await self.send_sjoin(self._ctx.Config.SERVICE_CHANLOG)
 
-                    if self._ctx.Base.check_for_new_version(False):
-                        self.send_priv_msg(
+                    if self._ctx.Base.check_for_new_version():
+                        await self.send_priv_msg(
                             nick_from=self._ctx.Config.SERVICE_NICKNAME,
                             msg=f" New Version available {version}",
                             channel=self._ctx.Config.SERVICE_CHANLOG
                         )
 
                 # Initialisation terminé aprés le premier PING
-                self.send_priv_msg(
+                await self.send_priv_msg(
                     nick_from=self._ctx.Config.SERVICE_NICKNAME,
                     msg=tr("[ %sINFORMATION%s ] >> %s is ready!", self._ctx.Const.Colors.green, self._ctx.Const.Colors.nogc, self._ctx.Config.SERVICE_NICKNAME),
                     channel=self._ctx.Config.SERVICE_CHANLOG
@@ -664,19 +745,19 @@ class Inspircd(IProtocol):
 
                 # Send EOF to other modules
                 for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
-                    module.class_instance.cmd(scopy)
+                    await module.class_instance.cmd(scopy)
                 
                 # Join saved channels & load existing modules
-                self._ctx.Irc.join_saved_channels()
-                self._ctx.ModuleUtils.db_load_all_existing_modules(self._ctx.Irc)
+                await self._ctx.Irc.join_saved_channels()
+                await self._ctx.ModuleUtils.db_load_all_existing_modules()
 
                 return None
         except IndexError as ie:
-            self._ctx.Logs.error(f"{__name__} - Key Error: {ie}")
+            self._ctx.Logs.error('Key Error: %s', ie)
         except KeyError as ke:
-            self._ctx.Logs.error(f"{__name__} - Key Error: {ke}")
+            self._ctx.Logs.error('Key Error: %s', ke)
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_part(self, server_msg: list[str]) -> None:
         """Handle part coming from a server
@@ -719,6 +800,8 @@ class Inspircd(IProtocol):
             hostname = str(server_msg[5])
             umodes = str(server_msg[11])
             vhost = str(server_msg[6])
+            fingerprint = None
+            tls_cipher = None
 
             if not 'S' in umodes:
                 # remote_ip = self._ctx.Base.decode_ip(str(serverMsg[9]))
@@ -753,13 +836,15 @@ class Inspircd(IProtocol):
                                 remote_ip=remote_ip,
                                 geoip=geoip,
                                 score_connexion=score_connexion,
+                                fingerprint=fingerprint,
+                                tls_cipher=tls_cipher,
                                 connexion_datetime=datetime.now()
                             )
 
             self._ctx.User.insert(_user_obj)
 
             for module in self._ctx.ModuleUtils.model_get_loaded_modules().copy():
-                module.class_instance.cmd(server_msg)
+                await module.class_instance.cmd(server_msg)
 
             # SASL authentication
             dnickname = self._ctx.Config.SERVICE_NICKNAME
@@ -822,8 +907,8 @@ class Inspircd(IProtocol):
                 arg = convert_to_string.split()
                 arg.remove(f":{self._ctx.Config.SERVICE_PREFIX}")
                 if not self._ctx.Commands.is_command_exist(arg[0]):
-                    self._ctx.Logs.debug(f"This command {arg[0]} is not available")
-                    self.send_notice(
+                    self._ctx.Logs.debug('This command %s is not available', arg[0])
+                    await self.send_notice(
                         nick_from=self._ctx.Config.SERVICE_NICKNAME,
                         nick_to=user_trigger,
                         msg=f"This command [{self._ctx.Const.Colors.bold}{arg[0]}{self._ctx.Const.Colors.bold}] is not available"
@@ -834,7 +919,7 @@ class Inspircd(IProtocol):
                 await self._ctx.Base.log_cmd(user_trigger, cmd_to_send)
 
                 fromchannel = str(cmd[2]).lower() if self._ctx.Channel.is_valid_channel(cmd[2]) else None
-                self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
 
             if cmd[2] == self._ctx.Config.SERVICE_ID:
                 pattern = fr'^:.*?:(.*)$'
@@ -847,17 +932,22 @@ class Inspircd(IProtocol):
 
                     # Réponse a un CTCP VERSION
                     if arg[0] == '\x01VERSION\x01':
-                        self.on_version(srv_msg)
+                        await self.on_version(srv_msg)
                         return None
 
                     # Réponse a un TIME
                     if arg[0] == '\x01TIME\x01':
-                        self.on_time(srv_msg)
+                        await self.on_time(srv_msg)
                         return None
 
                     # Réponse a un PING
                     if arg[0] == '\x01PING':
-                        self.on_ping(srv_msg)
+                        await self.on_ping(srv_msg)
+                        return None
+
+                    # Réponse a un VERSION via /msg Defender version
+                    if arg[0].upper() == 'VERSION':
+                        await self.on_version_msg(srv_msg)
                         return None
 
                     if not self._ctx.Commands.is_command_exist(arg[0]):
@@ -875,15 +965,15 @@ class Inspircd(IProtocol):
                     if len(arg) >= 2:
                         fromchannel = str(arg[1]).lower() if self._ctx.Channel.is_valid_channel(arg[1]) else None
 
-                    self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
+                    await self._ctx.Irc.hcmds(user_trigger, fromchannel, arg, cmd)
             return None
 
         except KeyError as ke:
-            self._ctx.Logs.error(f"Key Error: {ke}")
+            self._ctx.Logs.error('Key Error: %s', ke)
         except AttributeError as ae:
-            self._ctx.Logs.error(f"Attribute Error: {ae}")
+            self._ctx.Logs.error('Attribute Error: %s', ae)
         except Exception as err:
-            self._ctx.Logs.error(f"General Error: {err}", exc_info=True)
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_server_ping(self, server_msg: list[str]) -> None:
         """Send a PONG message to the server
@@ -901,7 +991,7 @@ class Inspircd(IProtocol):
 
             return None
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_server(self, server_msg: list[str]) -> None:
         """_summary_
@@ -920,7 +1010,7 @@ class Inspircd(IProtocol):
                 self._ctx.Logs.debug(f">> Branch Version: {server_msg[3].replace(':', '')}")
 
         except Exception as err:
-            self._ctx.Logs.error(f'General Error: {err}')
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_version(self, server_msg: list[str]) -> None:
         """Sending Server Version to the server
@@ -928,23 +1018,28 @@ class Inspircd(IProtocol):
         Args:
             server_msg (list[str]): List of str coming from the server
         """
-        # ['@unrealircd.org/userhost=StatServ@stats.deb.biz.st;draft/bot;bot;msgid=ehfAq3m2yjMjhgWEfi1UCS;time=2024-10-26T13:49:06.299Z', ':00BAAAAAI', 'PRIVMSG', '12ZAAAAAB', ':\x01VERSION\x01']
+        # [':649AAAAAA', 'PRIVMSG', '98KAAAAAB', ':\x01VERSION\x01']
         # Réponse a un CTCP VERSION
         try:
 
-            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(server_msg[1]))
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(server_msg[0]))
             dnickname = self._ctx.Config.SERVICE_NICKNAME
-            arg = server_msg[4].replace(':', '')
+            service_id = self._ctx.Config.SERVICE_ID
+            arg = server_msg[3].replace(':', '')
 
             if nickname is None:
                 return None
 
             if arg == '\x01VERSION\x01':
-                await self.send2socket(f':{dnickname} NOTICE {nickname} :\x01VERSION Service {self._ctx.Config.SERVICE_NICKNAME} V{self._ctx.Config.CURRENT_VERSION}\x01')
+                await self.send_notice(
+                    nick_from=service_id,
+                    nick_to=nickname,
+                    msg=f'\x01VERSION Service {dnickname} V{self._ctx.Config.CURRENT_VERSION}\x01'
+                )
 
             return None
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_time(self, server_msg: list[str]) -> None:
         """Sending TIME answer to a requestor
@@ -977,7 +1072,7 @@ class Inspircd(IProtocol):
         Args:
             server_msg (list[str]): List of str coming from the server
         """
-        # ['@unrealircd.org/userhost=StatServ@stats.deb.biz.st;draft/bot;bot;msgid=ehfAq3m2yjMjhgWEfi1UCS;time=2024-10-26T13:49:06.299Z', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
+        # ['@unrealircd.org...', ':001INC60B', 'PRIVMSG', '12ZAAAAAB', ':\x01PING', '762382207\x01']
         # Réponse a un CTCP VERSION
         try:
 
@@ -1011,23 +1106,24 @@ class Inspircd(IProtocol):
             server_msg (list[str]): Original message from the server
         """
         try:
-            # ['@label=0073', ':0014E7P06', 'VERSION', 'PyDefender']
-            user_obj  = self._ctx.User.get_user(self._ctx.Utils.clean_uid(server_msg[1]))
+            # [':649AAAAAA', 'PRIVMSG', '98KAAAAAB', ':VERSION']
+            user_obj  = self._ctx.User.get_user(self._ctx.Utils.clean_uid(server_msg[0]))
+            service_id = self._ctx.Config.SERVICE_ID
 
             if user_obj is None:
                 return None
 
             response_351 = f"{self._ctx.Config.SERVICE_NAME.capitalize()}-{self._ctx.Config.CURRENT_VERSION} {self._ctx.Config.SERVICE_HOST} {self.name}"
-            await self.send2socket(f':{self._ctx.Config.SERVICE_HOST} 351 {user_obj.nickname} {response_351}')
+            await self.send2socket(f':{service_id} NOTICE {user_obj.nickname} :{response_351}')
 
-            modules = self._ctx.ModuleUtils.get_all_available_modules()
+            modules = self._ctx.ModuleUtils.discover()
             response_005 = ' | '.join(modules)
-            await self.send2socket(f':{self._ctx.Config.SERVICE_HOST} 005 {user_obj.nickname} {response_005} are supported by this server')
+            await self.send2socket(f':{service_id} NOTICE {user_obj.nickname} :{response_005} are supported by this server')
 
             return None
 
         except Exception as err:
-            self._ctx.Logs.error(f"{__name__} - General Error: {err}")
+            self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
     async def on_sasl(self, server_msg: list[str]) -> Optional['MSasl']:
         """Handle SASL coming from a server
@@ -1195,7 +1291,7 @@ class Inspircd(IProtocol):
     #                           COMMON IRC PARSER
     # ------------------------------------------------------------------------
 
-    async def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
+    def parse_uid(self, server_msg: list[str]) -> Optional['MUser']:
         """Parse UID and return dictionary.
         >>> [':97K', 'UID', '97KAAAAAC', '1762113659', 'adator_', '172.18.128.1', '172.18.128.1', '...', '...', '172.18.128.1', '1762113659', '+', ':...']
         Args:
@@ -1205,9 +1301,9 @@ class Inspircd(IProtocol):
         uid = scopy[2]
         return self._ctx.User.get_user(uid)
 
-    async def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
+    def parse_quit(self, server_msg: list[str]) -> tuple[Optional['MUser'], str]:
         """Parse quit and return dictionary.
-        >>> [':97KAAAAAB', 'QUIT', ':Quit:', 'this', 'is', 'my', 'reason', 'to', 'quit']
+        >>> [':649AAAAAB', 'QUIT', ':Quit:', 'Leaving']
         Args:
             server_msg (list[str]): The server message to parse
 
@@ -1220,13 +1316,13 @@ class Inspircd(IProtocol):
             scopy.pop(0)
         
         user_obj = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0]))
-        tmp_reason = scopy[3:]
+        tmp_reason = scopy[2:]
         tmp_reason[0] = tmp_reason[0].replace(':', '')
         reason = ' '.join(tmp_reason)
 
         return user_obj, reason
 
-    async def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
+    def parse_nick(self, server_msg: list[str]) -> tuple[Optional['MUser'], str, str]:
         """Parse nick changes.
         >>> [':97KAAAAAC', 'NICK', 'testinspir', '1757360740']
 
@@ -1245,7 +1341,7 @@ class Inspircd(IProtocol):
         timestamp = scopy[3]
         return user_obj, newnickname, timestamp
 
-    async def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
+    def parse_privmsg(self, server_msg: list[str]) -> tuple[Optional['MUser'], Optional['MUser'], Optional['MChannel'], str]:
         """Parse PRIVMSG message.
         >>> [':97KAAAAAE', 'PRIVMSG', '#welcome', ':This', 'is', 'my', 'public', 'message']
         >>> [':97KAAAAAF', 'PRIVMSG', '98KAAAAAB', ':My','Message','...']
@@ -1380,7 +1476,80 @@ class Inspircd(IProtocol):
         Args:
             server_msg (list[str]): Original server message
         """
-        ...
+        # [':649AAAAAA', 'MODE', '649AAAAAA', '-o']
+        scopy = server_msg.copy()
+        _mode = scopy[4]
+        _client = None
+
+        if len(scopy) > 5:
+            _client = self._ctx.User.get_user(scopy[5])
+
+        _channel = self._ctx.Channel.get_channel(scopy[3])
+
+        if _client is not None and _channel is not None:
+            # Updating User modes is a channel
+            # ['@unrealircd.org...', ':001XSNL01', 'MODE', '#welcome', '+vv', 'adator_', 'adator']
+            _mode = _mode[0:2]
+            _users = scopy[5:]
+            for _user in _users:
+                _client = self._ctx.User.get_user(_user)
+                if _client is not None:
+                    self._ctx.Channel.append_user_mode_from_channel(_channel.name, _client.uid, _mode)
+            
+            return None
+
+        if _channel is not None:
+            # Updating a channel mode.
+            # ['@msgid=d0ySx56....', ':001', 'MODE', '#a', '+nt', '1723207536']
+            # ['@unrealircd.org...', ':001LQ0L0C', 'MODE', '#services', '-l']
+            
+            _cmodes = scopy[4]
+            self._ctx.Channel.append_channel_mode(_channel.name, _cmodes)
+
+            return None
+
+
+        return None
+
+    async def on_fmode(self, server_msg: list[str]) -> None:
+        """Handle Fmode coming from a server
+
+        Args:
+            server_msg (list[str]): Original server message
+        """
+        # [':649AAAAAA', 'FMODE', '#welcome', '1793911606', '+vv', '649AAAAAA', '98KAAAAAB']
+        scopy = server_msg.copy()
+        _mode = scopy[4]
+        _client = None
+
+        if len(scopy) > 5:
+            _client = self._ctx.User.get_user(scopy[5])
+
+        _channel = self._ctx.Channel.get_channel(scopy[2])
+
+        if _client is not None and _channel is not None:
+            # Updating User modes is a channel
+            # [':649AAAAAA', 'FMODE', '#welcome', '1793911606', '+vv', '649AAAAAA', '98KAAAAAB']
+            _mode = _mode[0:2]
+            _users = scopy[5:]
+            for _user in _users:
+                _client = self._ctx.User.get_user(_user)
+                if _client is not None:
+                    self._ctx.Channel.append_user_mode_from_channel(_channel.name, _client.uid, _mode)
+            
+            return None
+
+        if _channel is not None:
+            # Updating a channel mode.
+            # [':649AAAAAA', 'FMODE', '#welcome', '1793911606', '+n']
+            
+            _cmodes = scopy[4]
+            self._ctx.Channel.append_channel_mode(_channel.name, _cmodes)
+
+            return None
+
+
+        return None
     
     async def on_reputation(self, server_msg: list[str]) -> None:
         """Handle REPUTATION coming from a server
