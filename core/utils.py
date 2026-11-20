@@ -5,16 +5,19 @@ import asyncio
 import inspect
 import gc
 import ssl
+import threading
+import base64
+import ipaddress
 from pathlib import Path
 from re import match, sub
-import threading
 from typing import Literal, Optional, Any, TYPE_CHECKING
 from datetime import datetime, timedelta
 from time import time, sleep
 from random import choice
 from hashlib import md5, sha3_512
-from core.classes.modules.settings import global_settings
 from inspect import iscoroutinefunction
+from core.classes.modules.settings import global_settings
+
 
 if TYPE_CHECKING:
     from threading import Event
@@ -132,7 +135,7 @@ def get_defender_uptime(loader: 'Loader') -> str:
         str: L'écart entre la date du jour et celle de la connexion de Defender
     """
     current_datetime = datetime.now()
-    diff_date = current_datetime - loader.Irc.defender_connexion_datetime
+    diff_date = current_datetime - loader.Config.DEFENDER_CONNEXION_DATETIME
     uptime = timedelta(days=diff_date.days, seconds=diff_date.seconds)
 
     return uptime
@@ -354,3 +357,8 @@ def write_gc_to_file():
         for o in objects:
             if 'core' in o['file']:
                 f.write(f"{o}\n")
+
+def encrypt_ipaddress(ipv4: str) -> str:
+
+    encoded = base64.b64encode(ipaddress.ip_address(ipv4).packed).decode()
+    return encoded
