@@ -1,27 +1,66 @@
 from re import sub
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from datetime import datetime
+from core.definition import MUser
 
 if TYPE_CHECKING:
     from core.loader import Loader
-    from core.definition import MUser
 
 class User:
 
     @property
-    def current_user(self) -> 'MUser':
+    def current_user(self) -> MUser:
         return self._current_user
 
     @current_user.setter
-    def current_user(self, muser: 'MUser') -> None:
+    def current_user(self, muser: MUser) -> None:
         self._current_user = muser
 
     def __init__(self, loader: 'Loader'):
         self._ctx = loader
-        self._current_user: 'MUser'
-        self.UID_DB: list['MUser'] = []
+        self._current_user: MUser
+        self.UID_DB: list[MUser] = []
 
-    def insert(self, new_user: 'MUser') -> bool:
+    def init_defender_user(self) -> bool:
+        """Create for the first time the Service user into UID_DB
+
+        Returns:
+            bool: True if success.
+        """
+        
+        _result = self.insert(MUser(
+            uid=self._ctx.Config.SERVICE_ID,
+            nickname=self._ctx.Config.SERVICE_NICKNAME,
+            username=self._ctx.Config.SERVICE_USERNAME,
+            realname=self._ctx.Config.SERVICE_REALNAME,
+            hostname=self._ctx.Config.SERVICE_HOST,
+            umodes=self._ctx.Config.SERVICE_SMODES,
+            vhost='',
+            fingerprint='',
+            tls_cipher='',
+            isWebirc=False,
+            isWebsocket=False,
+            remote_ip=self._ctx.Config.SERVICE_IP,
+            score_connexion=1000,
+            geoip='FR'
+        ))
+
+        if _result:
+            self._ctx.Logs.debug('Service User created successfully %s, %s, %s, %s',
+                                 self._ctx.Config.SERVICE_ID,
+                                 self._ctx.Config.SERVICE_NICKNAME,
+                                 self._ctx.Config.SERVICE_USERNAME,
+                                 self._ctx.Config.SERVICE_REALNAME)
+        else:
+            self._ctx.Logs.critical('Service User not created %s, %s, %s, %s',
+                                 self._ctx.Config.SERVICE_ID,
+                                 self._ctx.Config.SERVICE_NICKNAME,
+                                 self._ctx.Config.SERVICE_USERNAME,
+                                 self._ctx.Config.SERVICE_REALNAME)
+
+        return _result
+
+    def insert(self, new_user: MUser) -> bool:
         """Insert a new User object
 
         Args:
@@ -119,7 +158,7 @@ class User:
 
         return True
 
-    def get_user(self, uidornickname: str) -> Optional['MUser']:
+    def get_user(self, uidornickname: str) -> MUser | None:
         """Get The User Object model
 
         Args:
@@ -138,7 +177,7 @@ class User:
 
         return None
 
-    def get_uid(self, uidornickname:str) -> Optional[str]:
+    def get_uid(self, uidornickname:str) -> str | None:
         """Get the UID of the user starting from the UID or the Nickname
 
         Args:
@@ -156,7 +195,7 @@ class User:
         self.current_user = user_obj
         return user_obj.uid
 
-    def get_nickname(self, uidornickname:str) -> Optional[str]:
+    def get_nickname(self, uidornickname:str) -> str | None:
         """Get the Nickname starting from UID or the nickname
 
         Args:
@@ -173,7 +212,7 @@ class User:
         self.current_user = user_obj
         return user_obj.nickname
 
-    def get_user_asdict(self, uidornickname: str) -> Optional[dict[str, Any]]:
+    def get_user_asdict(self, uidornickname: str) -> dict[str, Any] | None:
         """Transform User Object to a dictionary
 
         Args:
@@ -205,25 +244,6 @@ class User:
 
         return True
 
-    @staticmethod
-    def clean_uid(uid: str) -> Optional[str]:
-        """Clean UID by removing @ / % / + / ~ / * / :
-
-        Args:
-            uid (str): The UID to clean
-
-        Returns:
-            str: Clean UID without any sign
-        """
-
-        pattern = fr'[:|@|%|\+|~|\*]*'
-        parsed_uid = sub(pattern, '', uid)
-
-        if not parsed_uid:
-            return None
-
-        return parsed_uid
-
     def get_user_uptime_in_minutes(self, uidornickname: str) -> float:
         """Retourne depuis quand l'utilisateur est connecté (in minutes).
 
@@ -254,3 +274,22 @@ class User:
         uptime_minutes = round(number=convert_to_minutes, ndigits=2)
 
         return uptime_minutes
+
+    @staticmethod
+    def clean_uid(uid: str) -> str | None:
+        """Clean UID by removing @ / % / + / ~ / * / :
+
+        Args:
+            uid (str): The UID to clean
+
+        Returns:
+            str: Clean UID without any sign
+        """
+
+        pattern = fr'[:|@|%|\+|~|\*]*'
+        parsed_uid = sub(pattern, '', uid)
+
+        if not parsed_uid:
+            return None
+
+        return parsed_uid
