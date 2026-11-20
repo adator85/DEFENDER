@@ -186,6 +186,8 @@ class Unrealircd6(IProtocol):
 
         version = self._ctx.Config.CURRENT_VERSION
         unixtime = self._ctx.Utils.get_unixtime()
+        
+        _bind_address = self._ctx.Utils.encrypt_ipaddress(self._ctx.Config.SERVICE_IP)
 
         await self.send2socket(f":{server_id} PASS :{server_password}", print_log=False)
         await self.send2socket(f":{server_id} PROTOCTL SID NOQUIT NICKv2 SJOIN SJ3 NICKIP TKLEXT2 NEXTBANS CLK EXTSWHOIS MLOCK MTAGS")
@@ -194,7 +196,7 @@ class Unrealircd6(IProtocol):
         await self.send2socket(f":{server_id} PROTOCTL BOOTED={unixtime}")
         await self.send2socket(f":{server_id} SERVER {server_link} 1 :{service_info}")
         await self.send2socket(f":{server_id} {service_nickname} :Reserved for services")
-        await self.send2socket(f":{server_id} UID {service_nickname} 1 {unixtime} {service_username} {service_hostname} {service_id} * {service_smodes} * * fwAAAQ== :{service_realname}")
+        await self.send2socket(f":{server_id} UID {service_nickname} 1 {unixtime} {service_username} {service_hostname} {service_id} * {service_smodes} * * {_bind_address} :{service_realname}")
         await self.send2socket("EOS")
         await self.send_sjoin(service_channel_log)
         await self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
@@ -609,6 +611,51 @@ class Unrealircd6(IProtocol):
         await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} MODE {channel_name} {channel_mode}")
         return None
 
+    async def send_unban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        # await p.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
+        _service_id = self._ctx.Config.SERVICE_ID
+        _channel = self._ctx.Channel.get_channel(channel)
+        _user = self._ctx.User.get_user(nickname)
+
+        if _channel is None or _user is None:
+            self._ctx.Logs.debug('Impossible to set a ban on a None channel or None user!')
+            return None
+
+        await self.send2socket(f':{_service_id} MODE {_channel.name} -b {_user.nickname}!{hostname}')
+
+        return None
+
+    async def send_ban(self, channel: str, nickname: str, hostname: str = '*@*') -> None:
+        # await p.send2socket(f":{service_id} MODE {chan.name} -b {final_nickname}!*@*")
+        _service_id = self._ctx.Config.SERVICE_ID
+        _channel = self._ctx.Channel.get_channel(channel)
+        _user = self._ctx.User.get_user(nickname)
+
+        if _channel is None or _user is None:
+            self._ctx.Logs.debug('Impossible to set a ban on a None channel or None user!')
+            return None
+
+        await self.send2socket(f':{_service_id} MODE {_channel.name} +b {_user.nickname}!{hostname}')
+
+        return None
+
+    async def send_kick(self, channel: str, nickname: str):
+        """Kick a nickname from a channel
+
+        Args:
+            channel (str): The channel name (will be validated)
+            nickname (str): The nickname (will be validated)
+        """
+        _service_id = self._ctx.Config.SERVICE_ID
+        _channel = self._ctx.Channel.get_channel(channel)
+        _user = self._ctx.User.get_user(nickname)
+
+        if _channel is None or _user is None:
+            self._ctx.Logs.error('Kick failed: Channel or Nickname must exist!')
+            return
+
+        await self.send2socket(f":{_service_id} KICK {_channel.name} {_user.nickname}")
+
     async def send_raw(self, raw_command: str) -> None:
 
         await self.send2socket(f":{self._ctx.Config.SERVICE_NICKNAME} {raw_command}")
@@ -683,10 +730,10 @@ class Unrealircd6(IProtocol):
             server_msg (list[str]): The UID ircd response
         """
         scopy = server_msg.copy()
-        if scopy[0].startswith('@'):
-            scopy.pop(0)
+        _mtags = True if scopy[0].startswith('@') else False
+        _index = 0 if _mtags else 1
 
-        uid = scopy[7]
+        uid = scopy[8 - _index]
         return self._ctx.User.get_user(uid)
 
     def parse_quit(self, server_msg: list[str]) -> tuple[Optional[MUser], str]:
@@ -699,12 +746,12 @@ class Unrealircd6(IProtocol):
             tuple[MUser, str]: The User Who Quit Object and the reason.
         """
         scopy = server_msg.copy()
-        if scopy[0].startswith('@'):
-            scopy.pop(0)
-        
-        user_obj = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0]))
-        tmp_reason = scopy[3:]
-        tmp_reason[0] = tmp_reason[0].replace(':', '')
+        _mtags = True if scopy[0].startswith('@') else False
+        _index = 0 if _mtags else 1
+
+        user_obj = self._ctx.User.get_user(self._ctx.Utils.clean_uid(scopy[0 - _index]))
+        tmp_reason = scopy[3 - _index:]
+        tmp_reason[0 - _index] = tmp_reason[0 - _index].replace(':', '')
         reason = ' '.join(tmp_reason)
 
         return user_obj, reason
@@ -1045,7 +1092,7 @@ class Unrealircd6(IProtocol):
                 if self._ctx.Config.DEFENDER_INIT == 1:
                     current_version = self._ctx.Config.CURRENT_VERSION
                     latest_version = self._ctx.Config.LATEST_VERSION
-                    if self._ctx.Base.check_for_new_version(False):
+                    if self._ctx.Base.check_for_new_version():
                         version = f'{current_version} >>> {latest_version}'
                     else:
                         version = f'{current_version}'
@@ -1074,7 +1121,7 @@ class Unrealircd6(IProtocol):
 
                     await self.send_sjoin(self._ctx.Config.SERVICE_CHANLOG)
 
-                    if self._ctx.Base.check_for_new_version(False):
+                    if self._ctx.Base.check_for_new_version():
                         await self.send_priv_msg(
                             nick_from=self._ctx.Config.SERVICE_NICKNAME,
                             msg=f" New Version available {version}",
@@ -1103,7 +1150,7 @@ class Unrealircd6(IProtocol):
                                              module.module_name)
                     _d_smod.append(f':L:{module.module_header.name}:{module.module_header.version}')
 
-                await self.send2socket(f":{self._ctx.Config.SERVICE_ID} SMOD {' '.join(_d_smod)}")
+                await self.send2socket(f":{self._ctx.Config.SERVEUR_ID} SMOD {' '.join(_d_smod)}")
 
                 del _d_smod
 
@@ -1158,35 +1205,48 @@ class Unrealircd6(IProtocol):
         # '001HB8G04', '0', '+iwxz', 'Clk-A62F1D18.vps.ovh.net', 'Clk-A62F1D18.vps.ovh.net', 'MyZBwg==', ':...']
         try:
             scopy = server_msg.copy()
-            is_webirc = True if 'webirc' in scopy[0] else False
-            is_websocket = True if 'websocket' in scopy[0] else False
+            _is_mtags = True if scopy[0].startswith('@') else False
 
-            uid = str(scopy[8])
-            nickname = str(scopy[3])
-            username = str(scopy[6])
-            hostname = str(scopy[7])
-            umodes = str(scopy[10])
-            vhost = str(scopy[11])
-            remote_ip = '127.0.0.1' if 'S' in umodes else self._ctx.Base.decode_ip(str(scopy[13])) or '127.0.0.2'
+            if _is_mtags:
+                _index = 0
+                is_webirc = True if 'webirc' in scopy[0] else False
+                is_websocket = True if 'websocket' in scopy[0] else False
+
+                # Extract Geoip information
+                pattern = r'^.*geoip=cc=(\S{2}).*$'
+                geoip_match = match(pattern, scopy[0 - _index])
+                geoip = geoip_match.group(1) if geoip_match else 'XX'
+
+                # Extract Fingerprint information
+                pattern = r'^.*certfp=([^;]+).*$'
+                fp_match = match(pattern, scopy[0 - _index])
+                fingerprint = fp_match.group(1) if fp_match else None
+
+                # Extract tls_cipher information
+                pattern = r'^.*tls_cipher=([^;]+).*$'
+                tlsc_match = match(pattern, scopy[0 - _index])
+                tls_cipher = tlsc_match.group(1) if tlsc_match else None
+
+            else:
+                _index = 1
+                is_webirc = False
+                is_websocket = False
+                tls_cipher = None
+                fingerprint = None
+                geoip = 'XX'
+
+
+            score_connexion = self._ctx.Irc.first_score
+            uid = str(scopy[8 - _index])
+            nickname = str(scopy[3 - _index])
+            username = str(scopy[6 - _index])
+            hostname = str(scopy[7 - _index])
+            umodes = str(scopy[10 - _index])
+            vhost = str(scopy[11 - _index])
+            remote_ip = '127.0.0.1' if 'S' in umodes else self._ctx.Base.decode_ip(str(scopy[13 - _index])) or '127.0.0.2'
             
             # extract realname
-            realname = ' '.join(scopy[14:]).lstrip(':')
-
-            # Extract Geoip information
-            pattern = r'^.*geoip=cc=(\S{2}).*$'
-            geoip_match = match(pattern, scopy[0])
-            geoip = geoip_match.group(1) if geoip_match else 'XX'
-
-            # Extract Fingerprint information
-            pattern = r'^.*certfp=([^;]+).*$'
-            fp_match = match(pattern, scopy[0])
-            fingerprint = fp_match.group(1) if fp_match else None
-
-            # Extract tls_cipher information
-            pattern = r'^.*tls_cipher=([^;]+).*$'
-            tlsc_match = match(pattern, scopy[0])
-            tls_cipher = tlsc_match.group(1) if tlsc_match else None
-            score_connexion = self._ctx.Irc.first_score
+            realname = ' '.join(scopy[14 - _index:]).lstrip(':')
 
             _user_obj = self._ctx.Definition.MUser(
                                 uid=uid,
@@ -1386,15 +1446,22 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            _mtags = True if scopy[0].startswith('@') else False
+            _index = 0 if _mtags else 1
+
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1 - _index]))
             dnickname = self._ctx.Config.SERVICE_NICKNAME
-            arg = scopy[4].replace(':', '')
+            arg = scopy[4 - _index].replace(':', '')
 
             if nickname is None:
                 return None
 
             if arg == '\x01VERSION\x01':
-                await self.send2socket(f':{dnickname} NOTICE {nickname} :\x01VERSION Service {self._ctx.Config.SERVICE_NICKNAME} V{self._ctx.Config.CURRENT_VERSION}\x01')
+                await self.send_notice(
+                    nick_from=dnickname,
+                    nick_to=nickname,
+                    msg=f'\x01VERSION Service {dnickname} V{self._ctx.Config.CURRENT_VERSION}\x01'
+                )
 
             return None
         except Exception as err:
@@ -1410,9 +1477,12 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            _mtags = True if scopy[0].startswith('@') else False
+            _index = 0 if _mtags else 1
+
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1 - _index]))
             dnickname = self._ctx.Config.SERVICE_NICKNAME
-            arg = scopy[4].replace(':', '')
+            arg = scopy[4 - _index].replace(':', '')
             current_datetime = self._ctx.Utils.get_sdatetime()
 
             if nickname is None:
@@ -1420,6 +1490,11 @@ class Unrealircd6(IProtocol):
 
             if arg == '\x01TIME\x01':
                 await self.send2socket(f':{dnickname} NOTICE {nickname} :\x01TIME {current_datetime}\x01')
+                await self.send_notice(
+                    nick_from=dnickname,
+                    nick_to=nickname,
+                    msg=f'\x01TIME {current_datetime}\x01'
+                )
 
             return None
         except Exception as err:
@@ -1435,16 +1510,19 @@ class Unrealircd6(IProtocol):
         # Réponse a un CTCP VERSION
         try:
             scopy = server_msg.copy()
-            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1]))
+            _mtags = True if scopy[0].startswith('@') else False
+            _index = 0 if _mtags else 1
+
+            nickname = self._ctx.User.get_nickname(self._ctx.Utils.clean_uid(scopy[1 - _index]))
             dnickname = self._ctx.Config.SERVICE_NICKNAME
-            arg = scopy[4].replace(':', '')
+            arg = scopy[4 - _index].replace(':', '')
 
             if nickname is None:
                 self._ctx.Logs.debug(scopy)
                 return None
 
             if arg == '\x01PING':
-                recieved_unixtime = int(scopy[5].replace('\x01',''))
+                recieved_unixtime = int(scopy[5 - _index].replace('\x01',''))
                 current_unixtime = self._ctx.Utils.get_unixtime()
                 ping_response = current_unixtime - recieved_unixtime
 
@@ -1457,6 +1535,7 @@ class Unrealircd6(IProtocol):
                 self._ctx.Logs.debug(scopy)
 
             return None
+
         except Exception as err:
             self._ctx.Logs.error('General Error: %s', err, exc_info=True)
 
