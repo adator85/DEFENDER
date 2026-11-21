@@ -146,7 +146,8 @@ class Autolimit(IModule):
 
                     for _static_serv_chan in _static_serv_chans:
                         if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.members) != _static_serv_chan.get('uids_count'):
-                            self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan))
+                            self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan),
+                                                               async_name=f'apply_mode_{_serv_chan.name}')
                             _static_serv_chan['uids_count'] = len(_serv_chan.members)
             else:
                 __id = 2
@@ -179,7 +180,8 @@ class Autolimit(IModule):
                     if _serv_chan:
                         for _static_serv_chan in _static_serv_chans:
                             if _static_serv_chan.get('name') == _serv_chan.name and len(_serv_chan.members) != _static_serv_chan.get('uids_count'):
-                                self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan, _al_chan))
+                                self.ctx.DAsyncio.create_safe_task(self.apply_mode(_serv_chan, _al_chan),
+                                                                   async_name=f'apply_mode_{_serv_chan.name}')
                                 _static_serv_chan['uids_count'] = len(_serv_chan.members)
 
             await asyncio.sleep(0.3)
