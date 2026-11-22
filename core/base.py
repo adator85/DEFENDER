@@ -54,9 +54,6 @@ class Base:
         # Init database connection
         self.engine, self.cursor = self.db_init()
         
-        # Create the database
-        # self.__create_db()
-
     async def init(self) -> None:
         await self.__create_db()
 
@@ -341,6 +338,7 @@ class Base:
 
     def create_thread(self, func: Callable[..., object], *args, run_once: bool = False, daemon: bool = True) -> None:
         """Create a new thread and store it into running_threads variable
+        The created thread must always start with a threading.Event parameter.
 
         Args:
             func (object): The method/function you want to execute via this thread
