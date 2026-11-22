@@ -282,15 +282,18 @@ def uninstall():
 	match _response.lower():
 		case 'y':
 			# Stop Defender Servcie.
-			check_call(['systemctl', '--user', 'stop', SERVICE_FILE_NAME])
+			if is_openrc():
+				check_call(['rc-service', 'defender', 'stop'])
+				ROOT_PATH.joinpath('defender.initd').unlink()
+			else:
+				# Stop and Remove Service file and reload daemon
+				check_call(['systemctl', '--user', 'stop', SERVICE_FILE_NAME])
+				SYSTEMD_PATH.joinpath(SERVICE_FILE_NAME).unlink()
+				check_call(['systemctl', '--user', 'daemon-reload'])
 
 			# Remove Python Virtual Environment
 			_pyenv_fqn = Path(PYENV_FOLDER_NAME)
 			check_call(['rm', '-r', _pyenv_fqn])
-
-			# Remove Service file and reload daemon
-			SYSTEMD_PATH.joinpath(SERVICE_FILE_NAME).unlink()
-			check_call(['systemctl', '--user', 'daemon-reload'])
 
 			_remove = input('Do you delete the data folder (Y/n)? ')
 			match _remove.lower():

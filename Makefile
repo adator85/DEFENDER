@@ -67,18 +67,19 @@ endif
 
 clean:
 ifeq ($(OS), Linux)
-	@export echo $DBUS_SESSION_BUS_ADDRESS && \
-		systemctl --user stop defender
-	$(info Defender has been stopped...)
+	$(info Distribution: $(DISTRO))
 	@if [ -e .pyenv ]; then \
-		rm -rf .pyenv; \
-		echo "Virtual Env has been removed!"; \
-	fi
-	@if [ -e $(HOME_DIR)/.config/systemd/user/defender.service ]; then \
-		rm $(HOME_DIR)/.config/systemd/user/defender.service; \
-		echo "Systemd file has been removed!"; \
+		. .pyenv/bin/activate && python defender.py --uninstall; \
+		echo "Uninstall well executed."; \
 	fi
 	@export echo $DBUS_SESSION_BUS_ADDRESS && systemctl --user daemon-reload && echo "Systemd Daemon reloaded!"
+endif
+ifeq ($(DISTRO), Alpine Linux)
+	$(info Distribution: $(DISTRO))
+	@if [ -e .pyenv ]; then \
+		. .pyenv/bin/activate && python defender.py --uninstall; \
+		echo "Uninstall well executed."; \
+	fi
 endif
 
 update:
