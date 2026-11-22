@@ -183,7 +183,7 @@ def create_openrc_service_file():
 name="Defender IRC Service"
 description="Defender IRC Bot"
 command="{PYENV}"
-command_args="{ROOT_PATH}/{PY_EXEC} --start --from-sysctl"
+command_args="{ROOT_PATH}/{PY_EXEC} --start --with-sysctl"
 command_background=true
 pidfile="/run/${{RC_SVCNAME}}.pid"
 command_user="{CURRENT_USER}"
