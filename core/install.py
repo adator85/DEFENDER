@@ -296,12 +296,12 @@ def uninstall():
 
 			# Remove Python Virtual Environment
 			_pyenv_fqn = Path(PYENV_FOLDER_NAME)
-			check_call(['rm', '-r', _pyenv_fqn])
+			check_call(['rm', '-rf', _pyenv_fqn])
 
 			_remove = input('Do you delete the data folder (Y/n)? ')
 			match _remove.lower():
 				case 'y':
-					check_call(['rm', '-r', DATA_FULLPATH])
+					check_call(['rm', '-rf', DATA_FULLPATH])
 				case 'n':
 					log.log(LOG_INSTALL_LEVEL, 'Data Folder still available.')
 				case _:
