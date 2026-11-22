@@ -1,28 +1,33 @@
-import argparse
 import getpass
+import logging
 import os
 import sys
 import filecmp
 from dataclasses import dataclass
-from subprocess import check_call, CalledProcessError, DEVNULL, check_output
+from subprocess import check_call, CalledProcessError, DEVNULL, check_output, run
 from pathlib import Path
 from platform import python_version_tuple
 
-parser = argparse.ArgumentParser(description="Python Installation Code")
-parser.add_argument('--check-version', action='store_true', help='Check if the python version is ok!')
-parser.add_argument('--install', action='store_true', help='Run the installation')
-parser.add_argument('--git-update', action='store_true', help='Update from git (main repository)')
-parser.add_argument('--started-from-sysctl', action='store_true', help='Is Defender Start from systemctl?')
-parser.add_argument('--debug-level', type=int, choices=[10, 20, 30, 40, 50], help='Run Defender')
-args = parser.parse_args()
-
+LOG_INSTALL_LEVEL = 12
 PYTHON_REQUIRED_VERSION = (3, 10, 0)
 PYTHON_SYSTEM_VERSION = tuple(map(int, python_version_tuple()))
-ROOT_PATH = os.getcwd()
-PYENV = Path(ROOT_PATH).joinpath('.pyenv/bin/python') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/python.exe')
-PIPENV = Path(ROOT_PATH).joinpath('.pyenv/bin/pip') if os.name != 'nt' else Path(ROOT_PATH).joinpath('.pyenv/Scripts/pip.exe')
+ROOT_PATH = Path(os.getcwd())
 USER_HOME_DIRECTORY = Path.home()
-SYSTEMD_PATH = Path(USER_HOME_DIRECTORY).joinpath('.config', 'systemd', 'user')
+
+REQUIREMENT_FILE = 'requirements.txt'
+PYENV_FOLDER_NAME = '.pyenv'
+DATA_FOLDER_NAME = 'data'
+DATABASE_FOLDER_NAME = 'db'
+LOGS_FOLDER_NAME = 'logs'
+
+DATA_FULLPATH = Path(DATA_FOLDER_NAME)
+DATABASE_FULLPATH = DATA_FULLPATH.joinpath(DATABASE_FOLDER_NAME)
+LOGS_FULLPATH = DATA_FULLPATH.joinpath(LOGS_FOLDER_NAME)
+
+PYENV = ROOT_PATH.joinpath(f'{PYENV_FOLDER_NAME}/bin/python') if os.name != 'nt' else ROOT_PATH.joinpath(f'{PYENV_FOLDER_NAME}/Scripts/python.exe')
+PIPENV = ROOT_PATH.joinpath(f'{PYENV_FOLDER_NAME}/bin/pip') if os.name != 'nt' else ROOT_PATH.joinpath(f'{PYENV_FOLDER_NAME}/Scripts/pip.exe')
+
+SYSTEMD_PATH = USER_HOME_DIRECTORY.joinpath('.config', 'systemd', 'user')
 PY_EXEC = 'defender.py'
 SERVICE_FILE_NAME = 'defender.service'
 CURRENT_USER = getpass.getuser()
@@ -32,47 +37,90 @@ class Package:
 	name: str
 	version: str
 
-def update_packages() -> bool:
-	try:
-		if sys.prefix not in PYENV.__str__():
-			print("You are probably running a new installation "
-				  f"or you are not using your virtual env {PYENV}")
-			return False
+def start_log_system() -> logging.Logger:
 
-		print("> Checking for dependencies versions ==> WAIT")
-		print("> Upgrading local pip!")
+	logging_name = 'defender-install'
+	debug_level = 10
+
+	# Create folder if not available
+	logs_directory = LOGS_FULLPATH
+	if not logs_directory.exists():
+		logs_directory.mkdir(parents=True)
+
+	logs_fullpath = LOGS_FULLPATH.joinpath('defender.log')
+
+	# Init logs object
+	logs = logging.getLogger(logging_name)
+	logs.setLevel(debug_level)
+
+	# Add custom levels
+	logging.addLevelName(LOG_INSTALL_LEVEL, 'INSTALL')
+
+	# Add Handlers
+	file_handler = logging.FileHandler(logs_fullpath, encoding='UTF-8')
+	file_handler.setLevel(debug_level)
+
+	stdout_handler = logging.StreamHandler()
+	stdout_handler.setLevel(debug_level)
+
+	# Define log format
+	formatter = logging.Formatter(
+		fmt='%(asctime)s - %(levelname)s - %(message)s (%(filename)s:%(funcName)s:%(lineno)d)',
+		datefmt='%Y-%m-%d %H:%M:%S'
+		)
+
+	# Apply log format
+	file_handler.setFormatter(formatter)
+	stdout_handler.setFormatter(formatter)
+
+	# Add handler to logs
+	logs.addHandler(file_handler)
+	logs.addHandler(stdout_handler)
+
+	logs.log(LOG_INSTALL_LEVEL, 'Starting Logging system: [%s]', logs.name)
+
+	return logs
+
+log = start_log_system()
+
+def run_update_packages():
+	try:
+
+		log.log(LOG_INSTALL_LEVEL, '> Checking for dependencies versions ==> WAIT')
+		log.log(LOG_INSTALL_LEVEL, '> Upgrading local pip!')
 		check_call([PIPENV, 'install', '--upgrade', 'pip'], stdout=DEVNULL)
 
-		print("> Upgrading local packages!")
+		log.log(LOG_INSTALL_LEVEL, '> Upgrading local packages!')
 		check_call([PIPENV, 'install', '--upgrade', '-r', 'requirements.txt'], stdout=DEVNULL)
 
-		print("> Dependencies versions ==> OK")
+		log.log(LOG_INSTALL_LEVEL, '> Dependencies versions ==> OK')
 
-		return True
 	except Exception as err:
-		print("UpdatePackage Error:", err)
-		return False
+		log.error('General Error:', err)
 
 def run_git_update() -> None:
 	try:
+
 		_current_git_branch = check_output(
 			['git', 'branch', '--show-current'],
 			text=True
 		).strip()
 
-		print(f"> Checking Defender updates using current branch {_current_git_branch}")
+		log.log(LOG_INSTALL_LEVEL, '> Checking Defender updates using current branch %s', _current_git_branch)
 
 		check_call(['git', 'pull', 'origin', _current_git_branch])
 
 		if not is_openrc():
 			create_systemd_service_file()
 
-	except CalledProcessError as cpe:
-		print('CalledProcessError:', cpe, str(cpe.returncode))
+		del _current_git_branch
 
-def check_python_requirement():
+	except CalledProcessError as cpe:
+		log.error('CalledProcessError: %s - %s', cpe, str(cpe.returncode))
+
+def check_python_version_requirement():
 	if PYTHON_SYSTEM_VERSION < PYTHON_REQUIRED_VERSION:
-		raise RuntimeError(f"Your Python Version is not meeting the requirement, "
+		raise RuntimeError("Your Python Version is not meeting the requirement, "
 						   f"System Version: {PYTHON_SYSTEM_VERSION} < Required Version {PYTHON_REQUIRED_VERSION}")
 
 def is_openrc() -> bool:
@@ -91,15 +139,15 @@ def create_systemd_service_file():
 	py_exec = PY_EXEC
 	service_file_name = SERVICE_FILE_NAME
 
-	if not Path(systemd_path).exists():
-		print("[!] Folder not available")
+	if not systemd_path.exists():
+		log.error('[!] Folder not available: %s', str(systemd_path))
 		sys.exit(1)
 
 	contain = f'''[Unit]
 Description=Defender IRC Service
 
 [Service]
-ExecStart={pyenv} {py_exec} --started-from-sysctl
+ExecStart={pyenv} {py_exec} --start --with-sysctl
 WorkingDirectory={ROOT_PATH}
 SyslogIdentifier=Defender
 Restart=on-failure
@@ -109,29 +157,22 @@ RestartForceExitStatus=42
 WantedBy=default.target
 '''
 
-	if not Path(ROOT_PATH).joinpath('.tmp/').exists():
-		Path(ROOT_PATH).joinpath('.tmp/').mkdir()
+	if not ROOT_PATH.joinpath('.tmp/').exists():
+		ROOT_PATH.joinpath('.tmp/').mkdir()
 
-	_tmp_file = Path(ROOT_PATH).joinpath('.tmp/' + service_file_name)
-	_prod_file = Path(systemd_path).joinpath(service_file_name)
+	_tmp_file = ROOT_PATH.joinpath('.tmp/' + service_file_name)
+	_prod_file = systemd_path.joinpath(service_file_name)
 	with open(_tmp_file, 'w') as f:
 		f.write(contain)
 
 	if _prod_file.exists():
 		if filecmp.cmp(_tmp_file, _prod_file):
-			print('No update required for the', _prod_file)
+			log.log(LOG_INSTALL_LEVEL, 'No update required for the %s', _prod_file)
 			return
 
 	with open(_prod_file, "w") as file:
 		file.write(contain)
-		print('Service file generated with current configuration')
-		print('Running IRC Service ...')
-
-		print("#"*24)
-		print("Installation complete ...")
-		print("If the configuration is correct, then you must see your service connected to your irc server")
-		print(f"If any issue, you can see the log file for debug {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
-		print("#"*24)
+		log.log(LOG_INSTALL_LEVEL, 'Service file generated with current configuration')
 
 	del _tmp_file, _prod_file
 
@@ -142,7 +183,7 @@ def create_openrc_service_file():
 name="Defender IRC Service"
 description="Defender IRC Bot"
 command="{PYENV}"
-command_args="{ROOT_PATH}/{PY_EXEC}"
+command_args="{ROOT_PATH}/{PY_EXEC} --started-from-sysctl"
 command_background=true
 pidfile="/run/${{RC_SVCNAME}}.pid"
 command_user="{CURRENT_USER}"
@@ -158,39 +199,191 @@ depend() {{
 
 	os.chmod(openrc_path, 0o755)
 
-	print('OpenRC init script generated: defender.initd')
-	print()
-	print('#' * 24)
-	print("Installation complete!")
-	print()
-	print("Quick start (non-root):")
-	print(f"  {PYENV} {PY_EXEC}")
-	print()
-	print("System service with OpenRC (requires root):")
-	print("  sudo cp defender.initd /etc/init.d/defender")
-	print("  sudo rc-update add defender default")
-	print("  sudo rc-service defender start")
-	print()
-	print(f"Log file: {ROOT_PATH}{os.sep}logs{os.sep}defender.log")
-	print('#' * 24)
+	log.log(LOG_INSTALL_LEVEL, 'OpenRC init script generated: defender.initd')
+	log.log(LOG_INSTALL_LEVEL, '')
+	log.log(LOG_INSTALL_LEVEL, '#' * 24)
+	log.log(LOG_INSTALL_LEVEL, 'Installation complete!')
+	log.log(LOG_INSTALL_LEVEL, '')
+	log.log(LOG_INSTALL_LEVEL, 'Quick start (non-root):')
+	log.log(LOG_INSTALL_LEVEL, '  %s %s', PYENV, PY_EXEC)
+	log.log(LOG_INSTALL_LEVEL, '')
+	log.log(LOG_INSTALL_LEVEL, 'System service with OpenRC (requires root):')
+	log.log(LOG_INSTALL_LEVEL, '  sudo cp defender.initd /etc/init.d/defender')
+	log.log(LOG_INSTALL_LEVEL, '  sudo rc-update add defender default')
+	log.log(LOG_INSTALL_LEVEL, '  sudo rc-service defender start')
+	log.log(LOG_INSTALL_LEVEL, '')
+	log.log(LOG_INSTALL_LEVEL, 'Log file: %s', LOGS_FULLPATH.joinpath('defender.log'))
+	log.log(LOG_INSTALL_LEVEL, '#' * 24)
 
-def main():
-	if args.check_version:
-		check_python_requirement()
-		sys.exit(0)
+def create_required_folders():
+	"""Create required folders if they don't exist
+	"""
+	if not DATA_FULLPATH.exists():
+		DATA_FULLPATH.mkdir()
+		log.log(LOG_INSTALL_LEVEL, '-> Data folder created: %s', DATA_FULLPATH.__str__())
 
-	if args.install:
-		
+	if not SYSTEMD_PATH.exists():
+		SYSTEMD_PATH.mkdir()
+		log.log(LOG_INSTALL_LEVEL, '-> Systemd folder created: %s', SYSTEMD_PATH.__str__())
+
+	if not DATABASE_FULLPATH.exists():
+		DATABASE_FULLPATH.mkdir()
+		log.log(LOG_INSTALL_LEVEL, '-> Database folder created: %s', DATABASE_FULLPATH.__str__())
+
+	if not LOGS_FULLPATH.exists():
+		LOGS_FULLPATH.mkdir()
+		log.log(LOG_INSTALL_LEVEL, '-> Logs folder created: %s', LOGS_FULLPATH.__str__())
+
+def install() -> bool:
+	# Check python version
+	# Create python virtualenv if not exist
+	# Create systemd folder
+	# Create defender.service file.
+	# Create logs folder if not exist
+	# Create db folder if not exist.
+	check_python_version_requirement()
+
+	create_required_folders()
+
+	log.log(LOG_INSTALL_LEVEL, 'Defender folders status:')
+	log.log(LOG_INSTALL_LEVEL, '	Python Virtual Environment: %s', 'Created' if PYENV.exists() else 'Not created')
+	log.log(LOG_INSTALL_LEVEL, '	Database Folder: %s', 'Created' if DATABASE_FULLPATH.exists() else 'Not created')
+	log.log(LOG_INSTALL_LEVEL, '	Logs folder: %s', 'Created' if LOGS_FULLPATH.exists() else 'Not created')
+
+	try:
+		if not PYENV.exists():
+			log.log(LOG_INSTALL_LEVEL, '-> Create Python virtual environment: %s', PYENV)
+			check_call(['python3', '-m', 'venv', PYENV_FOLDER_NAME])
+			check_call([PIPENV, 'install', '-r', 'requirements.txt'])
+		else:
+			if not is_packages_installed():
+				log.log(LOG_INSTALL_LEVEL, '-> Virtual Environment installed but missing packages:')
+				check_call([PIPENV, 'install', '-r', 'requirements.txt'])
+
 		if is_openrc():
 			create_openrc_service_file()
 		else:
 			create_systemd_service_file()
+			check_call(['loginctl', 'enable-linger', CURRENT_USER])
+			check_call(['systemctl', '--user', 'daemon-reload'])
 
-		sys.exit(0)
+	except CalledProcessError as cpe:
+		log.error('CalledProcessError: %s (%s)', cpe, cpe.returncode)
+		return False
+
+def uninstall():
+
+	if not is_installed():
+		log.log(LOG_INSTALL_LEVEL, 'Defender is not installed!')
+		return
+
+	_response = input('Do you confirm the uninstall of the app (Y/n)? ')
+
+	match _response.lower():
+		case 'y':
+			# Stop Defender Servcie.
+			check_call(['systemctl', '--user', 'stop', SERVICE_FILE_NAME])
+
+			# Remove Python Virtual Environment
+			_pyenv_fqn = Path(PYENV_FOLDER_NAME)
+			check_call(['rm', '-r', _pyenv_fqn])
+
+			# Remove Service file and reload daemon
+			SYSTEMD_PATH.joinpath(SERVICE_FILE_NAME).unlink()
+			check_call(['systemctl', '--user', 'daemon-reload'])
+
+			_remove = input('Do you delete the data folder (Y/n)? ')
+			match _remove.lower():
+				case 'y':
+					check_call(['rm', '-r', DATA_FULLPATH])
+				case 'n':
+					log.log(LOG_INSTALL_LEVEL, 'Data Folder still available.')
+				case _:
+					log.warning('This option is not available!')
+
+			log.log(LOG_INSTALL_LEVEL, 'Defender has been uninstalled successfuly!')
+		case 'n':
+			log.log(LOG_INSTALL_LEVEL, 'Uninstall aborted!')
+		case _:
+			log.warning('This option is not available!')
+
+def update():
+	if sys.prefix not in PYENV.__str__():
+		log.warning('You are probably running a new installation '
+		            'or you are not using your virtual env %s', PYENV)
+		return
+
+	run_git_update()
+	run_update_packages()
+
+def version() -> str:
+	import json
 	
-	if args.git_update:
-		run_git_update()
-		sys.exit(0)
+	try:
+		with open('version.json', 'r') as f:
+			version: dict = json.loads(f.read())
+			return 'Defender v' + version.get('version', '')
 
-if __name__ == "__main__":
-	main()
+		return ''
+	except FileNotFoundError as fe:
+		log.error('❌ File [version.json] not found: %s', fe)
+
+def is_installed() -> bool:
+
+	installed = True
+
+	if not PYENV.exists():
+		installed = False
+	else:
+		installed = is_packages_installed()
+	
+	if not DATA_FULLPATH.exists():
+		installed = False
+
+	if not SYSTEMD_PATH.exists():
+		installed = False
+
+	if not DATABASE_FULLPATH.exists():
+		installed = False
+
+	if not LOGS_FULLPATH.exists():
+		installed = False
+
+
+	return installed
+
+def is_packages_installed():
+	try:
+		packages: list[str] = []
+		with open(REQUIREMENT_FILE, "r", encoding="utf-8") as f:
+			packages = [
+				line.strip()
+				for line in f
+				if line.strip() and not line.strip().startswith("#")
+			]
+
+		missing_packages = []
+
+		for package in packages:
+			result = run(
+				[PYENV, "-m", "pip", "show", package.split("==")[0].split(">=")[0].split("<=")[0].strip()],
+				capture_output=True,
+				text=True)
+
+			if result.returncode != 0:
+				missing_packages.append(package)
+
+		if not missing_packages:
+			log.log(LOG_INSTALL_LEVEL, "✅ All packages installed !")
+
+			return True
+		else:
+			log.log(LOG_INSTALL_LEVEL, '❌ %s missing package(s):', len(missing_packages))
+			for package in missing_packages:
+				log.log(LOG_INSTALL_LEVEL, '   - %s', package)
+
+			return False
+
+	except FileNotFoundError:
+		log.error('❌ Requirement File [%s] not found.', REQUIREMENT_FILE)
+		return False

@@ -18,7 +18,7 @@ ifeq ($(OS), Linux)
 	$(info Home directory: $(HOME_DIR))
 	$(info Shell type: $(SHELL))
 
-	@python3 core/install.py --check-version
+	@python3 defender.py --check-python-version
 	@if [ $$? -eq 0 ]; then \
 		echo "Python Version OK! Well done :)"; \
 	else \
@@ -34,26 +34,33 @@ ifeq ($(OS), Linux)
 		pip install -r requirements.txt
 
 ifeq ($(DISTRO), Alpine Linux)
-	@. .pyenv/bin/activate && python core/install.py --install
-	$(info )
-	$(info ============================================)
-	$(info Installation complete!)
-	$(info To start Defender manually:)
-	$(info   .pyenv/bin/python defender.py)
-	$(info )
-	$(info For autostart with OpenRC (as root):)
-	$(info   sudo cp defender.initd /etc/init.d/defender)
-	$(info   sudo rc-update add defender default)
-	$(info   sudo rc-service defender start)
-	$(info ============================================)
+	@. .pyenv/bin/activate && python defender.py --install
+	@echo ""
+	@echo "============================================"
+	@echo "Installation complete!"
+	@echo "To start Defender manually:"
+	@echo "  .pyenv/bin/python defender.py"
+	@echo ""
+	@echo "For autostart with OpenRC (as root):"
+	@echo "  sudo cp defender.initd /etc/init.d/defender"
+	@echo "  sudo rc-update add defender default"
+	@echo "  sudo rc-service defender start"
+	@echo "============================================"
 else
 	$(info Creating the systemd user folder...)
 	mkdir -p $(HOME_DIR)/.config/systemd/user
-	@. .pyenv/bin/activate && python core/install.py --install
+	@. .pyenv/bin/activate && python defender.py --install
 	loginctl enable-linger $(CURRENT_USER)
 	@sleep 2
 	systemctl --user daemon-reload
-	systemctl --user start defender
+	@echo "========================================================"
+	@echo "Installation complete!"
+	@echo "To start Defender manually:"
+	@echo "  .pyenv/bin/python defender.py --start --with-main-file"
+	@echo ""
+	@echo "To start defender using systemd (as normal user):"
+	@echo "  systemctl --user start defender"
+	@echo "========================================================"
 endif
 
 endif
@@ -77,6 +84,6 @@ endif
 update:
 ifeq ($(OS), Linux)
 	$(info Starting update from the $(CURRENT_GIT_BRANCH) repository...)
-	@. .pyenv/bin/activate && python core/install.py --git-update
+	@. .pyenv/bin/activate && python defender.py --update
 	$(info Update done!)
 endif

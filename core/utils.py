@@ -161,19 +161,19 @@ def get_number_gc_objects(your_object_to_count: Optional[type] = None) -> int:
 
 def heartbeat(event: 'Event', loader: 'Loader', beat: float) -> None:
     """Execute certaines commandes de nettoyage toutes les x secondes
-    x étant définit a l'initialisation de cette class (self.beat)
+        x étant définit a l'initialisation de cette class (self.beat)
 
     Args:
         event (Event): the event loop object
         loader (Loader): The loader object
         beat (float): Nombre de secondes entre chaque exécution
     """
-    loader.Logs.debug(f"Thread started from {threading.current_thread().name}")
+    loader.Logs.debug('Thread started from %s', threading.current_thread().name)
     while event.is_set():
         loader.Base.execute_periodic_action()
         sleep(beat)
 
-    loader.Logs.debug("Heartbeat is off!")
+    loader.Logs.debug('Heartbeat is off!')
     return None
 
 async def run_garbage_collector(event: asyncio.Event, ctx: 'Loader') -> None:

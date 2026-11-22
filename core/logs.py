@@ -1,5 +1,6 @@
 import logging
-from os import path, makedirs, sep
+from . import __data_folder__
+from pathlib import Path
 from typing import Optional
 
 class ServiceLogging:
@@ -10,8 +11,12 @@ class ServiceLogging:
             self.SRVMSG_LEVEL = 11
             self.DEFMSG_LEVEL = 12
             
-            self.OS_SEP = sep
             self.LOGGING_NAME = loggin_name
+
+            self.DATA_PATH = Path(__data_folder__)
+            self.LOGS_PATH = self.DATA_PATH.joinpath('logs')
+            self.LOGS_FULLPATH = self.LOGS_PATH.joinpath(f'{loggin_name}.log')
+
             self.remove_logger(loggin_name) # Remove logger if exists
 
             self.DEBUG_LEVEL, self.DEBUG_FILE_LEVEL, self.DEBUG_STDOUT_LEVEL = (10, 10, 10)
@@ -52,16 +57,17 @@ class ServiceLogging:
 
         def start_log_system(self) -> logging.Logger:
 
-            os_sep = self.OS_SEP
             logging_name = self.LOGGING_NAME
             debug_level = self.DEBUG_LEVEL
             debug_file_level = self.DEBUG_FILE_LEVEL
             debug_stdout_level = self.DEBUG_STDOUT_LEVEL
 
             # Create folder if not available
-            logs_directory = f'logs{os_sep}'
-            if not path.exists(f'{logs_directory}'):
-                makedirs(logs_directory)
+            logs_directory = self.LOGS_PATH
+            if not logs_directory.exists():
+                logs_directory.mkdir(parents=True)
+
+            logs_fullpath = self.LOGS_FULLPATH
 
             # Init logs object
             logging.addLevelName(self.SRVMSG_LEVEL, 'SRVMSG')
@@ -70,7 +76,7 @@ class ServiceLogging:
             logs.setLevel(debug_level)
 
             # Add Handlers
-            self.file_handler = logging.FileHandler(f'logs{os_sep}{logging_name}.log',encoding='UTF-8')
+            self.file_handler = logging.FileHandler(logs_fullpath, encoding='UTF-8')
             self.file_handler.setLevel(debug_file_level)
 
             self.stdout_handler = logging.StreamHandler()
@@ -92,16 +98,16 @@ class ServiceLogging:
 
             # Apply the filter
             logs.addFilter(self.replace_filter)
-            logs.info(f'#################### STARTING {self.LOGGING_NAME} ####################')
+            logs.info('#################### STARTING %s ####################', self.LOGGING_NAME)
 
             return logs
 
         def set_stdout_handler_level(self, level: int) -> None:
-            self.logs.debug(f"[STDOUT LEVEL] New level {level}")
+            self.logs.debug('[STDOUT LEVEL] New level %s', level)
             self.stdout_handler.setLevel(level)
 
         def set_file_handler_level(self, level: int) -> None:
-            self.logs.debug(f"[LOG FILE LEVEL] new level {level}")
+            self.logs.debug('[LOG FILE LEVEL] new level %s', level)
             self.file_handler.setLevel(level)
 
         def update_handler_format(self, debug_hard: bool = False) -> None:
@@ -127,13 +133,12 @@ class ServiceLogging:
                 handler.setFormatter(new_formatter)
 
         def regenerate_handlers(self, logger: logging.Logger) -> logging.Logger:
-            os_sep = self.OS_SEP
-            logging_name = self.LOGGING_NAME
+
             debug_file_level = self.DEBUG_FILE_LEVEL
             debug_stdout_level = self.DEBUG_STDOUT_LEVEL
 
             # Add Handlers
-            self.file_handler = logging.FileHandler(f'logs{os_sep}{logging_name}.log',encoding='UTF-8')
+            self.file_handler = logging.FileHandler(self.LOGS_FULLPATH, encoding='UTF-8')
             self.file_handler.setLevel(debug_file_level)
 
             self.stdout_handler = logging.StreamHandler()
@@ -155,7 +160,7 @@ class ServiceLogging:
 
             # Apply the filter
             logger.addFilter(self.replace_filter)
-            logger.info(f'REGENRATING LOGGER {self.LOGGING_NAME}')
+            logger.info('REGENRATING LOGGER %s', self.LOGGING_NAME)
 
             return logger
 
