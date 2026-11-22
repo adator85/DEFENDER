@@ -351,7 +351,7 @@ def get_number_of_instances(module_name: str):
 
 def write_gc_to_file():
     objects = get_gc_objects()
-    with open('objects.txt', 'a') as f:
+    with open('.tmp/objects.txt', 'a') as f:
         f.write("\n")
         f.write("--------------------------------------------------------------\n")
         for o in objects:
