@@ -513,15 +513,23 @@ class Base:
 
     def db_init(self) -> tuple[Engine, Connection]:
 
-        db_directory = self.Config.DB_PATH
-        full_path_db = self.Config.DB_PATH + self.Config.DB_NAME
+        _data_path = Path('data')
+        _db_path = _data_path.joinpath(self.Config.DB_PATH)
+        _db_fullpath = _db_path.joinpath(self.Config.DB_NAME)
 
-        if not os.path.exists(db_directory):
+        if not _data_path.exists():
+            self.logs.info('Create data/ folder!')
+            _data_path.mkdir()
+
+        if not _db_path.exists():
             self.install = True
-            os.makedirs(db_directory)
+            _db_path.mkdir()
 
-        engine = create_engine(f'sqlite:///{full_path_db}.db', echo=False)
+        engine = create_engine(f'sqlite:///{_db_fullpath.__str__()}.db', echo=False)
         cursor = engine.connect()
+
+        del _data_path, _db_path, _db_fullpath
+
         self.logs.info("-- Database connexion has been initiated")
         return engine, cursor
 

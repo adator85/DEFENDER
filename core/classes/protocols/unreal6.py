@@ -202,7 +202,7 @@ class Unrealircd6(IProtocol):
         await self.send2socket(f":{server_id} TKL + Q * {service_nickname} {service_hostname} 0 {unixtime} :Reserved for services")
         await self.send2socket(f":{service_id} MODE {service_channel_log} {service_cmodes}")
 
-        self._ctx.Logs.debug('%s Link information sent to the server', __name__)
+        self._ctx.Logs.debug('Link information sent to the %s IRCd', self.name)
 
     async def send_set_nick(self, newnickname: str) -> None:
         """Change nickname of the server

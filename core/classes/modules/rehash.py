@@ -58,7 +58,7 @@ async def restart_service(uplink: 'Loader', reason: str = 'Restarting without re
     if not uplink.Config.DEFENDER_STARTED_FROM_SYSTEMCTL:
         # If defender has started manually! restart through a new subprocess.
         logs.warning("Signal Off! Defender started manually, this is not recommended. Restaring a new instance.")
-        subprocess.Popen(['.pyenv/bin/python', 'defender.py'])
+        subprocess.Popen(['.pyenv/bin/python', 'defender.py', '--start', '--with-main-file'])
         logs.debug("Kill main process.")
 
 async def rehash_service(uplink: 'Loader', nickname: str) -> None:

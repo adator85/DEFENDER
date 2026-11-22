@@ -287,7 +287,7 @@ class MConfig(MainModel):
     DB_NAME: str = "defender"
     """The database name"""
 
-    DB_PATH: str = f"db{sep}"
+    DB_PATH: str = "db"
     """The database path"""
 
     BATCH_SIZE: int = 400
