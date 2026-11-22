@@ -287,6 +287,11 @@ def uninstall():
 					check_call(['rc-service', 'defender', 'stop'])
 				except CalledProcessError as cpe:
 					log.log(LOG_INSTALL_LEVEL, 'rc-service Error: %s', cpe)
+				try:
+					check_call(['rc-update', 'del', 'defender', 'default'])
+				except CalledProcessError as cpe:
+					log.log(LOG_INSTALL_LEVEL, 'rc-update Error: %s', cpe)
+
 				ROOT_PATH.joinpath('defender.initd').unlink()
 			else:
 				# Stop and Remove Service file and reload daemon
