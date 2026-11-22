@@ -66,20 +66,19 @@ endif
 endif
 
 clean:
-ifeq ($(OS), Linux)
-	$(info Distribution: $(DISTRO))
-	@if [ -e .pyenv ]; then \
-		. .pyenv/bin/activate && python defender.py --uninstall; \
-		echo "Uninstall well executed."; \
-	fi
-	@export echo $DBUS_SESSION_BUS_ADDRESS && systemctl --user daemon-reload && echo "Systemd Daemon reloaded!"
-endif
 ifeq ($(DISTRO), Alpine Linux)
 	$(info Distribution: $(DISTRO))
 	@if [ -e .pyenv ]; then \
 		. .pyenv/bin/activate && python defender.py --uninstall; \
 		echo "Uninstall well executed."; \
 	fi
+else
+	$(info Distribution: $(DISTRO))
+	@if [ -e .pyenv ]; then \
+		. .pyenv/bin/activate && python defender.py --uninstall; \
+		echo "Uninstall well executed."; \
+	fi
+	@export echo $DBUS_SESSION_BUS_ADDRESS && systemctl --user daemon-reload && echo "Systemd Daemon reloaded!"
 endif
 
 update:
