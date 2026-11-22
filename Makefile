@@ -86,7 +86,6 @@ ifeq ($(OS), Linux)
 	$(info Starting update from the $(CURRENT_GIT_BRANCH) repository...)
 	@if [ -e .pyenv ]; then \
 		. .pyenv/bin/activate && python defender.py --update; \
-		echo "Update well executed."; \
+		echo "Update done!"; \
 	fi
-	$(info Update done!)
 endif
