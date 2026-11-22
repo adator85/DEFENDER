@@ -85,7 +85,10 @@ log = start_log_system()
 
 def run_update_packages():
 	try:
-
+		if not PIPENV.exists():
+			log.log(LOG_INSTALL_LEVEL, 'Python Virtual env has been removed. No packages updated!')
+			return
+		
 		log.log(LOG_INSTALL_LEVEL, '> Checking for dependencies versions ==> WAIT')
 		log.log(LOG_INSTALL_LEVEL, '> Upgrading local pip!')
 		check_call([PIPENV, 'install', '--upgrade', 'pip'], stdout=DEVNULL)
