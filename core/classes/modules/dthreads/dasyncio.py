@@ -103,7 +103,7 @@ class DAsyncio:
                     return None
 
         executor = DaemonThreadPoolExecutor(daemon=True)
-        executor.start(max_workers=1, thread_name_prefix=_name)
+        executor.start(max_workers=1, thread_name=_name, thread_name_prefix=_name)
         loop = asyncio.get_event_loop()
         largs = list(args)
         thread_event: Optional[threading.Event] = None
@@ -115,8 +115,8 @@ class DAsyncio:
 
         future = loop.run_in_executor(executor, func, *tuple(largs))
         future.add_done_callback(self.__asynctask_done, context=io_ctx)
-        _thread = list(executor._threads)[0]
-        _thread.name = _name
+        _thread = executor.thread
+        _thread.name = executor.thread_name
 
         id_obj = self.ctx.Definition.MThread(
             name=_name,
@@ -132,11 +132,15 @@ class DAsyncio:
         result = await future
 
         if future.done():
-            self.logs.debug('[IO THREAD SHUTDOWN] Executor shutdown!')
+            self.logs.debug('[IO THREAD SHUTDOWN] ID: %s | NAME: %s | WORKERS: %s',
+                            executor.thread.native_id, executor.thread.name,
+                            executor._max_workers)
             executor.shutdown()
 
         self.running_iothreads.remove(id_obj)
-        self.logs.debug('[IO THREAD REMOVED] Thread removed from running_iothreads list!')
+        self.logs.debug('[IO THREAD REMOVED] ID: %s | NAME: %s | WORKERS: %s',
+                            executor.thread.native_id, executor.thread.name,
+                            executor._max_workers)
         return result
 
     def __create_asynctask(self, func: Coroutine[Any, Any, Any], *,
