@@ -131,7 +131,12 @@ class DAsyncio:
                         _thread.native_id, _thread.name, executor._max_workers)
         result = await future
 
+        if future.done():
+            self.logs.debug('[IO THREAD SHUTDOWN] Executor shutdown!')
+            executor.shutdown()
+
         self.running_iothreads.remove(id_obj)
+        self.logs.debug('[IO THREAD REMOVED] Thread removed from running_iothreads list!')
         return result
 
     def __create_asynctask(self, func: Coroutine[Any, Any, Any], *,
