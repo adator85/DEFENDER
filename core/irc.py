@@ -235,7 +235,7 @@ class Irc:
         return None
 
     async def thread_check_for_new_version(self, fromuser: str) -> None:
-        
+
         _app_current_version = self.ctx.Config.CURRENT_VERSION
         _app_latest_version = self.ctx.Config.LATEST_VERSION
         _dnickname = self.ctx.Config.SERVICE_NICKNAME
