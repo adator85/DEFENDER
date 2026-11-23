@@ -480,6 +480,14 @@ class Base:
                     self.logs.debug('[IO THREAD CLEAN] ID: %s | NAME: %s',
                                     _iothd.native_id, _iothd.name)
 
+            _threads_queues = list(concurrent.futures.thread._threads_queues.items())
+            if len(_threads_queues) > 0:
+                tq: dict[threading.Thread, Any] = dict(concurrent.futures.thread._threads_queues).copy()
+                for t, q in tq.items():
+                    if not t.is_alive():
+                        self.logs.debug('IO Threads in queue to delete: %s (%s)', t.name, t.native_id)
+                        dict(concurrent.futures.thread._threads_queues).pop(t, None)
+
         except Exception as err:
             self.logs.error('General Error: %s', err, exc_info=True)
 
