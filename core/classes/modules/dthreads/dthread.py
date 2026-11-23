@@ -11,7 +11,16 @@ class DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
               thread_name='', thread_name_prefix='',
               initializer=None, initargs=()):
         super().__init__(max_workers, thread_name_prefix, initializer, initargs)
-        self.thread_name = thread_name
+        self._thread_name = thread_name
+        self._thread_obj: threading.Thread
+
+    @property
+    def thread_name(self) -> str:
+        return self._thread_name
+
+    @property
+    def thread(self) -> threading.Thread:
+        return self._thread_obj
 
     def _adjust_thread_count(self):
         if len(self._threads) < self._max_workers:
@@ -29,6 +38,7 @@ class DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
                 ),
                 daemon=self.daemon
             )
+            self._thread_obj = t
             self._threads.add(t)
             concurrent.futures.thread._threads_queues[t] = self._work_queue
             t.start()
